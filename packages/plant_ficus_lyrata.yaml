@@ -1,4 +1,5 @@
-# /config/packages/plant_ficus_lyrata.yaml
+# /packages/plant_ficus_lyrata.yaml #
+#####################################
 
 input_text:
   notification_history_ficus:

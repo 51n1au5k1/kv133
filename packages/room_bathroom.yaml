@@ -1,4 +1,5 @@
-# /config/packages/room_bathroom.yaml
+# /packages/room_bathroom.yaml #
+################################
 
 input_boolean:
   bathroom_cleaning_mode:
@@ -48,40 +49,40 @@ binary_sensor:
              is_state('binary_sensor.bathroom_motion_2_occupancy', 'on') }}
 
 timer:
-  timer_bathroom: 
+  timer_bathroom:
     name: "Движение отсутствует"
-    duration: '00:07:53'
+    duration: "00:07:53"
 
 automation:
-# Климат
-# Работа с вытяжкой
+  # Климат
+  # Работа с вытяжкой
 
-  - id: 'dc1acbee-6ecd-45a4-8eae-ab69034c3117'
+  - id: "dc1acbee-6ecd-45a4-8eae-ab69034c3117"
     alias: "Ванная: Вытяжка, включение."
     description: "Включение вентилятора при высокой влажности"
     trigger:
       - platform: state
         entity_id: binary_sensor.bathroom_humidity_max
-        to: 'on'
+        to: "on"
     action:
       - service: fan.turn_on
         entity_id: fan.bathroom_relay_l1
 
-  - id: '6ebb6fa8-9cd1-4ebd-839d-44d175e6c319'
+  - id: "6ebb6fa8-9cd1-4ebd-839d-44d175e6c319"
     alias: "Ванная: Вытяжка, выключение."
     description: "Выключение вентилятора при нормальной влажности"
     trigger:
       - platform: state
         entity_id: binary_sensor.bathroom_humidity_min
-        to: 'on'
+        to: "on"
     action:
       - service: fan.turn_off
         entity_id: fan.bathroom_relay_l1
 
-# Освещение
-# Автоматизация переключения света по кнопке
+  # Освещение
+  # Автоматизация переключения света по кнопке
 
-  - id: '5525cbdc-3a8d-4464-908e-795c8205b40c'
+  - id: "5525cbdc-3a8d-4464-908e-795c8205b40c"
     alias: "Ванная: Освещение, вкл/выкл с выключателя"
     trigger:
       - platform: device
@@ -97,26 +98,26 @@ automation:
           - conditions:
               - condition: state
                 entity_id: light.bathroom_main
-                state: 'on'
+                state: "on"
             sequence:
               - service: timer.start
                 target:
                   entity_id: timer.timer_bathroom
 
   # Автоматизация включения света по движению или открытию двери
-  - id: '0007279c-13b5-402b-9aef-bf264273fa90'
+  - id: "0007279c-13b5-402b-9aef-bf264273fa90"
     alias: "Ванная: Освещение, вкл по движению, датчикам открытия и (пере)запуск таймера"
     condition:
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
-        state: 'off'
+        state: "off"
     trigger:
       - platform: state
         entity_id: binary_sensor.bathroom_open_door
-        to: 'on'
+        to: "on"
       - platform: state
         entity_id: binary_sensor.bathroom_motions
-        to: 'on'
+        to: "on"
     action:
       - service: light.turn_on
         target:
@@ -126,12 +127,12 @@ automation:
           entity_id: timer.timer_bathroom
 
   # Автоматизация выключения света по таймеру
-  - id: 'b30b7ad8-6563-4279-a78f-1a113f9cb252'
+  - id: "b30b7ad8-6563-4279-a78f-1a113f9cb252"
     alias: "Ванная: Освещение, выключение по таймеру"
     condition:
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
-        state: 'off'
+        state: "off"
     trigger:
       - platform: event
         event_type: timer.finished
@@ -141,4 +142,3 @@ automation:
       - service: light.turn_off
         target:
           area_id: vannaia
-

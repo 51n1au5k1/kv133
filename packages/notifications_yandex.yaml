@@ -1,13 +1,14 @@
-# /config/packages/notifications_yandex.yaml
+# /packages/notifications_yandex.yaml #
+#######################################
 
 # Настройки для интеграции с Яндекс устройствами
 conversation:
   intents:
-    media_player.yandex_station_ff98f0294437799304d0788d: [.+]  # Возможность вести диалоги через Яндекс станцию
+    media_player.yandex_station_ff98f0294437799304d0788d: [.+] # Возможность вести диалоги через Яндекс станцию
 
 yandex_station:
-  recognition_lang: ru-RU  # Язык распознавания по умолчанию
-  tts_service_name: alice_say  # Сервис текста в речь от Алисы
+  recognition_lang: ru-RU # Язык распознавания по умолчанию
+  tts_service_name: alice_say # Сервис текста в речь от Алисы
 
 # Шаблонные датчики для отображения погоды на Яндекс устройствах
 sensor:
@@ -104,7 +105,7 @@ automation:
           - conditions:
               - condition: state
                 entity_id: person.master
-                state: 'home'
+                state: "home"
             sequence:
               - service: notify.andrei
                 data:
@@ -112,7 +113,7 @@ automation:
           - conditions:
               - condition: state
                 entity_id: person.tatiana
-                state: 'home'
+                state: "home"
             sequence:
               - service: notify.tatsiana
                 data:
@@ -161,15 +162,15 @@ automation:
           entity_id: script.yandex_tts_hum_status
     mode: single
 
-## CO2
-### CO2 alert
+  ## CO2
+  ### CO2 alert
   - id: "fd913662-45dc-4dc5-bcbb-55aea5a669b1"
     alias: "Уведомление. Яндекс: Гостиная, необходимо проветрить"
     description: ""
     trigger:
       - platform: state
         entity_id:
-          - binary_sensor.ventilation_need
+          - sensor.livingroom_ventilation_need
         from: "off"
         to: "on"
         for:
@@ -184,14 +185,14 @@ automation:
       - service: script.turn_on
         entity_id: script.yandex_tts_co2_alert
     mode: single
-###Ventilation is over
+  ###Ventilation is over
   - id: "727d6609-4d07-4c6a-b860-1a9a9cccdfe8"
     alias: "Уведомление. Яндекс: Гостиная, проветривание завершено "
     description: ""
     trigger:
       - platform: state
         entity_id:
-          - binary_sensor.ventilation_status
+          - sensor.livingroom_ventilation_status
         from: "off"
         to: "on"
     condition:
@@ -201,14 +202,14 @@ automation:
     action:
       - wait_for_trigger:
           - platform: state
-            entity_id: binary_sensor.ventilation_status
+            entity_id: sensor.livingroom_ventilation_status
             to: "off"
         timeout: "00:03:00"
         continue_on_timeout: true
       - service: script.turn_on
         entity_id: script.yandex_tts_co2_normal
     mode: single
-## Температура ниже 20 градусов в одной из комнат, необходимо закрыть дверь
+  ## Температура ниже 20 градусов в одной из комнат, необходимо закрыть дверь
   - id: "a8c5eb07-9381-46d5-bc65-0f52dd7079a8"
     alias: "Уведомление. Яндекс: Температура ниже установленного уровня"
     description: ""
@@ -228,8 +229,8 @@ automation:
           entity_id: script.yandex_tts_door_status
     mode: single
 
-### Режим уборки
-## Включение
+  ### Режим уборки
+  ## Включение
   - id: "d2c32d88-e5d5-4a10-8739-583f09e0623c"
     alias: "Уведомление. Яндекс: Режим уборки включен"
     description: >-
@@ -278,7 +279,7 @@ automation:
         target:
           entity_id: switch.chuangmi_ipc019_37da_switch_status
     mode: single
-### Режим принятия душа
+  ### Режим принятия душа
   - id: "f6bc1a50-5d19-4ab0-91af-00dd75cff3f5"
     alias: "Уведомление. Яндекс: Режим принятия ванны на 30 минут"
     description: "Activates shower mode for 30 minutes when 'С лёгким паром!' is said"
@@ -295,7 +296,7 @@ automation:
         entity_id: input_boolean.bathroom_shower_mode
     mode: single
 
-## Стук в дверь
+  ## Стук в дверь
   - id: "d03a5f5d-058f-4b9b-8977-adbc32a16640"
     alias: "Уведомление. Яндекс: Звонок в дверь"
     description: "Алиса говорит 'Тук-тук! К Вам гости!' и моргает светом через Xiaomi Gateway при нажатии кнопки"

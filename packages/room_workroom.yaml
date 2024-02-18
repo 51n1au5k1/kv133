@@ -1,4 +1,5 @@
-# /config/packages/room_workroom.yaml
+# /packages/room_workroom.yaml #
+################################
 
 automation:
   - id: '29873ab9-335c-4c39-9898-b01b5a482606'

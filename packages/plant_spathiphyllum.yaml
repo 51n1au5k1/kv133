@@ -1,4 +1,5 @@
-# /config/packages/plant_spathiphyllum.yaml
+# /packages/plant_spathiphyllum.yaml #
+######################################
 
 input_text:
   notification_history_spathiphyllum:

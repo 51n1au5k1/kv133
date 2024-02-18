@@ -1,4 +1,5 @@
-# /config/packages/room_hallway.yaml
+# /packages/room_hallway.yaml #
+###############################
 
 timer:
   timer_hallway: 

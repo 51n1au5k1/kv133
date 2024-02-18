@@ -1,4 +1,5 @@
-# /config/packages/plant_pilea_peperomioides.yaml
+# /packages/plant_pilea_peperomioides.yaml #
+############################################
 
 input_text:
   notification_history_pilea:

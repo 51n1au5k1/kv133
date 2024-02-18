@@ -20,9 +20,9 @@ sensor:
         friendly_name: "Необходимость проветривания"
         value_template: >
           {% if states('sensor.co2_monitor_co2') is not none and states('sensor.co2_monitor_co2') != 'unknown' %}
-            {{ (states('sensor.co2_monitor_co2') | float) > 1000 }}
+            {{ 'on' if (states('sensor.co2_monitor_co2') | float) > 1000 else 'off' }}
           {% else %}
-            false
+            off
           {% endif %}
 
       # Датчик статуса проветривания, активируется при CO2 ниже 550 ppm
@@ -31,9 +31,9 @@ sensor:
         friendly_name: "Статус проветривания"
         value_template: >
           {% if states('sensor.co2_monitor_co2') is not none and states('sensor.co2_monitor_co2') != 'unknown' %}
-            {{ (states('sensor.co2_monitor_co2') | float) < 550 }}
+            {{ 'on' if (states('sensor.co2_monitor_co2') | float) < 550 else 'off' }}
           {% else %}
-            false
+            off
           {% endif %}
 
 binary_sensor:
@@ -70,7 +70,7 @@ input_boolean:
 
 automation:
   # Отключение датчика фазы загрузки системы после старта
-  - id: '03e3ffd0-4e1e-4200-b0e3-1ce6a2d77d6a'
+  - id: "03e3ffd0-4e1e-4200-b0e3-1ce6a2d77d6a"
     alias: "Вспомогательная автоматизация: Отключение датчика фазы загрузки системы после старта"
     trigger:
       - platform: homeassistant
@@ -104,7 +104,7 @@ automation:
           - conditions:
               - condition: state
                 entity_id: climate.konditsioner
-                state: 'on'
+                state: "on"
             sequence:
               - service: input_boolean.turn_on
                 target:
@@ -117,7 +117,7 @@ automation:
           - conditions:
               - condition: state
                 entity_id: fan.zhimi_mb3_a5d3_air_purifier
-                state: 'on'
+                state: "on"
             sequence:
               - service: input_boolean.turn_on
                 target:
@@ -130,7 +130,7 @@ automation:
           - conditions:
               - condition: state
                 entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3
-                state: 'on'
+                state: "on"
             sequence:
               - service: input_boolean.turn_on
                 target:
@@ -139,7 +139,6 @@ automation:
           - service: input_boolean.turn_off
             target:
               entity_id: input_boolean.humidifier_pre_restart_state
-
 
   - id: "457a6711-67fa-4cb2-bcab-63c0cc58e054"
     alias: "Вспомогательная автоматизация: восстановление состояний климатической техники"
@@ -151,7 +150,7 @@ automation:
           - conditions:
               - condition: state
                 entity_id: input_boolean.climate_pre_restart_state
-                state: 'on'
+                state: "on"
             sequence:
               - service: climate.turn_on
                 target:
@@ -164,7 +163,7 @@ automation:
           - conditions:
               - condition: state
                 entity_id: input_boolean.fan_pre_restart_state
-                state: 'on'
+                state: "on"
             sequence:
               - service: fan.turn_on
                 target:
@@ -177,7 +176,7 @@ automation:
           - conditions:
               - condition: state
                 entity_id: input_boolean.humidifier_pre_restart_state
-                state: 'on'
+                state: "on"
             sequence:
               - service: fan.turn_on
                 target:
@@ -186,4 +185,3 @@ automation:
           - service: fan.turn_off
             target:
               entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3
-
