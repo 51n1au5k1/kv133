@@ -1,21 +1,31 @@
 # /packages/room_workroom.yaml #
 ################################
 
+# Этот пакет конфигураций Home Assistant предназначен для автоматизации
+# управления подсветкой рабочей зоны в кабинете. Предусмотрено удобное включение
+# и выключение света, что способствует созданию оптимальных условий для работы
+# или отдыха.
+
+# Автоматизации
 automation:
-  - id: '29873ab9-335c-4c39-9898-b01b5a482606'
+  # Вкл/выкл подсветки рабочей зоны кнопкой
+  # Позволяет управлять подсветкой рабочего стола с помощью физической кнопки.
+  # Эта автоматизация реагирует на одиночное нажатие кнопки, выполняя
+  # переключение состояния света (включение/выключение).
+  - id: "29873ab9-335c-4c39-9898-b01b5a482606"
     alias: "Кабинет: Вкл/выкл подсветки рабочей зоны кнопкой"
-    description: ''
+    description: ""
     trigger:
-    - platform: device
-      domain: mqtt
-      device_id: 8067572bca7252311fc2ce6152f90f34
-      type: action
-      subtype: single
-      discovery_id: 0x00158d0003cffd82 action_single
+      - platform: device
+        domain: mqtt
+        device_id: 8067572bca7252311fc2ce6152f90f34
+        type: action
+        subtype: single
+        discovery_id: 0x00158d0003cffd82 action_single
     condition: []
     action:
-    - type: toggle
-      device_id: 3a9919ab25ad577158f751a70c35f8e2
-      entity_id: light.working_room_led
-      domain: light
+      - type: toggle
+        device_id: 3a9919ab25ad577158f751a70c35f8e2
+        entity_id: light.working_room_led
+        domain: light
     mode: single

@@ -1,17 +1,29 @@
 # /packages/notifications_yandex.yaml #
 #######################################
 
-# Настройки для интеграции с Яндекс устройствами
+# Данный набор конфигураций представляет собой часть интеграции умного дома с
+# Яндекс устройствами через Home Assistant, позволяя расширить возможности
+# управления и взаимодействия с домашней автоматизацией. Конфигурация включает
+# в себя настройки для голосового управления, обработку погодных условий,
+# автоматизации для интерактивного взаимодействия с помощью Яндекс станции,
+# а также уведомления и сценарии для повышения комфорта и безопасности в доме.
+
+# Настройки интеграции с Яндекс устройствами:
+
+# Возможность вести диалоги через Яндекс станцию.
+
 conversation:
   intents:
-    media_player.yandex_station_ff98f0294437799304d0788d: [.+] # Возможность вести диалоги через Яндекс станцию
+    media_player.yandex_station_ff98f0294437799304d0788d: [.+]
 
+    # Настройка языка распознавания и сервиса текста в речь от Алисы.
 yandex_station:
   recognition_lang: ru-RU # Язык распознавания по умолчанию
   tts_service_name: alice_say # Сервис текста в речь от Алисы
 
 # Шаблонные датчики для отображения погоды на Яндекс устройствах
 sensor:
+  # Перевод направлений ветра в человечесукю речь
   - platform: template
     sensors:
       yandex_weather4notion_wind:
@@ -37,7 +49,7 @@ sensor:
           {% else %}
             северный
           {% endif %}
-
+      # Перевод состояний погоды в человеческую речь
       yandex_weather4notion_conditions:
         friendly_name: "Погодные условия"
         value_template: >-
@@ -84,45 +96,12 @@ sensor:
 
 # Автоматизации для взаимодействия с Яндекс колонкой
 automation:
-  - id: "661464a3-ab6d-438e-847b-f2b6ddfee59a"
-    alias: "Уведомление. Яндекс: Прощание"
-    description: "Выключает весь свет в доме, включает камеру в полноцветном режиме и произносит прощальное сообщение через Яндекс колонку."
-    trigger:
-      - platform: event
-        event_type: yandex_speaker
-        event_data:
-          value: Я буду скучать! Возвращайся быстрее
-    action:
-      - delay: "00:00:04"
-      - service: script.turn_on
-        target:
-          entity_id: script.yandex_tts_door_status
-      - service: light.turn_off
-        entity_id: light.all_lights
-      - service: switch.turn_on
-        entity_id: switch.chuangmi_ipc019_37da_glimmer_full_color
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: person.master
-                state: "home"
-            sequence:
-              - service: notify.andrei
-                data:
-                  message: "Свет в квартире выключен! Приятной дороги!"
-          - conditions:
-              - condition: state
-                entity_id: person.tatiana
-                state: "home"
-            sequence:
-              - service: notify.tatsiana
-                data:
-                  message: "Свет в квартире выключен! Приятной дороги!"
-    mode: single
-
+  # Приветствие и прощание, активируемые голосовыми командами,
+  # с дополнительными действиями, такими как управление освещением и камерами.
+  # Приветствие
   - id: "2f26dfda-2840-424a-a840-8c4acda8eaf6"
     alias: "Уведомление. Яндекс: Приветствие"
-    description: ""
+    description: "Отключение камеры, включение света в прихожей и доклад о климате"
     trigger:
       - platform: event
         event_type: yandex_speaker
@@ -161,9 +140,47 @@ automation:
         target:
           entity_id: script.yandex_tts_hum_status
     mode: single
+  # Прощание
+  - id: "661464a3-ab6d-438e-847b-f2b6ddfee59a"
+    alias: "Уведомление. Яндекс: Прощание"
+    description: "Выключает весь свет в доме, включает камеру в полноцветном режиме и произносит прощальное сообщение через Яндекс колонку."
+    trigger:
+      - platform: event
+        event_type: yandex_speaker
+        event_data:
+          value: Я буду скучать! Возвращайся быстрее
+    action:
+      - delay: "00:00:04"
+      - service: script.turn_on
+        target:
+          entity_id: script.yandex_tts_door_status
+      - service: light.turn_off
+        entity_id: light.all_lights
+      - service: switch.turn_on
+        entity_id: switch.chuangmi_ipc019_37da_glimmer_full_color
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: person.master
+                state: "home"
+            sequence:
+              - service: notify.andrei
+                data:
+                  message: "Свет в квартире выключен! Приятной дороги!"
+          - conditions:
+              - condition: state
+                entity_id: person.tatiana
+                state: "home"
+            sequence:
+              - service: notify.tatsiana
+                data:
+                  message: "Свет в квартире выключен! Приятной дороги!"
+    mode: single
 
-  ## CO2
-  ### CO2 alert
+  ## Уведомления о необходимости проветривания помещения при высоком уровне CO2,
+  # а также о завершении проветривания.
+
+  # Необходимо проветрить гостиную
   - id: "fd913662-45dc-4dc5-bcbb-55aea5a669b1"
     alias: "Уведомление. Яндекс: Гостиная, необходимо проветрить"
     description: ""
@@ -185,7 +202,8 @@ automation:
       - service: script.turn_on
         entity_id: script.yandex_tts_co2_alert
     mode: single
-  ###Ventilation is over
+
+  # Проветривание в гостиной можно завершать
   - id: "727d6609-4d07-4c6a-b860-1a9a9cccdfe8"
     alias: "Уведомление. Яндекс: Гостиная, проветривание завершено "
     description: ""
@@ -209,7 +227,9 @@ automation:
       - service: script.turn_on
         entity_id: script.yandex_tts_co2_normal
     mode: single
-  ## Температура ниже 20 градусов в одной из комнат, необходимо закрыть дверь
+
+  # Уведомления о температуре ниже установленного уровня в комнатах,
+  # требующих внимания.
   - id: "a8c5eb07-9381-46d5-bc65-0f52dd7079a8"
     alias: "Уведомление. Яндекс: Температура ниже установленного уровня"
     description: ""
@@ -229,56 +249,37 @@ automation:
           entity_id: script.yandex_tts_door_status
     mode: single
 
-  ### Режим уборки
+  # Включение и выключение режима уборки через голосовые команды,
+  # управляя освещением и другими устройствами для создания оптимальных условий.
   ## Включение
   - id: "d2c32d88-e5d5-4a10-8739-583f09e0623c"
     alias: "Уведомление. Яндекс: Режим уборки включен"
-    description: >-
-      Режим "Уборка": автоматизации освещения отключатся в ванной и прихожей
-      отключение света в прихожей
+    description: "Активация режима уборки в ванной."
     mode: single
     trigger:
       - platform: event
         event_type: yandex_speaker
         event_data:
           value: Режим уборки активирован
-    condition: []
     action:
-      - service: automation.turn_off
-        data:
-          stop_actions: true
+      - service: input_boolean.turn_on
         target:
-          entity_id: automation.bathroom_light_off_after_timer
-      - service: automation.turn_off
-        data:
-          stop_actions: true
-        target:
-          entity_id: automation.bathroom_light_on_and_restart_timer_on_motion
-      - service: switch.turn_on
-        target:
-          entity_id: switch.chuangmi_ipc019_37da_switch_status
-        data: {}
+          entity_id: input_boolean.bathroom_cleaning_mode
 
   ## Выключение
   - id: "ad9e3a24-b81d-41aa-b6c7-1b53c9b3b4d7"
     alias: "Уведомление. Яндекс: Режим уборки выключен"
-    description: Отключение режима "Уборка"
+    description: "Отключение режима уборки в ванной."
     trigger:
       - platform: event
         event_type: yandex_speaker
         event_data:
           value: Режим уборки отключён
     action:
-      - service: automation.turn_on
+      - service: input_boolean.turn_off
         target:
-          entity_id: automation.bathroom_light_off_after_timer
-      - service: automation.turn_on
-        target:
-          entity_id: automation.bathroom_light_on_and_restart_timer_on_motion
-      - service: switch.turn_off
-        target:
-          entity_id: switch.chuangmi_ipc019_37da_switch_status
-    mode: single
+          entity_id: input_boolean.bathroom_cleaning_mode
+
   ### Режим принятия душа
   - id: "f6bc1a50-5d19-4ab0-91af-00dd75cff3f5"
     alias: "Уведомление. Яндекс: Режим принятия ванны на 30 минут"
@@ -338,8 +339,35 @@ automation:
         target:
           entity_id: light.lumi_v3_7cdd_light
     mode: single
+
 ################################################################################
+# Скрипты в Home Assistant представляют собой последовательности действий,
+# запускаемые в ответ на определённые события или команды.
+# В контексте интеграции с Яндекс устройствами, они используются для создания
+# богатых взаимодействий между пользователями и умным домом через голосовые
+# команды или автоматизации, предоставляя возможности, от простого
+# информирования о состоянии дома до управления устройствами
+# и создания атмосферы.
+#
+# Общий принцип работы скриптов:
+# Активация через Голосовые Команды или Автоматизации: Скрипты могут быть
+# вызваны голосовыми командами через Яндекс устройства или автоматически в
+# рамках определённых сценариев.
+#
+# Выполнение Последовательности Действий: После активации скрипт выполняет
+# заранее заданную последовательность действий, например, включение/выключение
+# света, воспроизведение голосовых сообщений через Яндекс станцию, управление
+# другими устройствами.
+#
+# Обратная Связь: Скрипты могут предоставлять обратную связь пользователю через
+# аудио сообщения, уведомления на мобильные устройства или изменение состояния
+# устройств в доме.
+################################################################################
+
 script:
+  # Воспроизводит через Яндекс станцию текущий уровень CO2 в доме, предоставляя
+  # пользователю важную информацию о качестве воздуха.
+
   yandex_tts_ppm_status:
     alias: Yandex_TTS_ppm_status
     sequence:
@@ -350,7 +378,10 @@ script:
           media_content_type: text
     mode: single
     icon: yandex:alisa
-  ###
+
+  # Сообщает текущую температуру в гостиной, помогая пользователю быть в курсе
+  # комфорта в доме.
+
   yandex_tts_temp_status:
     alias: Yandex_TTS_temp_status
     sequence:
@@ -361,7 +392,10 @@ script:
           media_content_type: text
     mode: single
     icon: yandex:alisa
-  ###
+
+  # Сообщает текущую влажность в гостиной, помогая пользователю быть в курсе
+  # комфорта в доме.
+
   yandex_tts_hum_status:
     alias: Yandex_TTS_hum_status
     sequence:
@@ -372,8 +406,10 @@ script:
           media_content_type: text
     mode: single
     icon: yandex:alisa
-  #### CO2
-  ### СО2 предупреждение
+
+  # Активируется при высоком уровне CO2, предлагая пользователю проветрить
+  # помещение для улучшения качества воздуха.
+
   yandex_tts_co2_alert:
     alias: Yandex_TTS_CO2_alert
     sequence:
@@ -385,7 +421,9 @@ script:
           media_content_type: text
     mode: single
     icon: yandex:alisa
-  ### Проветривание завершено
+
+  # Проветривание завершено
+
   yandex_tts_co2_normal:
     alias: Yandex_TTS_CO2_normal
     sequence:
@@ -397,7 +435,10 @@ script:
           media_content_type: text
     mode: single
     icon: yandex:alisa
-  #################################
+
+    # Информирует пользователя о том, какие двери в доме остались открытыми,
+    # повышая уровень безопасности и контроля за домом.
+
   yandex_tts_door_status:
     alias: Yandex_TTS_Which_door_is_open
     sequence:
@@ -453,7 +494,9 @@ script:
             data.text|join(\"\") }}"
     mode: single
     icon: yandex:alisa
-  ### Включить вытяжку на кухню
+
+  # Рекомендует пользователю включить вытяжку на кухне.
+
   yandex_tts_kitchen_fan_alert:
     alias: Yandex_TTS_Kithcen_fan_alert
     sequence:
@@ -465,4 +508,3 @@ script:
           media_content_type: text
     mode: single
     icon: yandex:alisa
-  #######

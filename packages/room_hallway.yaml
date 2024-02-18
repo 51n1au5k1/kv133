@@ -1,69 +1,96 @@
 # /packages/room_hallway.yaml #
 ###############################
 
+# Этот пакет Home Assistant настроен для автоматизации освещения в прихожей,
+# обеспечивая удобство и эффективность управления светом. Включает в себя
+# автоматизации для реагирования на действия пользователя и изменения в
+# окружающей среде, а также таймер для контроля продолжительности включения
+# света.
+
+# Таймер
+# Отсчитывает время от момента последнего активного действия в прихожей, после
+# чего свет автоматически выключается. Задана продолжительность в 7 минут и
+# 53 секунды.
+
 timer:
-  timer_hallway: 
+  timer_hallway:
     name: "Движение отсутствует"
-    duration: '00:07:53'
+    duration: "00:07:53"
 
+# Автоматизации:
 automation:
-# Автоматизация включения/выключения света в прихожей по кнопке
-- id: hallway_light_toggle_by_button
-  alias: "Прихожая: Вкл/выкл света кнопкой"
-  trigger:
-    - platform: state
-      entity_id: sensor.0x00158d0002ec2a03_action
-      to: 'single'
-  action:
-    - service: light.toggle
-      target:
-        area_id: prikhozhaia
-    - service: timer.start
-      target:
-        entity_id: timer.timer_hallway
+  # Автоматизация включения/выключения света в прихожей по кнопке
+  # Реагирует на нажатие кнопки, включая или выключая освещение в прихожей.
+  # После включения света также запускается таймер для автоматического
+  # выключения по истечении времени.
 
-# Автоматизация включения света при движении и низком уровне освещенности
-- id: hallway_light_on_by_motion_low_lux
-  alias: "Прихожая: Вкл света при движении и низкой освещенности"
-  trigger:
-    - platform: state
-      entity_id: binary_sensor.hallway_motion_occupancy
-      to: 'on'
-  condition:
-    - condition: numeric_state
-      entity_id: sensor.lumi_v3_7cdd_illumination
-      below: 400
-  action:
-    - service: light.turn_on
-      target:
+  - id: hallway_light_toggle_by_button
+    alias: "Прихожая: Вкл/выкл света кнопкой"
+    trigger:
+      - platform: state
+        entity_id: sensor.0x00158d0002ec2a03_action
+        to: "single"
+    action:
+      - service: light.toggle
+        target:
+          area_id: prikhozhaia
+      - service: timer.start
+        target:
+          entity_id: timer.timer_hallway
+
+  # Вкл света при движении и низкой освещенности
+  # Активируется при обнаружении движения, если уровень освещённости ниже порога
+  # в 400 люкс. Включает свет на короткое время, после чего автоматически
+  # выключает его, если дополнительное движение не обнаружено.
+
+  - id: hallway_light_on_by_motion_low_lux
+    alias: "Прихожая: Вкл света при движении и низкой освещенности"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.hallway_motion_occupancy
+        to: "on"
+    condition:
+      - condition: numeric_state
+        entity_id: sensor.lumi_v3_7cdd_illumination
+        below: 400
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: light.lumi_v3_7cdd_light
+        data:
+          brightness_pct: 10
+      - delay:
+          seconds: 5
+      - service: light.turn_off
         entity_id: light.lumi_v3_7cdd_light
-      data:
-        brightness_pct: 10
-    - delay:
-        seconds: 5
-    - service: light.turn_off
-      entity_id: light.lumi_v3_7cdd_light
 
-# Автоматизация включения таймера при включении света любым способом
-- id: hallway_timer_start_on_light_on
-  alias: "Прихожая: Запуск таймера при включении света"
-  trigger:
-    - platform: state
-      entity_id: light.hallway_switch
-      to: 'on'
-  action:
-    - service: timer.start
-      entity_id: timer.timer_hallway
+  # Запуск таймера при включении света
+  # Запускает таймер в момент включения света в прихожей любым способом,
+  # обеспечивая его автоматическое выключение по истечении заданного времени.
 
-# Автоматизация выключения света по таймеру
-- id: hallway_light_off_by_timer
-  alias: "Прихожая: Выключение света по таймеру"
-  trigger:
-    - platform: event
-      event_type: timer.finished
-      event_data:
+  - id: hallway_timer_start_on_light_on
+    alias: "Прихожая: Запуск таймера при включении света"
+    trigger:
+      - platform: state
+        entity_id: light.hallway_switch
+        to: "on"
+    action:
+      - service: timer.start
         entity_id: timer.timer_hallway
-  action:
-    - service: light.turn_off
-      target:
-        area_id: prikhozhaia
+
+  # Выключение света по таймеру
+  # Выключает освещение в прихожей по истечении времени таймера, обеспечивая
+  # экономию электроэнергии и предотвращая работу света в отсутствие
+  # необходимости.
+
+  - id: hallway_light_off_by_timer
+    alias: "Прихожая: Выключение света по таймеру"
+    trigger:
+      - platform: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.timer_hallway
+    action:
+      - service: light.turn_off
+        target:
+          area_id: prikhozhaia

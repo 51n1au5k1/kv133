@@ -1,6 +1,8 @@
 # /packages/plant_ficus_lyrata.yaml #
 #####################################
 
+# См. /config/packages/plant_euphorbia_leuconeura.yaml
+
 input_text:
   notification_history_ficus:
     name: "Фикус: История уведомлений"

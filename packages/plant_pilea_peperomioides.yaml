@@ -1,6 +1,8 @@
 # /packages/plant_pilea_peperomioides.yaml #
 ############################################
 
+# См. /config/packages/plant_euphorbia_leuconeura.yaml
+
 input_text:
   notification_history_pilea:
     name: "Пилея: История уведомлений"

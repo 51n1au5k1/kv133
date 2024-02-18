@@ -1,10 +1,23 @@
 # packages/plant_euphorbia_leuconeura.yaml #
 ############################################
 
+# Этот пакет конфигураций Home Assistant предназначен для мониторинга условий
+# содержания растения Молочай (Euphorbia leuconeura) и включает в себя механизмы
+# уведомлений о необходимости ухода.
+
+# Конфигурации
+# Входные Тексты и Даты
+
+# История уведомлений Молочай: Хранит историю отправленных уведомлений о
+# состоянии растения.
+
 input_text:
   notification_history_euphorbia:
     name: "Молочай: История уведомлений"
 
+# Время последнего уведомления о влажности и температуре почвы:
+# Записывает момент отправки последнего уведомления о необходимости полива
+# и обеспечения тепла.
 input_datetime:
   last_euphorbia_soil_notification:
     name: "Last Euphorbia Soil Notification Time"
@@ -15,6 +28,18 @@ input_datetime:
     has_date: true
     has_time: true
 
+# Механизм установления отметок об отправке уведомлений включает в себя
+# обновление input_datetime со временем последнего уведомления.
+# Это обеспечивает контроль за частотой уведомлений и предотвращает их
+# избыточность, повышая эффективность коммуникации с пользователем и
+# внимание к актуальным потребностям растения.
+
+# Настройка хранения информации в базе данных
+# Позволяет сохранять исторические данные о состоянии растения. Это включает
+# в себя уровень влажности почвы, температуру и уровень освещенности, а
+# также статусы бинарных сенсоров и времени последних уведомлений.
+# Исключая автоматизации из записи, мы фокусируемся на сборе только
+# релевантной информации о состоянии растения.
 recorder:
   include:
     entities:
@@ -30,24 +55,30 @@ recorder:
     domains:
       - automation
 
-# Бинарные сенсоры
+# Бинарные Датчики
+
 binary_sensor:
   - platform: template
     sensors:
+      # Необходимость полива (Молочай): Активируется, когда влажность почвы
+      # опускается ниже заданного порога.
       plant_alert_euphorbia_leuconeura_soil:
         unique_id: plant_alert_euphorbia_leuconeura_soil
         friendly_name: "Необходимость полива (Молочай)"
         device_class: problem
         value_template: >-
           {{ states('sensor.euphorbia_leuconeura_soil_moisture') | int(default=0) < states('number.euphorbia_leuconeura_min_soil_moisture') | int(default=0) }}
-
+      # Необходимость согрева (Молочай): Сигнализирует о снижении температуры
+      # почвы ниже комфортной для растения.
       plant_alert_euphorbia_leuconeura_temperature:
         unique_id: plant_alert_euphorbia_leuconeura_temperature
         friendly_name: "Необходимость согрева (Молочай)"
         device_class: problem
         value_template: >-
           {{ states('sensor.euphorbia_leuconeura_temperature') | int(default=0) < states('number.euphorbia_leuconeura_min_temperature') | int(default=0) }}
-
+      # Euphorbia Needs Watering Recently: Показывает, что растению недавно
+      # требовался полив, основываясь на времени последнего уведомления и
+      # текущем состоянии датчика влажности.
       euphorbia_watering_needed_recently:
         unique_id: euphorbia_watering_needed_recently
         friendly_name: "Euphorbia Needs Watering Recently"
@@ -59,6 +90,9 @@ binary_sensor:
 
 # Автоматизации
 automation:
+  # Уведомление о необходимости полива: Отправляет уведомления через
+  # определенные интервалы времени, если растение нуждается в поливе, и
+  # кто-то находится дома.
   - id: "0467a8eb-5161-41f0-8b13-941ff36845fc"
     alias: "Растение. Молочай: Уведомление о необходимости полива"
     description: "Отправляет уведомление, если Молочай нуждается в поливе, каждые 3 часа, если кто-то есть дома."
@@ -121,6 +155,8 @@ automation:
             {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
     mode: single
 
+  # Уведомление о необходимости тепла: Сообщает о потребности в тепле для
+  # растения, если температура почвы опускается ниже комфортного уровня.
   - id: "f9f31a67-9214-402e-b7d7-73d5a7516b14"
     alias: "Растение. Молочай: Уведомление о температуре"
     description: "Отправляет уведомление, если Молочай нуждается в тепле, каждые 3 часа, только если кто-то есть дома."
