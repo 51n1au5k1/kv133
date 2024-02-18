@@ -1,0 +1,146 @@
+# /config/packages/plant_ficus_lyrata.yaml
+
+input_text:
+  notification_history_ficus:
+    name: "Фикус: История уведомлений"
+
+input_datetime:
+  last_ficus_soil_notification:
+    name: "Last Ficus Soil Notification Time"
+    has_date: true
+    has_time: true
+
+  last_ficus_temperature_notification:
+    name: "Last Ficus Temperature Notification Time"
+    has_date: true
+    has_time: true
+
+recorder:
+  include:
+    entities:
+      - sensor.ficus_lyrata_soil_moisture
+      - sensor.ficus_lyrata_temperature
+      - sensor.ficus_lyrata_illuminance
+      - binary_sensor.plant_alert_ficus_lyrata_soil
+      - binary_sensor.plant_alert_ficus_lyrata_temperature
+      - binary_sensor.plant_alert_ficus_lyrata_illuminance
+      - input_datetime.last_ficus_soil_notification
+      - input_datetime.last_ficus_temperature_notification
+  exclude:
+    domains:
+      - automation
+
+binary_sensor:
+  - platform: template
+    sensors:
+      plant_alert_ficus_lyrata_soil:
+        unique_id: plant_alert_ficus_lyrata_soil
+        friendly_name: "Необходимость полива (Фикус)"
+        device_class: problem
+        value_template: >-
+          {{ states('sensor.ficus_lyrata_soil_moisture') | int(default=0) < states('number.ficus_lyrata_min_soil_moisture') | int(default=0) }}
+
+      plant_alert_ficus_lyrata_temperature:
+        unique_id: plant_alert_ficus_lyrata_temperature
+        friendly_name: "Необходимость согрева (Фикус)"
+        device_class: problem
+        value_template: >-
+          {{ states('sensor.ficus_lyrata_temperature') | int(default=0) < states('number.ficus_lyrata_min_temperature') | int(default=0) }}
+
+      ficus_watering_needed_recently:
+        unique_id: ficus_watering_needed_recently
+        friendly_name: "Ficus Needs Watering Recently"
+        value_template: >-
+          {{ is_state('binary_sensor.plant_alert_ficus_lyrata_soil', 'on') 
+            and (as_timestamp(now()) - as_timestamp(states('input_datetime.last_ficus_soil_notification') | default(0))) > 10800 }}
+        delay_off:
+          minutes: 1
+
+automation:
+  - id: "e6ad35f4-903a-481d-920e-f84ed4785010"
+    alias: "Растение. Фикус: Уведомление о необходимости полива"
+    description: "Отправляет уведомление, если Фикус нуждается в поливе, каждые 3 часа, если кто-то есть дома."
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.plant_alert_ficus_lyrata_soil
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.ficus_watering_needed_recently
+        state: "off"
+      - condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_ficus_soil_notification'))) > 10800 }}
+      - condition: time
+        after: "08:00:00"
+        before: "22:00:00"
+    action:
+      - service: notify.tatsiana
+        data:
+          message: "Фикус уже почти пикус...ой, поник! Подлей водички, дорогая, не жалей!"
+          data:
+            photo:
+              file: "/config/www/images/plants_alerts/Ficus_lyrata_soil.webp"
+              caption: "Фикус уже почти пикус...ой, поник! Подлей водички, дорогая, не жалей!"
+      - service: notify.andrei
+        data:
+          message: "Необходимо полить Фикус: влажность почвы составляет {{ states('sensor.ficus_lyrata_soil_moisture') | round }}"
+          data:
+            photo:
+              file: "/config/www/images/plants_alerts/Ficus_lyrata_soil.webp"
+              caption: "Необходимо полить Фикус: влажность почвы составляет {{ states('sensor.ficus_lyrata_soil_moisture') | round }}"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.last_ficus_soil_notification
+        data:
+          timestamp: "{{ now().timestamp() }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.notification_history_ficus
+        data_template:
+          value: >
+            {% set history = states('input_text.notification_history_ficus') %}
+            {% set new_entry = "Уведомление о поливе Фикуса: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
+            {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
+    mode: single
+
+  - id: "94e20fb4-2e39-433f-990f-74df413a6ace"
+    alias: "Растение. Фикус: Уведомление о температуре"
+    description: "Отправляет уведомление, если Фикус нуждается в тепле, каждые 3 часа, только если кто-то есть дома."
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.plant_alert_ficus_lyrata_temperature
+        to: "on"
+    condition:
+      - condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_ficus_temperature_notification'))) > 10800 }}
+    action:
+      - service: notify.tatsiana
+        data_template:
+          message: "Фитозавры вымерли от холода, я не хочу повторить его судьбу!"
+          data:
+            photo:
+              file: "/config/www/images/plants_alerts/Ficus_lyrata_cold.webp"
+              caption: "Фитозавры вымерли от холода, я не хочу повторить его судьбу!"
+      - service: notify.andrei
+        data_template:
+          message: "Фикус необходимо поставить в тёплое место, температура почвы составляет {{states('sensor.ficus_lyrata_temperature')|round}}"
+          data:
+            photo:
+              file: "/config/www/images/plants_alerts/Ficus_lyrata_cold.webp"
+              caption: "Фикус необходимо поставить в тёплое место, температура почвы составляет {{states('sensor.ficus_lyrata_temperature')|round}}"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.last_ficus_temperature_notification
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.notification_history_ficus
+        data_template:
+          value: >
+            {% set history = states('input_text.notification_history_ficus') %}
+            {% set new_entry = "Уведомление о температуре Фикуса: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
+            {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
+    mode: single

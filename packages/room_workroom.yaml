@@ -1,0 +1,20 @@
+# /config/packages/room_workroom.yaml
+
+automation:
+  - id: '29873ab9-335c-4c39-9898-b01b5a482606'
+    alias: "Кабинет: Вкл/выкл подсветки рабочей зоны кнопкой"
+    description: ''
+    trigger:
+    - platform: device
+      domain: mqtt
+      device_id: 8067572bca7252311fc2ce6152f90f34
+      type: action
+      subtype: single
+      discovery_id: 0x00158d0003cffd82 action_single
+    condition: []
+    action:
+    - type: toggle
+      device_id: 3a9919ab25ad577158f751a70c35f8e2
+      entity_id: light.working_room_led
+      domain: light
+    mode: single

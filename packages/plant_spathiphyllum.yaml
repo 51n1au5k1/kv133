@@ -1,0 +1,146 @@
+# /config/packages/plant_spathiphyllum.yaml
+
+input_text:
+  notification_history_spathiphyllum:
+    name: "Спатифиллюм: История уведомлений"
+
+input_datetime:
+  last_spathiphyllum_soil_notification:
+    name: "Last Spathiphyllum Soil Notification Time"
+    has_date: true
+    has_time: true
+
+  last_spathiphyllum_temperature_notification:
+    name: "Last Spathiphyllum Temperature Notification Time"
+    has_date: true
+    has_time: true
+
+recorder:
+  include:
+    entities:
+      - sensor.spathiphyllum_soil_moisture
+      - sensor.spathiphyllum_temperature
+      - sensor.spathiphyllum_illuminance
+      - binary_sensor.plant_alert_spathiphyllum_soil
+      - binary_sensor.plant_alert_spathiphyllum_temperature
+      - binary_sensor.plant_alert_spathiphyllum_illuminance
+      - input_datetime.last_spathiphyllum_soil_notification
+      - input_datetime.last_spathiphyllum_temperature_notification
+  exclude:
+    domains:
+      - automation
+
+binary_sensor:
+  - platform: template
+    sensors:
+      plant_alert_spathiphyllum_soil:
+        unique_id: plant_alert_spathiphyllum_soil
+        friendly_name: "Необходимость полива (Спатифиллюм)"
+        device_class: "problem"
+        value_template: >-
+          {{ states('sensor.spathiphyllum_soil_moisture') | int(default=0) < states('number.spathiphyllum_min_soil_moisture') | int(default=0) }}
+
+      plant_alert_spathiphyllum_temperature:
+        unique_id: plant_alert_spathiphyllum_temperature
+        friendly_name: "Необходимость согрева (Спатифиллюм)"
+        device_class: "problem"
+        value_template: >-
+          {{ states('sensor.spathiphyllum_temperature') | int(default=0) < states('number.spathiphyllum_min_temperature') | int(default=0) }}
+
+      spathiphyllum_watering_needed_recently:
+        unique_id: spathiphyllum_watering_needed_recently
+        friendly_name: "Spathiphyllum Needs Watering Recently"
+        value_template: >-
+          {{ is_state('binary_sensor.plant_alert_spathiphyllum_soil', 'on') 
+            and (as_timestamp(now()) - as_timestamp(states('input_datetime.last_spathiphyllum_soil_notification') | default(0))) > 10800 }}
+        delay_off:
+          minutes: 1
+
+automation:
+  - id: "2cadcef1-bddc-44ce-9942-da293182f318"
+    alias: "Растение. Спатифиллюм: Уведомление о необходимости полива"
+    description: "Отправляет уведомление, если Спатифиллум нуждается в поливе, каждые 3 часа, если кто-то есть дома."
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.plant_alert_spathiphyllum_soil
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.spathiphyllum_watering_needed_recently
+        state: "off"
+      - condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_spathiphyllum_soil_notification'))) > 10800 }}
+      - condition: time
+        after: "08:00:00"
+        before: "22:00:00"
+    action:
+      - service: notify.tatsiana
+        data:
+          message: "Женское счастье нуждается в капельке твоего внимания..."
+          data:
+            photo:
+              file: "/config/www/images/plants_alerts/Spathiphyllum_soil.webp"
+              caption: "Женское счастье нуждается в капельке твоего внимания..."
+      - service: notify.andrei
+        data:
+          message: "Необходимо полить Женское счастье: влажность почвы составляет {{ states('sensor.spathiphyllum_soil_moisture') | round|int }}%"
+          data:
+            photo:
+              file: "/config/www/images/plants_alerts/Spathiphyllum_soil.webp"
+              caption: "Необходимо полить Женское счастье: влажность почвы составляет {{ states('sensor.spathiphyllum_soil_moisture') | round|int }}%"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.last_spathiphyllum_soil_notification
+        data:
+          timestamp: "{{ now().timestamp() }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.notification_history_spathiphyllum
+        data_template:
+          value: >
+            {% set history = states('input_text.notification_history_spathiphyllum') %}
+            {% set new_entry = "Уведомление о поливе Спатифиллума: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
+            {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
+    mode: single
+
+  - id: "6d029e7d-6cf6-4aee-85ee-c1295158e442"
+    alias: "Растение. Спатифиллюм: Уведомление о температуре"
+    description: "Отправляет уведомление, если Спатифиллум нуждается в тепле, каждые 3 часа, только если кто-то есть дома."
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.plant_alert_spathiphyllum_temperature
+        to: "on"
+    condition:
+      - condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_spathiphyllum_temperature_notification'))) > 10800 }}
+    action:
+      - service: notify.tatsiana
+        data_template:
+          message: "Женское счастье нуждается в твоём тепле как никогда."
+          data:
+            photo:
+              file: "/config/www/images/plants_alerts/Spathiphyllum_cold.webp"
+              caption: "Женское счастье нуждается в твоём тепле как никогда."
+      - service: notify.andrei
+        data_template:
+          message: "Женское счастье необходимо поставить в тёплое место, температура почвы составляет {{states('sensor.spathiphyllum_temperature')|round}}°C."
+          data:
+            photo:
+              file: "/config/www/images/plants_alerts/Spathiphyllum_cold.webp"
+              caption: "Женское счастье необходимо поставить в тёплое место, температура почвы составляет {{states('sensor.spathiphyllum_temperature')|round}}°C."
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.last_spathiphyllum_temperature_notification
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.notification_history_spathiphyllum
+        data_template:
+          value: >
+            {% set history = states('input_text.notification_history_spathiphyllum') %}
+            {% set new_entry = "Уведомление о температуре Спатифиллума: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
+            {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
+    mode: single

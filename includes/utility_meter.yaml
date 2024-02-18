@@ -1,0 +1,12 @@
+## Living room Left socket
+living_room_socket_l_energy:
+  unique_id: 010b8f06-2a59-45a6-93c7-3ad068c03f4c
+  name: UM_livingroom_socket_l
+  source: sensor.livingroom_socket_l_energy
+  cycle: monthly
+## Living room Right socket
+living_room_socket_r_energy:
+  unique_id: 0a49014e-cc08-42e5-93f0-0951f2db7742
+  name: UM_livingroom_socket_R
+  source: sensor.livingroom_socket_r_energy
+  cycle: monthly

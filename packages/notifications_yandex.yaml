@@ -1,0 +1,467 @@
+# /config/packages/notifications_yandex.yaml
+
+# Настройки для интеграции с Яндекс устройствами
+conversation:
+  intents:
+    media_player.yandex_station_ff98f0294437799304d0788d: [.+]  # Возможность вести диалоги через Яндекс станцию
+
+yandex_station:
+  recognition_lang: ru-RU  # Язык распознавания по умолчанию
+  tts_service_name: alice_say  # Сервис текста в речь от Алисы
+
+# Шаблонные датчики для отображения погоды на Яндекс устройствах
+sensor:
+  - platform: template
+    sensors:
+      yandex_weather4notion_wind:
+        friendly_name: "Направление ветра"
+        value_template: >-
+          {% set bearing = states('sensor.yandex_weather_wind_bearing') | int %}
+          {% if bearing == 0 %}
+            отсуствует (штиль)
+          {% elif bearing == 45 %}
+            северо-восточный
+          {% elif bearing == 90 %}
+            восточный
+          {% elif bearing == 135 %}
+            юго-восточный
+          {% elif bearing == 180 %}
+            южный
+          {% elif bearing == 225 %}
+            юго-западный
+          {% elif bearing == 270 %}
+            западный
+          {% elif bearing == 315 %}
+            северо-западный
+          {% else %}
+            северный
+          {% endif %}
+
+      yandex_weather4notion_conditions:
+        friendly_name: "Погодные условия"
+        value_template: >-
+          {% set condition = states('sensor.yandex_weather_condition_yandex_2') %}
+          {% if condition == 'clear' %}
+            ясно
+          {% elif condition == 'partly-cloudy' %}
+            малооблачно
+          {% elif condition == 'cloudy' %}
+            облачно с прояснениями
+          {% elif condition == 'overcast' %}
+            пасмурно
+          {% elif condition == 'drizzle' %}
+            морось
+          {% elif condition == 'light-rain' %}
+            небольшой дождь
+          {% elif condition == 'rain' %}
+            дождь
+          {% elif condition == 'moderate-rain' %}
+            умеренно-сильный дождь
+          {% elif condition == 'heavy-rain' %}
+            сильный дождь
+          {% elif condition == 'continuous-heavy-rain' %}
+            длительный сильный дождь
+          {% elif condition == 'showers' %}
+            ливень
+          {% elif condition == 'wet-snow' %}
+            дождь со снегом
+          {% elif condition == 'light-snow' %}
+            небольшой снег
+          {% elif condition == 'snow' %}
+            снег
+          {% elif condition == 'snow-showers' %}
+            снегопад
+          {% elif condition == 'hail' %}
+            град
+          {% elif condition == 'thunderstorm' %}
+            гроза
+          {% elif condition == 'thunderstorm-with-rain' %}
+            дождь с грозой
+          {% else %}
+            гроза с градом
+          {% endif %}
+
+# Автоматизации для взаимодействия с Яндекс колонкой
+automation:
+  - id: "661464a3-ab6d-438e-847b-f2b6ddfee59a"
+    alias: "Уведомление. Яндекс: Прощание"
+    description: "Выключает весь свет в доме, включает камеру в полноцветном режиме и произносит прощальное сообщение через Яндекс колонку."
+    trigger:
+      - platform: event
+        event_type: yandex_speaker
+        event_data:
+          value: Я буду скучать! Возвращайся быстрее
+    action:
+      - delay: "00:00:04"
+      - service: script.turn_on
+        target:
+          entity_id: script.yandex_tts_door_status
+      - service: light.turn_off
+        entity_id: light.all_lights
+      - service: switch.turn_on
+        entity_id: switch.chuangmi_ipc019_37da_glimmer_full_color
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: person.master
+                state: 'home'
+            sequence:
+              - service: notify.andrei
+                data:
+                  message: "Свет в квартире выключен! Приятной дороги!"
+          - conditions:
+              - condition: state
+                entity_id: person.tatiana
+                state: 'home'
+            sequence:
+              - service: notify.tatsiana
+                data:
+                  message: "Свет в квартире выключен! Приятной дороги!"
+    mode: single
+
+  - id: "2f26dfda-2840-424a-a840-8c4acda8eaf6"
+    alias: "Уведомление. Яндекс: Приветствие"
+    description: ""
+    trigger:
+      - platform: event
+        event_type: yandex_speaker
+        event_data:
+          value: С возвращением, дорогой мне человек! Я скучала без тебя!
+    condition: []
+    action:
+      - service: light.turn_on
+        target:
+          area_id: prikhozhaia
+      - delay:
+          hours: 0
+          minutes: 0
+          seconds: 4
+          milliseconds: 0
+      - service: script.turn_on
+        data: {}
+        target:
+          entity_id: script.yandex_tts_ppm_status
+      - delay:
+          hours: 0
+          minutes: 0
+          seconds: 6
+          milliseconds: 0
+      - service: script.turn_on
+        data: {}
+        target:
+          entity_id: script.yandex_tts_temp_status
+      - delay:
+          hours: 0
+          minutes: 0
+          seconds: 3
+          milliseconds: 0
+      - service: script.turn_on
+        data: {}
+        target:
+          entity_id: script.yandex_tts_hum_status
+    mode: single
+
+## CO2
+### CO2 alert
+  - id: "fd913662-45dc-4dc5-bcbb-55aea5a669b1"
+    alias: "Уведомление. Яндекс: Гостиная, необходимо проветрить"
+    description: ""
+    trigger:
+      - platform: state
+        entity_id:
+          - binary_sensor.ventilation_need
+        from: "off"
+        to: "on"
+        for:
+          hours: 0
+          minutes: 5
+          seconds: 0
+    condition:
+      - condition: time
+        after: "09:05:00"
+        before: "22:55:00"
+    action:
+      - service: script.turn_on
+        entity_id: script.yandex_tts_co2_alert
+    mode: single
+###Ventilation is over
+  - id: "727d6609-4d07-4c6a-b860-1a9a9cccdfe8"
+    alias: "Уведомление. Яндекс: Гостиная, проветривание завершено "
+    description: ""
+    trigger:
+      - platform: state
+        entity_id:
+          - binary_sensor.ventilation_status
+        from: "off"
+        to: "on"
+    condition:
+      - condition: time
+        after: "09:05:00"
+        before: "22:55:00"
+    action:
+      - wait_for_trigger:
+          - platform: state
+            entity_id: binary_sensor.ventilation_status
+            to: "off"
+        timeout: "00:03:00"
+        continue_on_timeout: true
+      - service: script.turn_on
+        entity_id: script.yandex_tts_co2_normal
+    mode: single
+## Температура ниже 20 градусов в одной из комнат, необходимо закрыть дверь
+  - id: "a8c5eb07-9381-46d5-bc65-0f52dd7079a8"
+    alias: "Уведомление. Яндекс: Температура ниже установленного уровня"
+    description: ""
+    trigger:
+      - platform: state
+        entity_id:
+          - binary_sensor.temperature_below_20
+        to: "on"
+    condition:
+      - condition: time
+        after: "09:05:00"
+        before: "22:55:00"
+    action:
+      - service: script.turn_on
+        data: {}
+        target:
+          entity_id: script.yandex_tts_door_status
+    mode: single
+
+### Режим уборки
+## Включение
+  - id: "d2c32d88-e5d5-4a10-8739-583f09e0623c"
+    alias: "Уведомление. Яндекс: Режим уборки включен"
+    description: >-
+      Режим "Уборка": автоматизации освещения отключатся в ванной и прихожей
+      отключение света в прихожей
+    mode: single
+    trigger:
+      - platform: event
+        event_type: yandex_speaker
+        event_data:
+          value: Режим уборки активирован
+    condition: []
+    action:
+      - service: automation.turn_off
+        data:
+          stop_actions: true
+        target:
+          entity_id: automation.bathroom_light_off_after_timer
+      - service: automation.turn_off
+        data:
+          stop_actions: true
+        target:
+          entity_id: automation.bathroom_light_on_and_restart_timer_on_motion
+      - service: switch.turn_on
+        target:
+          entity_id: switch.chuangmi_ipc019_37da_switch_status
+        data: {}
+
+  ## Выключение
+  - id: "ad9e3a24-b81d-41aa-b6c7-1b53c9b3b4d7"
+    alias: "Уведомление. Яндекс: Режим уборки выключен"
+    description: Отключение режима "Уборка"
+    trigger:
+      - platform: event
+        event_type: yandex_speaker
+        event_data:
+          value: Режим уборки отключён
+    action:
+      - service: automation.turn_on
+        target:
+          entity_id: automation.bathroom_light_off_after_timer
+      - service: automation.turn_on
+        target:
+          entity_id: automation.bathroom_light_on_and_restart_timer_on_motion
+      - service: switch.turn_off
+        target:
+          entity_id: switch.chuangmi_ipc019_37da_switch_status
+    mode: single
+### Режим принятия душа
+  - id: "f6bc1a50-5d19-4ab0-91af-00dd75cff3f5"
+    alias: "Уведомление. Яндекс: Режим принятия ванны на 30 минут"
+    description: "Activates shower mode for 30 minutes when 'С лёгким паром!' is said"
+    trigger:
+      - platform: event
+        event_type: yandex_speaker
+        event_data:
+          value: С лёгким паром!
+    action:
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.bathroom_shower_mode
+      - delay: "00:30:00"
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.bathroom_shower_mode
+    mode: single
+
+## Стук в дверь
+  - id: "d03a5f5d-058f-4b9b-8977-adbc32a16640"
+    alias: "Уведомление. Яндекс: Звонок в дверь"
+    description: "Алиса говорит 'Тук-тук! К Вам гости!' и моргает светом через Xiaomi Gateway при нажатии кнопки"
+    trigger:
+      - platform: state
+        entity_id: sensor.0x00158d0002582753_action_2
+        to: "single"
+    action:
+      - service: media_player.play_media
+        target:
+          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+        data:
+          media_content_id: "Тук-тук! К Вам гости!"
+          media_content_type: dialog
+          extra:
+            volume_level: 0.5
+      - service: light.turn_on
+        target:
+          entity_id: light.lumi_v3_7cdd_light
+        data:
+          brightness_pct: 10
+          rgb_color: [204, 255, 204]
+      - delay:
+          seconds: 1
+      - service: light.turn_off
+        target:
+          entity_id: light.lumi_v3_7cdd_light
+      - delay:
+          seconds: 1
+      - service: light.turn_on
+        target:
+          entity_id: light.lumi_v3_7cdd_light
+        data:
+          brightness_pct: 10
+          rgb_color: [204, 255, 204]
+      - delay:
+          seconds: 1
+      - service: light.turn_off
+        target:
+          entity_id: light.lumi_v3_7cdd_light
+    mode: single
+################################################################################
+script:
+  yandex_tts_ppm_status:
+    alias: Yandex_TTS_ppm_status
+    sequence:
+      - service: media_player.play_media
+        entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+        data:
+          media_content_id: Уровень Цэ О Два составляет {{states("sensor.co2_monitor_co2")|round|format(morph='часть')}} на миллион
+          media_content_type: text
+    mode: single
+    icon: yandex:alisa
+  ###
+  yandex_tts_temp_status:
+    alias: Yandex_TTS_temp_status
+    sequence:
+      - service: media_player.play_media
+        entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+        data:
+          media_content_id: Температура в гостиной {{states('sensor.livingroom_climat_sensor_temperature')|round|format(morph='градус')}}
+          media_content_type: text
+    mode: single
+    icon: yandex:alisa
+  ###
+  yandex_tts_hum_status:
+    alias: Yandex_TTS_hum_status
+    sequence:
+      - service: media_player.play_media
+        entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+        data:
+          media_content_id: Влажность {{states('sensor.livingroom_climat_sensor_humidity')|round|format(morph='процент')}}
+          media_content_type: text
+    mode: single
+    icon: yandex:alisa
+  #### CO2
+  ### СО2 предупреждение
+  yandex_tts_co2_alert:
+    alias: Yandex_TTS_CO2_alert
+    sequence:
+      - service: media_player.play_media
+        entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+        data:
+          media_content_id: >
+            {{["Необходимо", "Желательно", "Нужно" ] | random }} {{"проветрить"}} {{["квартиру", "помещение", "домик" ] | random }} {{"чтобы"}} {{["снизить", "уменьшить", "свести к минимуму" ] | random}} {{"концентрацию Цэ О Два"}}
+          media_content_type: text
+    mode: single
+    icon: yandex:alisa
+  ### Проветривание завершено
+  yandex_tts_co2_normal:
+    alias: Yandex_TTS_CO2_normal
+    sequence:
+      - service: media_player.play_media
+        entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+        data:
+          media_content_id: >
+            {{"Проветривание"}} {{["завершено!", "окончено!", "успешно!" ] | random }} {{["Уровень", "Концентрация", "Показатель" ] | random }} {{"Цэ О Два"}} {{["в пределах нормы", "в допустимых значениях", "в норме" ] | random}}
+          media_content_type: text
+    mode: single
+    icon: yandex:alisa
+  #################################
+  yandex_tts_door_status:
+    alias: Yandex_TTS_Which_door_is_open
+    sequence:
+      - service: media_player.play_media
+        entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+        data:
+          media_content_id:
+            "{% set door_sensors = {\n  \"в гостиной\": is_state(\"binary_sensor.gostinaia_balkon_contact\",
+            \"on\"),\n  \"в мастерской\":  is_state(\"binary_sensor.masterskaia_balkon_contact\",
+            \"on\"),\n  \"на кухне\":  is_state(\"binary_sensor.0x00158d0003ce9922_contact\",
+            \"on\"),\n  \"в спальне\":  is_state(\"binary_sensor.0x00158d00044d5d11_contact\",
+            \"on\")\n} %}\n{% set data = namespace(text=[]) %}\n{% for k in door_sensors
+            if door_sensors[k] == true %}\n  {% if loop.first %}\n    {% set data.text
+            = data.text + [[\"Кстати,\", \"Не забудьте, что\", \"Напоминаю, что\"]|random]
+            + [\" у вас\"] + [[\" открыта\", \" не закрыта\"]|random] + [\" дверь\"] %}\n
+            \ {% endif %}\n\n  {% if not loop.first and not loop.last %}\n    {% set data.text
+            = data.text + [\", \"] + [k] %}\n  {% elif loop.last and not loop.first %}\n
+            \   {% set data.text = data.text + [\" и \"] + [k] %}\n  {% else %}\n    {%
+            set data.text = data.text + [\" \"] + [k] %}\n  {% endif %}\n{% endfor %}\n{{
+            data.text|join(\"\") }}"
+          media_content_type: text
+      - service: notify.andrei
+        data:
+          message:
+            "{% set door_sensors = {\n  \"в гостиной\": is_state(\"binary_sensor.gostinaia_balkon_contact\",
+            \"on\"),\n  \"в мастерской\":  is_state(\"binary_sensor.masterskaia_balkon_contact\",
+            \"on\"),\n  \"на кухне\":  is_state(\"binary_sensor.0x00158d0003ce9922_contact\",
+            \"on\"),\n  \"в спальне\":  is_state(\"binary_sensor.0x00158d00044d5d11_contact\",
+            \"on\")\n} %}\n{% set data = namespace(text=[]) %}\n{% for k in door_sensors
+            if door_sensors[k] == true %}\n  {% if loop.first %}\n    {% set data.text
+            = data.text + [[\"Кстати,\", \"Не забудьте, что\", \"Напоминаю, что\"]|random]
+            + [\" у вас\"] + [[\" открыта\", \" не закрыта\"]|random] + [\" дверь\"] %}\n
+            \ {% endif %}\n\n  {% if not loop.first and not loop.last %}\n    {% set data.text
+            = data.text + [\", \"] + [k] %}\n  {% elif loop.last and not loop.first %}\n
+            \   {% set data.text = data.text + [\" и \"] + [k] %}\n  {% else %}\n    {%
+            set data.text = data.text + [\" \"] + [k] %}\n  {% endif %}\n{% endfor %}\n{{
+            data.text|join(\"\") }}"
+      - service: notify.tatsiana
+        data:
+          message:
+            "{% set door_sensors = {\n  \"в гостиной\": is_state(\"binary_sensor.gostinaia_balkon_contact\",
+            \"on\"),\n  \"в мастерской\":  is_state(\"binary_sensor.masterskaia_balkon_contact\",
+            \"on\"),\n  \"на кухне\":  is_state(\"binary_sensor.0x00158d0003ce9922_contact\",
+            \"on\"),\n  \"в спальне\":  is_state(\"binary_sensor.0x00158d00044d5d11_contact\",
+            \"on\")\n} %}\n{% set data = namespace(text=[]) %}\n{% for k in door_sensors
+            if door_sensors[k] == true %}\n  {% if loop.first %}\n    {% set data.text
+            = data.text + [[\"Кстати,\", \"Не забудьте, что\", \"Напоминаю, что\"]|random]
+            + [\" у вас\"] + [[\" открыта\", \" не закрыта\"]|random] + [\" дверь\"] %}\n
+            \ {% endif %}\n\n  {% if not loop.first and not loop.last %}\n    {% set data.text
+            = data.text + [\", \"] + [k] %}\n  {% elif loop.last and not loop.first %}\n
+            \   {% set data.text = data.text + [\" и \"] + [k] %}\n  {% else %}\n    {%
+            set data.text = data.text + [\" \"] + [k] %}\n  {% endif %}\n{% endfor %}\n{{
+            data.text|join(\"\") }}"
+    mode: single
+    icon: yandex:alisa
+  ### Включить вытяжку на кухню
+  yandex_tts_kitchen_fan_alert:
+    alias: Yandex_TTS_Kithcen_fan_alert
+    sequence:
+      - service: media_player.play_media
+        entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+        data:
+          media_content_id: >
+            Возможно стоит включить вытяжку на кухне.
+          media_content_type: text
+    mode: single
+    icon: yandex:alisa
+  #######

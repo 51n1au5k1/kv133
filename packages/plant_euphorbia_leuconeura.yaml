@@ -1,0 +1,177 @@
+# packages/plant_euphorbia_leuconeura.yaml
+
+input_text:
+  notification_history_euphorbia:
+    name: "Молочай: История уведомлений"
+
+input_datetime:
+  last_euphorbia_soil_notification:
+    name: "Last Euphorbia Soil Notification Time"
+    has_date: true
+    has_time: true
+  last_euphorbia_temperature_notification:
+    name: "Last Euphorbia Temperature Notification Time"
+    has_date: true
+    has_time: true
+
+recorder:
+  include:
+    entities:
+      - sensor.euphorbia_leuconeura_soil_moisture
+      - sensor.euphorbia_leuconeura_temperature
+      - sensor.euphorbia_leuconeura_illuminance
+      - binary_sensor.plant_alert_euphorbia_leuconeura_soil
+      - binary_sensor.plant_alert_euphorbia_leuconeura_temperature
+      - binary_sensor.plant_alert_euphorbia_leuconeura_illuminance
+      - input_datetime.last_euphorbia_soil_notification
+      - input_datetime.last_euphorbia_temperature_notification
+  exclude:
+    domains:
+      - automation
+
+# Бинарные сенсоры
+binary_sensor:
+  - platform: template
+    sensors:
+      plant_alert_euphorbia_leuconeura_soil:
+        unique_id: plant_alert_euphorbia_leuconeura_soil
+        friendly_name: "Необходимость полива (Молочай)"
+        device_class: problem
+        value_template: >-
+          {{ states('sensor.euphorbia_leuconeura_soil_moisture') | int(default=0) < states('number.euphorbia_leuconeura_min_soil_moisture') | int(default=0) }}
+
+      plant_alert_euphorbia_leuconeura_temperature:
+        unique_id: plant_alert_euphorbia_leuconeura_temperature
+        friendly_name: "Необходимость согрева (Молочай)"
+        device_class: problem
+        value_template: >-
+          {{ states('sensor.euphorbia_leuconeura_temperature') | int(default=0) < states('number.euphorbia_leuconeura_min_temperature') | int(default=0) }}
+
+      euphorbia_watering_needed_recently:
+        unique_id: euphorbia_watering_needed_recently
+        friendly_name: "Euphorbia Needs Watering Recently"
+        value_template: >-
+          {{ is_state('binary_sensor.plant_alert_euphorbia_leuconeura_soil', 'on') 
+            and (as_timestamp(now()) - as_timestamp(states('input_datetime.last_euphorbia_soil_notification') | default(0))) > 10800 }}
+        delay_off:
+          minutes: 1
+
+# Автоматизации
+automation:
+  - id: "0467a8eb-5161-41f0-8b13-941ff36845fc"
+    alias: "Растение. Молочай: Уведомление о необходимости полива"
+    description: "Отправляет уведомление, если Молочай нуждается в поливе, каждые 3 часа, если кто-то есть дома."
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.plant_alert_euphorbia_leuconeura_soil
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.euphorbia_watering_needed_recently
+        state: "off"
+      - condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_euphorbia_soil_notification'))) > 10800 }}
+      - condition: time
+        after: "08:00:00"
+        before: "22:00:00"
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: person.master
+            state: "home"
+          - condition: state
+            entity_id: person.tatiana
+            state: "home"
+    action:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: person.master
+                state: "home"
+            sequence:
+              - service: notify.andrei
+                data:
+                  message: "Необходимо полить Молочай: влажность почвы составляет {{ states('sensor.euphorbia_leuconeura_soil_moisture') }}%."
+                  data:
+                    photo:
+                      file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_soil.webp"
+                      caption: "Необходимо полить Молочай: влажность почвы составляет {{ states('sensor.euphorbia_leuconeura_soil_moisture') }}%."
+        default:
+          - service: notify.tatsiana
+            data:
+              message: "Молочай выручай! Подлей водички, не жалей! Влажность почвы сейчас {{ states('sensor.euphorbia_leuconeura_soil_moisture') }}%."
+              data:
+                photo:
+                  file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_soil.webp"
+                  caption: "Молочай выручай! Подлей водички, не жалей! Влажность почвы сейчас {{ states('sensor.euphorbia_leuconeura_soil_moisture') }}%."
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.last_euphorbia_soil_notification
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.notification_history_euphorbia
+        data_template:
+          value: >
+            {% set history = states('input_text.notification_history_euphorbia') %}
+            {% set new_entry = "Уведомление о поливе Молочая: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
+            {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
+    mode: single
+
+  - id: "f9f31a67-9214-402e-b7d7-73d5a7516b14"
+    alias: "Растение. Молочай: Уведомление о температуре"
+    description: "Отправляет уведомление, если Молочай нуждается в тепле, каждые 3 часа, только если кто-то есть дома."
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.plant_alert_euphorbia_leuconeura_temperature
+        to: "on"
+    condition:
+      - condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_euphorbia_temperature_notification'))) > 10800 }}
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: person.master
+            state: "home"
+          - condition: state
+            entity_id: person.tatiana
+            state: "home"
+    action:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: person.master
+                state: "home"
+            sequence:
+              - service: notify.andrei
+                data:
+                  message: "Молочай необходимо поставить в тёплое место, температура почвы составляет {{ states('sensor.euphorbia_leuconeura_temperature') }}°C."
+                  data:
+                    photo:
+                      file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_cold.webp"
+                      caption: "Молочай необходимо поставить в тёплое место, температура почвы составляет {{ states('sensor.euphorbia_leuconeura_temperature') }}°C."
+        default:
+          - service: notify.tatsiana
+            data:
+              message: "Бррр! Холодно, матушка, спасай-выручай!.. Температура почвы сейчас {{ states('sensor.euphorbia_leuconeura_temperature') }}°C."
+              data:
+                photo:
+                  file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_cold.webp"
+                  caption: "Бррр! Холодно, матушка, спасай-выручай!.. Температура почвы сейчас {{ states('sensor.euphorbia_leuconeura_temperature') }}°C."
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.last_euphorbia_temperature_notification
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.notification_history_euphorbia
+        data_template:
+          value: >
+            {% set history = states('input_text.notification_history_euphorbia') %}
+            {% set new_entry = "Уведомление о температуре Молочая: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
+            {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
+    mode: single

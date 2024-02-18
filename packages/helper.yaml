@@ -1,0 +1,189 @@
+# packages/helper.yaml #
+########################
+
+sensor:
+  # Измерение размера базы данных MariaDB для мониторинга использования
+  - platform: sql
+    db_url: !secret db_link
+    queries:
+      - name: Maria DB size
+        query: 'SELECT table_schema "database", Round(Sum(data_length + index_length) / 1048576, 2) "value" FROM information_schema.tables WHERE table_schema="homeassistant" GROUP BY table_schema;'
+        column: "value"
+        unit_of_measurement: MB
+
+  # Шаблонные датчики для мониторинга условий окружающей среды
+  - platform: template
+    sensors:
+      # Датчик необходимости проветривания, активируется при CO2 выше 1000 ppm
+      livingroom_ventilation_need:
+        unique_id: livingroom_ventilation_need
+        friendly_name: "Необходимость проветривания"
+        value_template: >
+          {% if states('sensor.co2_monitor_co2') is not none and states('sensor.co2_monitor_co2') != 'unknown' %}
+            {{ (states('sensor.co2_monitor_co2') | float) > 1000 }}
+          {% else %}
+            false
+          {% endif %}
+
+      # Датчик статуса проветривания, активируется при CO2 ниже 550 ppm
+      livingroom_ventilation_status:
+        unique_id: livingroom_ventilation_status
+        friendly_name: "Статус проветривания"
+        value_template: >
+          {% if states('sensor.co2_monitor_co2') is not none and states('sensor.co2_monitor_co2') != 'unknown' %}
+            {{ (states('sensor.co2_monitor_co2') | float) < 550 }}
+          {% else %}
+            false
+          {% endif %}
+
+binary_sensor:
+  - platform: template
+    sensors:
+      # Состояние дверей для определения необходимости работы очистителя воздуха
+      doors_in_kitchen_livingroom:
+        unique_id: doors_in_kitchen_livingroom
+        friendly_name: "Двери на балкон с гостиной"
+        device_class: door
+        value_template: >
+          {{ is_state('binary_sensor.gostinaia_balkon_contact', 'on')
+              or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') }}
+
+      # Сенсор падения температуры ниже 20 градусов в комнатах
+      temperature_below_20:
+        unique_id: temperature_below_20
+        friendly_name: "Температура ниже 20 градусов"
+        device_class: cold
+        value_template: >
+          {% set temp1 = states('sensor.livingroom_climat_sensor_temperature') %}
+          {% set temp2 = states('sensor.bedroom_th_sensor_temperature') %}
+          {% set temp3 = states('sensor.cgllc_dove_f637_temperature_humidity_sensor') %}
+          {{ (temp1 not in ['unknown', 'unavailable'] and temp1 | float(20) <= 20)
+            or (temp2 not in ['unknown', 'unavailable'] and temp2 | float(20) <= 20)
+            or (temp3 not in ['unknown', 'unavailable'] and temp3 | float(20) <= 20) }}
+
+input_boolean:
+  # Фаза загрузки системы для контроля начальной фазы работы
+  system_startup_phase:
+    name: "Фаза загрузки системы"
+    initial: on
+    icon: mdi:timer-sand
+
+automation:
+  # Отключение датчика фазы загрузки системы после старта
+  - id: '03e3ffd0-4e1e-4200-b0e3-1ce6a2d77d6a'
+    alias: "Вспомогательная автоматизация: Отключение датчика фазы загрузки системы после старта"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay: "00:02:00" # Задержка 2 минуты
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.system_startup_phase
+
+  # Обновление сенсора контроля отправки уведомлений о уровне СО2
+  - id: "7df1e59a-af5d-4496-be72-e687afdbf08e"
+    alias: "Вспомогательная автоматизация: Обновление сенсора контроля отправки уведомлений касательно уровня СО2"
+    description: "Reset the input_boolean when CO2 levels return to normal"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.ventilation_status
+        from: "on"
+        to: "off"
+    action:
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.co2_notification_sent
+    mode: single
+
+  - id: "5b187cde-0ad5-4132-bb68-a622dd15d6ff"
+    alias: "Вспомогательная автоматизация: сохраняем состояния климатической техники"
+    trigger:
+      - platform: homeassistant
+        event: shutdown
+    action:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: climate.konditsioner
+                state: 'on'
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.climate_pre_restart_state
+        default:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.climate_pre_restart_state
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
+                state: 'on'
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.fan_pre_restart_state
+        default:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.fan_pre_restart_state
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3
+                state: 'on'
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.humidifier_pre_restart_state
+        default:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.humidifier_pre_restart_state
+
+
+  - id: "457a6711-67fa-4cb2-bcab-63c0cc58e054"
+    alias: "Вспомогательная автоматизация: восстановление состояний климатической техники"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.climate_pre_restart_state
+                state: 'on'
+            sequence:
+              - service: climate.turn_on
+                target:
+                  entity_id: climate.konditsioner
+        default:
+          - service: climate.turn_off
+            target:
+              entity_id: climate.konditsioner
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.fan_pre_restart_state
+                state: 'on'
+            sequence:
+              - service: fan.turn_on
+                target:
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
+        default:
+          - service: fan.turn_off
+            target:
+              entity_id: fan.zhimi_mb3_a5d3_air_purifier
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.humidifier_pre_restart_state
+                state: 'on'
+            sequence:
+              - service: fan.turn_on
+                target:
+                  entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3
+        default:
+          - service: fan.turn_off
+            target:
+              entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3
+

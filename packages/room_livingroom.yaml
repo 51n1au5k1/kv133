@@ -1,0 +1,91 @@
+# packages/room_livingroom.yaml #
+#################################
+
+input_text:
+  previous_state_climate:
+    name: "Previous State of Climate"
+  previous_state_fan:
+    name: "Previous State of Air Purifier"
+  previous_state_humidifier:
+    name: "Previous State of Humidifier"
+
+input_boolean:
+  climate_pre_restart_state:
+    name: "Climate Pre-Restart State"
+    initial: off
+  fan_pre_restart_state:
+    name: "Fan Pre-Restart State"
+    initial: off
+  humidifier_pre_restart_state:
+    name: "Humidifier Pre-Restart State"
+    initial: off
+
+automation:
+  ### Климатическая техника
+  - id: "f4e42442-155e-4d0a-87c2-3f21fd72025d"
+    alias: "Гостиная: Климат, отключить устройства при открытии двери"
+    description: "Отключить устройства при открытой двери"
+    trigger:
+      platform: state
+      entity_id: binary_sensor.doors_in_kitchen_livingroom
+      to: "on"
+      for:
+        minutes: 1
+    action:
+      - service: input_text.set_value
+        data:
+          entity_id: input_text.previous_state_climate
+          value: "{{ states('climate.konditsioner') }}"
+      - service: input_text.set_value
+        data:
+          entity_id: input_text.previous_state_fan
+          value: "{{ states('fan.zhimi_mb3_a5d3_air_purifier') }}"
+      - service: input_text.set_value
+        data:
+          entity_id: input_text.previous_state_humidifier
+          value: "{{ states('fan.smartmi_humidifier_rainforest_air_quality_fan_3') }}"
+      - service: climate.turn_off
+        entity_id: climate.konditsioner
+      - service: fan.turn_off
+        entity_id: fan.zhimi_mb3_a5d3_air_purifier
+      - service: fan.turn_off
+        entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3
+
+  - id: "0347cae6-1b2f-436a-a54c-792feafa9620"
+    alias: "Гостиная: Климат, восстановление состояния устройств"
+    description: "Восстановить состояние устройств при закрытии двери"
+    trigger:
+      platform: state
+      entity_id: binary_sensor.doors_in_kitchen_livingroom
+      to: "off"
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_text.previous_state_climate') == 'on' }}"
+            sequence:
+              - service: climate.turn_on
+                entity_id: climate.konditsioner
+        default:
+          - service: climate.turn_off
+            entity_id: climate.konditsioner
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_text.previous_state_fan') == 'on' }}"
+            sequence:
+              - service: fan.turn_on
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
+        default:
+          - service: fan.turn_off
+            entity_id: fan.zhimi_mb3_a5d3_air_purifier
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_text.previous_state_humidifier') == 'on' }}"
+            sequence:
+              - service: fan.turn_on
+                entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3
+        default:
+          - service: fan.turn_off
+            entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3

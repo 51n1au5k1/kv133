@@ -1,0 +1,327 @@
+# /config/packages/notifications_telegram.yaml
+
+telegram_bot:
+  - platform: polling
+    api_key: !secret api_key_bot
+    parse_mode: html
+    allowed_chat_ids:
+      - !secret chat_id_andrei
+      - !secret chat_id_tatsiana
+
+notify:
+  - name: Andrei
+    platform: telegram
+    chat_id: !secret chat_id_andrei
+  - name: Tatsiana
+    platform: telegram
+    chat_id: !secret chat_id_tatsiana
+
+input_text:
+  currently_home:
+    name: "Currently Home"
+    min: 0
+    max: 255
+
+automation:
+  - id: "c6382818-05ed-4590-be92-b367489fb0e1"
+    alias: "Вспомогательная автоматизация: Обновление списка пользователей, находящихся дома"
+    description: "Обновляет список пользователей, находящихся дома, для последующего использования в уведомлениях."
+    trigger:
+      - platform: state
+        entity_id:
+          - person.master
+          - person.tatiana
+    action:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.currently_home
+        data:
+          value: >
+            {% set home_users = [] %}
+            {% if is_state('person.master', 'home') %}
+              {% set home_users = home_users + ['Andrei'] %}
+            {% endif %}
+            {% if is_state('person.tatiana', 'home') %}
+              {% set home_users = home_users + ['Tatiana'] %}
+            {% endif %}
+            {{ home_users | join(', ') }}
+
+  ## Прогноз погоды
+  - id: "ac0837cf-9ecb-413b-96fb-89552934212d"
+    alias: "Уведомление. Телеграм: Прогноз погоды"
+    description: "Отправляет прогноз погоды на сегодня в Телеграм каждое утро."
+    trigger:
+      - platform: time
+        at: "07:07:00" # Указывает время отправки сообщения
+    condition: []
+    action:
+      - service: notify.andrei
+        data:
+          title: "**Прогноз погоды на сегодня**"
+          message: >
+            Сегодня {{ states('sensor.open_meteo_opisanie_na_russkom') }}. Температура: {{ state_attr('weather.kvartira_133', 'forecast')[0].templow }}°C — {{ state_attr('weather.kvartira_133', 'forecast')[0].temperature }}°C. Ветер {{ state_attr('weather.kvartira_133', 'forecast')[0].wind_speed }} м/с. {% if state_attr('weather.kvartira_133', 'forecast')[0].precipitation | float > 0 %}Ожидаются осадки.{% else %}Осадков не ожидается.{% endif %}
+      - service: notify.tatsiana
+        data:
+          title: "**Прогноз погоды на сегодня**"
+          message: >
+            Сегодня {{ states('sensor.open_meteo_opisanie_na_russkom') }}. Температура: {{ state_attr('weather.kvartira_133', 'forecast')[0].templow }}°C — {{ state_attr('weather.kvartira_133', 'forecast')[0].temperature }}°C. Ветер {{ state_attr('weather.kvartira_133', 'forecast')[0].wind_speed }} м/с. {% if state_attr('weather.kvartira_133', 'forecast')[0].precipitation | float > 0 %}Ожидаются осадки.{% else %}Осадков не ожидается.{% endif %}
+    mode: single
+
+
+  ## Уведомление об открытии входной двери
+  - id: "1f7e3ae4-268e-4afa-a7e6-d395821f244b"
+    alias: "Уведомление. Телеграм: Открытие входной двери"
+    description: "Отправляет уведомление об открытии двери, если администратор не дома"
+    trigger:
+      - type: opened
+        platform: device
+        device_id: abd3e40b49cfbe61411bac5d87bf000f
+        entity_id: binary_sensor.hallway_door_contact
+        domain: binary_sensor
+    condition:
+      - condition: state
+        entity_id: person.andrei
+        state: "not_home"
+    action:
+      - service: notify.andrei
+        data:
+          message: "The front door was opened!"
+    mode: single
+
+  ############################################
+  ## Home assistant
+  ## HA starts
+  - id: "686a3440-7629-4b55-b508-593caf3679af"
+    alias: "Уведомление. Телеграм: Сервер запущен"
+    description: "Уведомление о запуске сервера"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - service: notify.andrei
+        data:
+          message: >
+            {{ ["Home assistant started!", "Home assistant is running now!", "Home assistant has begun!", "HA has started!"] | random }}
+          data:
+            photo:
+              - file: "/config/www/images/notify_alert/ha_wakeup.png"
+                caption: "{{ ['Home assistant started!', 'Home assistant is running now!', 'Home assistant has begun!', 'HA has started!'] | random }} "
+    mode: single
+
+  - id: "c8dc47aa-90f0-4522-b71e-4e99bbfe6c76"
+    alias: "Уведомление. Телеграм: Сервер отключён"
+    description: "Уведомление о выключении сервера"
+    trigger:
+      - platform: homeassistant
+        event: shutdown
+    action:
+      - service: notify.andrei
+        data:
+          message: >
+            {{ ['Home Assistant shutdown', 'Shutdown of Home Assistant', 'HA has been shut down'] | random }}
+          data:
+            photo:
+              - file: "/config/www/images/notify_alert/ha_shutdown.png"
+                caption: "{{ ['Home Assistant shutdown', 'Shutdown of Home Assistant', 'HA has been shut down'] | random }}"
+    mode: single
+
+  ############################################
+  #### Проветривание комнат
+  ## Проветривание гостиной
+  ### CO2 alert
+  - id: "dca1ab9b-889a-4d29-9376-558f2d8e3cfd"
+    alias: "Уведомление. Телеграм: Необходимо проветрить гостиную"
+    description: "Отправляет уведомление о необходимости проветривания, если уровень CO2 высок."
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.livingroom_ventilation_need
+        from: "off"
+        to: "on"
+        for:
+          hours: 0
+          minutes: 5
+          seconds: 0
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: 'off'
+      - condition: state
+        entity_id: input_boolean.co2_notification_sent
+        state: "off"
+    action:
+      - condition: state
+        entity_id: person.master
+        state: 'home'
+      - service: notify.andrei
+        data:
+          message: "Необходимо проветрить помещение для снижения концентрации CO2."
+          data:
+            photo:
+              file: "/config/www/images/notify_alert/ha_co2_alert.png"
+              caption: "Необходимо проветрить помещение для снижения концентрации CO2"
+      - condition: state
+        entity_id: person.tatiana
+        state: 'home'
+      - service: notify.tatsiana
+        data:
+          message: "Необходимо проветрить помещение для снижения концентрации CO2."
+          data:
+            photo:
+              file: "/config/www/images/notify_alert/ha_co2_alert.png"
+              caption: "Необходимо проветрить помещение для снижения концентрации CO2"
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.co2_notification_sent
+    mode: single
+
+
+  ### Уровень СО2 в пределах нормы
+  - id: "e531db4f-e947-460b-a9b3-2d71648bc465"
+    alias: "Уведомление. Телеграм: Проветривание в гостиной завершено"
+    description: "Уведомление о том, что проветривание завершено"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.livingroom_ventilation_status
+        from: "off"
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: 'off'
+      - condition: state
+        entity_id: input_boolean.ventilation_status_cool_down
+        state: "off"
+    action:
+      - wait_for_trigger:
+          - platform: state
+            entity_id: binary_sensor.livingroom_ventilation_status
+            to: "off"
+        continue_on_timeout: true
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: person.master
+                state: 'home'
+            sequence:
+              - service: notify.andrei
+                data:
+                  message: "Проветривание завершено! Уровень CO2 в пределах нормы."
+          - conditions:
+              - condition: state
+                entity_id: person.tatiana
+                state: 'home'
+            sequence:
+              - service: notify.tatsiana
+                data:
+                  message: "Проветривание завершено! Уровень CO2 в пределах нормы."
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.co2_notification_sent
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.ventilation_status_cool_down
+    mode: single
+
+  ## Температура в спальне меньше 20 при проветривании
+  - id: "c694ab76-109b-4199-ae0b-e56753b80ae0"
+    alias: "Уведомление. Телеграм: Температура в спальне ниже 20°"
+    description: "Уведомление о том, что в спальне температура ниже установленного предела"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.bedroom_th_sensor_temperature
+        below: 20
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.0x00158d00044d5d11_contact
+        state: "on"
+    action:
+      - condition: state
+        entity_id: person.master
+        state: 'home'
+      - service: notify.andrei
+        data:
+          message: "Температура в спальне ниже 20°. Динозавры любят тепло! Закройте балкон в спальне."
+      - condition: state
+        entity_id: person.tatiana
+        state: 'home'
+      - service: notify.tatsiana
+        data:
+          message: "Температура в спальне ниже 20°. Динозавры любят тепло! Закройте балкон в спальне."
+    mode: single
+
+  ## Температура в мастерской меньше 20 при проветривании
+  - id: "6d6b608d-26d9-4eb7-8a52-7163a91ed890"
+    alias: "Уведомление. Телеграм: Температура в мастерской ниже 20°"
+    description: "Уведомление о том, что в мастерской температура ниже установленного предела"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.cgllc_dove_f637_temperature_humidity_sensor
+        below: 20
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.masterskaia_balkon_contact
+        state: "on"
+    action:
+      - condition: state
+        entity_id: person.master
+        state: 'home'
+      - service: notify.andrei
+        data:
+          message: "Температура в мастерской ниже 20°. Это мастерская, а не холодильник! Закройте дверь."
+      - condition: state
+        entity_id: person.tatiana
+        state: 'home'
+      - service: notify.tatsiana
+        data:
+          message: "Температура в мастерской ниже 20°. Это мастерская, а не холодильник! Закройте дверь."
+    mode: single
+
+  ############################################
+  ##### Необходимость замены элемента питания
+  - id: "04c57ac3-56ec-49aa-a30a-4b3bd973eb60"
+    alias: "Уведомление. Телеграм: Необходимо заменить элемент питания"
+    description: "Уведомление о необходимости замены элемента питания"
+    use_blueprint:
+      path: sbyx/low-battery-level-detection-notification-for-all-battery-sensors.yaml
+      input:
+        threshold: 15
+        actions:
+          - service: notify.andrei
+            metadata: {}
+            data:
+              message: '"Необходима замена элемента питания: {{sensors}}"'
+  ## Необходимо обновить дополнение
+  - id: "4c5c8e57-be5b-4380-88a1-4ecc730c19da"
+    alias: "Уведомление. Телеграм: Возможно обновления компоненты системы"
+    description: "Уведомление о возможности обновления компонента системы"
+    trigger:
+      - platform: state
+        entity_id:
+          - update.file_editor_update
+          - update.home_assistant_core_update
+          - update.home_assistant_google_drive_backup_update
+          - update.home_assistant_operating_system_update
+          - update.home_assistant_supervisor_update
+          - update.log_viewer_update
+          - update.mosquitto_broker_update
+          - update.samba_share_update
+          - update.studio_code_server_update
+          - update.terminal_ssh_update
+          - update.zigbee2mqtt_update
+        to: "on"
+    action:
+      - service: notify.andrei
+        data_template:
+          message: >
+            {% set entity = trigger.to_state %}
+            {% if entity %}
+              🆕 Обновление доступно: {{ entity.attributes.friendly_name | default('Неизвестный компонент') }}
+              Текущая версия: {{ entity.attributes.installed_version | default('недоступно') }}
+              Новая версия: {{ entity.attributes.latest_version | default('недоступно') }}
+              📝 Сводка: {{ entity.attributes.release_summary | default('Нет подробностей') }}
+            {% else %}
+              Ошибка: Данные обновления недоступны.
+            {% endif %}

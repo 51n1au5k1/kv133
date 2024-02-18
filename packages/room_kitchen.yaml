@@ -1,0 +1,44 @@
+
+
+automation:
+  ## Переключение света по нажатию правой клавиши кухонного выключателя
+  - id: "b29835d5-9911-47ec-8630-2adda70be854"
+    alias: "Кухня: Переключение света включателем"
+    description: ""
+    trigger:
+      - platform: device
+        domain: mqtt
+        device_id: cc6ef89720abb376a24e910e13f37902
+        type: action
+        subtype: single_right
+    condition: []
+    action:
+      - type: toggle
+        device_id: cc6ef89720abb376a24e910e13f37902
+        entity_id: 6ecc35aae49d8307be87809073a32233
+        domain: light
+    mode: single
+
+  - id: 09855552-5e38-4de7-afd4-03ef866d6f41
+    alias: "Кухня: Предупреждение о необходимости включения вытяжки"
+    trigger:
+      - platform: state
+        entity_id: sensor.kitchen_th_temperature
+      - platform: state
+        entity_id: sensor.kitchen_th_humidity
+    condition:
+      - condition: template
+        value_template: "{{ (states('sensor.kitchen_th_temperature')|float - states('sensor.livingroom_climat_sensor_temperature')|float) > 5 }}"
+      - condition: template
+        value_template: "{{ (states('sensor.kitchen_th_humidity')|float - states('sensor.livingroom_climat_sensor_humidity')|float) > 10 }}"
+      - condition: state
+        entity_id: input_boolean.kitchen_fan_cool_down
+        state: "off"
+    action:
+      - service: script.turn_on
+        data: {}
+        target:
+          entity_id: script.yandex_tts_kitchen_fan_alert
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.kitchen_fan_cool_down
