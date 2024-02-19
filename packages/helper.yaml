@@ -84,16 +84,23 @@ binary_sensor:
             or (temp2 not in ['unknown', 'unavailable'] and temp2 | float(20) <= 20)
             or (temp3 not in ['unknown', 'unavailable'] and temp3 | float(20) <= 20) }}
 
+    
 # Входные Булевы
 # Фаза загрузки системы: Используется для определения начальной фазы работы
 # системы после запуска и исключению ложного запуска автоматизаций.
-
+# Контроль отправки сообщений о необходимости проветривания для исключения
+# повторной отправки уведомления.
 input_boolean:
   # Фаза загрузки системы для контроля начальной фазы работы
   system_startup_phase:
     name: "Фаза загрузки системы"
     initial: on
     icon: mdi:timer-sand
+
+  co2_notification_sent:
+    name: "Уведомление о CO2 отправлено"
+    initial: off
+    icon: mdi:alert-octagram
 
 # Автоматизации
 

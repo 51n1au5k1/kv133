@@ -8,21 +8,18 @@
 # повышая комфорт и эффективность использования.
 
 # Вводные переменные
-# previous_state_climate: Хранит предыдущее состояние кондиционера.
-# previous_state_fan: Хранит предыдущее состояние очистителя воздуха.
-# previous_state_humidifier: Хранит предыдущее состояние увлажнителя воздуха.
-
-input_text:
-  previous_state_climate:
-    name: "Previous State of Climate"
-  previous_state_fan:
-    name: "Previous State of Air Purifier"
-  previous_state_humidifier:
-    name: "Previous State of Humidifier"
-
-# climate_pre_restart_state: Фиксирует, был ли кондиционер включен до момента открытия двери.
-# fan_pre_restart_state: Фиксирует, был ли очиститель воздуха включен до момента открытия двери.
-# humidifier_pre_restart_state: Фиксирует, был ли увлажнитель воздуха включен до момента открытия двери.
+# climate_pre_restart_state: Хранит предыдущее состояние кондиционера при
+# перезагрузке системы.
+# fan_pre_restart_state: Хранит предыдущее состояние очистителя воздуха при
+# перезагрузке системы.
+# humidifier_pre_restart_state: Хранит предыдущее состояние увлажнителя воздуха
+# при # перезагрузке системы.
+# door_open_climate_pre_state: Фиксирует, был ли кондиционер включен до момента
+# открытия двери.
+# door_open_fan_pre_state: Фиксирует, был ли очиститель воздуха включен до
+# момента открытия двери.
+# door_open_humidifier_pre_state: Фиксирует, был ли увлажнитель воздуха включен
+# до момента открытия двери.
 
 input_boolean:
   climate_pre_restart_state:
@@ -34,6 +31,15 @@ input_boolean:
   humidifier_pre_restart_state:
     name: "Humidifier Pre-Restart State"
     initial: off
+  door_open_climate_pre_state:
+    name: "Climate Pre-State When Door Opened"
+    initial: off
+  door_open_fan_pre_state:
+    name: "Fan Pre-State When Door Opened"
+    initial: off
+  door_open_humidifier_pre_state:
+    name: "Humidifier Pre-State When Door Opened"
+    initial: off
 
 # Автоматизации
 automation:
@@ -42,9 +48,10 @@ automation:
   # Отключает кондиционер, очиститель воздуха и увлажнитель при длительном
   # открытии двери между кухней и гостиной, сохраняя их предыдущее состояние для
   # последующего восстановления.
+
   - id: "f4e42442-155e-4d0a-87c2-3f21fd72025d"
     alias: "Гостиная: Климат, отключить устройства при открытии двери"
-    description: "Отключить устройства при открытой двери"
+    description: "Отключает кондиционер, очиститель воздуха и увлажнитель при длительном открытии двери."
     trigger:
       platform: state
       entity_id: binary_sensor.doors_in_kitchen_livingroom
@@ -52,24 +59,36 @@ automation:
       for:
         minutes: 1
     action:
-      - service: input_text.set_value
-        data:
-          entity_id: input_text.previous_state_climate
-          value: "{{ states('climate.konditsioner') }}"
-      - service: input_text.set_value
-        data:
-          entity_id: input_text.previous_state_fan
-          value: "{{ states('fan.zhimi_mb3_a5d3_air_purifier') }}"
-      - service: input_text.set_value
-        data:
-          entity_id: input_text.previous_state_humidifier
-          value: "{{ states('fan.smartmi_humidifier_rainforest_air_quality_fan_3') }}"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: climate.konditsioner
+                state: "on"
+            sequence:
+              - service: input_boolean.turn_on
+                entity_id: input_boolean.door_open_climate_pre_state
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: switch.zhimi_mb3_a5d3_switch_status
+                state: "on"
+            sequence:
+              - service: input_boolean.turn_on
+                entity_id: input_boolean.door_open_fan_pre_state
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: humidifier.smartmi_humidifier_rainforest_hum_dehum_3
+                state: "on"
+            sequence:
+              - service: input_boolean.turn_on
+                entity_id: input_boolean.door_open_humidifier_pre_state
       - service: climate.turn_off
         entity_id: climate.konditsioner
-      - service: fan.turn_off
-        entity_id: fan.zhimi_mb3_a5d3_air_purifier
-      - service: fan.turn_off
-        entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3
+      - service: switch.turn_off
+        entity_id: switch.zhimi_mb3_a5d3_switch_status
+      - service: humidifier.turn_off
+        entity_id: humidifier.smartmi_humidifier_rainforest_hum_dehum_3
 
   # Восстановление состояния устройств
   # После закрытия двери автоматически восстанавливает предыдущее состояние
@@ -77,7 +96,7 @@ automation:
   # данных о их состоянии до открытия двери.
   - id: "0347cae6-1b2f-436a-a54c-792feafa9620"
     alias: "Гостиная: Климат, восстановление состояния устройств"
-    description: "Восстановить состояние устройств при закрытии двери"
+    description: "Восстанавливает состояние устройств при закрытии двери."
     trigger:
       platform: state
       entity_id: binary_sensor.doors_in_kitchen_livingroom
@@ -85,31 +104,28 @@ automation:
     action:
       - choose:
           - conditions:
-              - condition: template
-                value_template: "{{ states('input_text.previous_state_climate') == 'on' }}"
+              - condition: state
+                entity_id: input_boolean.door_open_climate_pre_state
+                state: "on"
             sequence:
               - service: climate.turn_on
                 entity_id: climate.konditsioner
-        default:
-          - service: climate.turn_off
-            entity_id: climate.konditsioner
-      - choose:
           - conditions:
-              - condition: template
-                value_template: "{{ states('input_text.previous_state_fan') == 'on' }}"
+              - condition: state
+                entity_id: input_boolean.door_open_fan_pre_state
+                state: "on"
             sequence:
-              - service: fan.turn_on
-                entity_id: fan.zhimi_mb3_a5d3_air_purifier
-        default:
-          - service: fan.turn_off
-            entity_id: fan.zhimi_mb3_a5d3_air_purifier
-      - choose:
+              - service: switch.turn_on
+                entity_id: switch.zhimi_mb3_a5d3_switch_status
           - conditions:
-              - condition: template
-                value_template: "{{ states('input_text.previous_state_humidifier') == 'on' }}"
+              - condition: state
+                entity_id: input_boolean.door_open_humidifier_pre_state
+                state: "on"
             sequence:
-              - service: fan.turn_on
-                entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3
-        default:
-          - service: fan.turn_off
-            entity_id: fan.smartmi_humidifier_rainforest_air_quality_fan_3
+              - service: humidifier.turn_on
+                entity_id: humidifier.smartmi_humidifier_rainforest_hum_dehum_3
+      - service: input_boolean.turn_off
+        entity_id:
+          - input_boolean.door_open_climate_pre_state
+          - input_boolean.door_open_fan_pre_state
+          - input_boolean.door_open_humidifier_pre_state
