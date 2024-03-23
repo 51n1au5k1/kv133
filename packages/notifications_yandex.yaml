@@ -164,7 +164,7 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - service: notify.andrei
+              - service: notify.master
                 data:
                   message: "Свет в квартире выключен! Приятной дороги!"
           - conditions:
@@ -460,7 +460,7 @@ script:
             set data.text = data.text + [\" \"] + [k] %}\n  {% endif %}\n{% endfor %}\n{{
             data.text|join(\"\") }}"
           media_content_type: text
-      - service: notify.andrei
+      - service: notify.master
         data:
           message:
             "{% set door_sensors = {\n  \"в гостиной\": is_state(\"binary_sensor.gostinaia_balkon_contact\",

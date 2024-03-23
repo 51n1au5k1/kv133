@@ -27,7 +27,7 @@ telegram_bot:
 # конкретным пользователям через их chat_id, которые храняться в secret.yaml
 
 notify:
-  - name: Andrei
+  - name: master
     platform: telegram
     chat_id: !secret chat_id_andrei
   - name: Tatsiana
@@ -88,7 +88,7 @@ automation:
         at: "07:07:00" # Указывает время отправки сообщения
     condition: []
     action:
-      - service: notify.andrei
+      - service: notify.master
         data:
           title: "<b>Прогноз погоды на сегодня</b>"
           message: >
@@ -115,10 +115,10 @@ automation:
         domain: binary_sensor
     condition:
       - condition: state
-        entity_id: person.andrei
+        entity_id: person.master
         state: "not_home"
     action:
-      - service: notify.andrei
+      - service: notify.master
         data:
           message: "The front door was opened!"
     mode: single
@@ -135,7 +135,7 @@ automation:
       - platform: homeassistant
         event: start
     action:
-      - service: notify.andrei
+      - service: notify.master
         data:
           message: >
             {{ ["Home assistant started!", "Home assistant is running now!", "Home assistant has begun!", "HA has started!"] | random }}
@@ -154,7 +154,7 @@ automation:
       - platform: homeassistant
         event: shutdown
     action:
-      - service: notify.andrei
+      - service: notify.master
         data:
           message: >
             {{ ['Home Assistant shutdown', 'Shutdown of Home Assistant', 'HA has been shut down'] | random }}
@@ -191,7 +191,7 @@ automation:
       - condition: state
         entity_id: person.master
         state: "home"
-      - service: notify.andrei
+      - service: notify.master
         data:
           message: "Необходимо проветрить помещение для снижения концентрации CO2."
           data:
@@ -240,7 +240,7 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - service: notify.andrei
+              - service: notify.master
                 data:
                   message: "Проветривание завершено! Уровень CO2 в пределах нормы."
           - conditions:
@@ -281,7 +281,7 @@ automation:
       - condition: state
         entity_id: person.master
         state: "home"
-      - service: notify.andrei
+      - service: notify.master
         data:
           message: "Температура в спальне ниже 20°. Динозавры любят тепло! Закройте балкон в спальне."
       - condition: state
@@ -312,7 +312,7 @@ automation:
       - condition: state
         entity_id: person.master
         state: "home"
-      - service: notify.andrei
+      - service: notify.master
         data:
           message: "Температура в мастерской ниже 20°. Это мастерская, а не холодильник! Закройте дверь."
       - condition: state
@@ -336,7 +336,7 @@ automation:
       input:
         threshold: 15
         actions:
-          - service: notify.andrei
+          - service: notify.master
             metadata: {}
             data:
               message: '"Необходима замена элемента питания: {{sensors}}"'
@@ -364,7 +364,7 @@ automation:
           - update.zigbee2mqtt_update
         to: "on"
     action:
-      - service: notify.andrei
+      - service: notify.master
         data_template:
           message: >
             {% set entity = trigger.to_state %}

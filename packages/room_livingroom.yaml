@@ -110,6 +110,7 @@ automation:
             sequence:
               - service: climate.turn_on
                 entity_id: climate.konditsioner
+      - choose:
           - conditions:
               - condition: state
                 entity_id: input_boolean.door_open_fan_pre_state
@@ -117,6 +118,7 @@ automation:
             sequence:
               - service: switch.turn_on
                 entity_id: switch.zhimi_mb3_a5d3_switch_status
+      - choose:
           - conditions:
               - condition: state
                 entity_id: input_boolean.door_open_humidifier_pre_state

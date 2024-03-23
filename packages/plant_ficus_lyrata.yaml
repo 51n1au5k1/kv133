@@ -85,7 +85,7 @@ automation:
             photo:
               file: "/config/www/images/plants_alerts/Ficus_lyrata_soil.webp"
               caption: "Фикус уже почти пикус...ой, поник! Подлей водички, дорогая, не жалей!"
-      - service: notify.andrei
+      - service: notify.master
         data:
           message: "Необходимо полить Фикус: влажность почвы составляет {{ states('sensor.ficus_lyrata_soil_moisture') | round }}"
           data:
@@ -126,7 +126,7 @@ automation:
             photo:
               file: "/config/www/images/plants_alerts/Ficus_lyrata_cold.webp"
               caption: "Фитозавры вымерли от холода, я не хочу повторить его судьбу!"
-      - service: notify.andrei
+      - service: notify.master
         data_template:
           message: "Фикус необходимо поставить в тёплое место, температура почвы составляет {{states('sensor.ficus_lyrata_temperature')|round}}"
           data:

@@ -27,16 +27,19 @@ automation:
   - id: hallway_light_toggle_by_button
     alias: "Прихожая: Вкл/выкл света кнопкой"
     trigger:
-      - platform: state
-        entity_id: sensor.0x00158d0002ec2a03_action
-        to: "single"
+      - platform: device
+        domain: mqtt
+        device_id: cfd464e1cbfa3da2ddd4f2109d74eb4e
+        type: action
+        subtype: single
     action:
       - service: light.toggle
         target:
-          area_id: prikhozhaia
+          entity_id: light.hallway_switch
       - service: timer.start
         target:
           entity_id: timer.timer_hallway
+          mode: single
 
   # Вкл света при движении и низкой освещенности
   # Активируется при обнаружении движения, если уровень освещённости ниже порога

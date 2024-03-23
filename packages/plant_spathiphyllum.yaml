@@ -85,7 +85,7 @@ automation:
             photo:
               file: "/config/www/images/plants_alerts/Spathiphyllum_soil.webp"
               caption: "Женское счастье нуждается в капельке твоего внимания..."
-      - service: notify.andrei
+      - service: notify.master
         data:
           message: "Необходимо полить Женское счастье: влажность почвы составляет {{ states('sensor.spathiphyllum_soil_moisture') | round|int }}%"
           data:
@@ -126,7 +126,7 @@ automation:
             photo:
               file: "/config/www/images/plants_alerts/Spathiphyllum_cold.webp"
               caption: "Женское счастье нуждается в твоём тепле как никогда."
-      - service: notify.andrei
+      - service: notify.master
         data_template:
           message: "Женское счастье необходимо поставить в тёплое место, температура почвы составляет {{states('sensor.spathiphyllum_temperature')|round}}°C."
           data:
