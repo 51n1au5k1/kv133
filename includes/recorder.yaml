@@ -1,21 +1,27 @@
-  db_url: !secret db_link
-  purge_keep_days: 30
-  exclude:
-    domains:
-      - automation
-      - group
-    entities:
-      - sensor.zhimi_mb3_a5d3_motor_speed
-      - sensor.time
-      - sensor.date
-  include:
-    domains:
-      - light
-      - switch
-      - sensor
-    entities:
-      - sensor.livingroom_temperature
-      - sensor.livingroom_humidity
-      - sensor.co2_level
-      - sensor.pm2_5_level
-      - sensor.open_meteo_tekushchaia_temperatura_na_ulitse
+db_url: !secret db_link
+purge_keep_days: 30
+
+include:
+  domains:
+    - light
+    - switch
+    - sensor
+  entities:
+    - sensor.livingroom_temperature
+    - sensor.livingroom_humidity
+    - sensor.co2_level
+    - sensor.pm2_5_level
+
+exclude:
+  entities:
+    - sensor.zhimi_mb3_a5d3_motor_speed
+    - sensor.time
+    - sensor.date
+    - sensor.livingroom_socket_l_energy
+    - sensor.bathroom_washing_machine_energy
+    - sensor.0x00158d0002530bd9_energy
+    - sensor.0x00158d0002530ba3_energy
+    - sensor.0x00158d000255b36f_energy
+    - sensor.livingroom_socket_l_energy
+    - sensor.livingroom_socket_r_energy
+

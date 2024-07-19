@@ -9,13 +9,13 @@
 
 # Таймер
 # Отсчитывает время от момента последнего активного действия в прихожей, после
-# чего свет автоматически выключается. Задана продолжительность в 7 минут и
-# 53 секунды.
+# чего свет автоматически выключается. Задана продолжительность в 1 минуту и
+# 30 секунды.
 
 timer:
   timer_hallway:
     name: "Движение отсутствует"
-    duration: "00:07:53"
+    duration: "00:01:00"
 
 # Автоматизации:
 automation:
@@ -24,7 +24,7 @@ automation:
   # После включения света также запускается таймер для автоматического
   # выключения по истечении времени.
 
-  - id: hallway_light_toggle_by_button
+  - id: "fc57ec27-9c9d-489a-8f5f-050b489466f7"
     alias: "Прихожая: Вкл/выкл света кнопкой"
     trigger:
       - platform: device
@@ -36,17 +36,43 @@ automation:
       - service: light.toggle
         target:
           entity_id: light.hallway_switch
-      - service: timer.start
+    mode: single
+
+  # Автоматизация включения/выключения света в прихожей при открытии двери.
+  # Реагирует на датчик открытия на входной двери.
+  # После включения света также запускается таймер для автоматического
+  # выключения по истечении времени.
+
+  - id: "3c9a07a9-58ee-4287-87ee-734687c93bba"
+    alias: "Прихожая: Включение освещения при открытии двери"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.hallway_door_contact
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: light.hallway_switch
+        state: "off"
+      - condition: time
+        weekday:
+          - mon
+          - tue
+          - wed
+          - thu
+          - fri
+        after: "08:30:00"
+    action:
+      - service: light.turn_on
         target:
-          entity_id: timer.timer_hallway
-          mode: single
+          entity_id: light.hallway_switch
+    mode: single
 
   # Вкл света при движении и низкой освещенности
   # Активируется при обнаружении движения, если уровень освещённости ниже порога
   # в 400 люкс. Включает свет на короткое время, после чего автоматически
   # выключает его, если дополнительное движение не обнаружено.
 
-  - id: hallway_light_on_by_motion_low_lux
+  - id: "7f815fb8-98f4-437a-96fc-06984d9a4a25"
     alias: "Прихожая: Вкл света при движении и низкой освещенности"
     trigger:
       - platform: state
@@ -62,21 +88,32 @@ automation:
           entity_id: light.lumi_v3_7cdd_light
         data:
           brightness_pct: 10
-      - delay:
-          seconds: 5
-      - service: light.turn_off
-        entity_id: light.lumi_v3_7cdd_light
+    mode: single
 
   # Запуск таймера при включении света
   # Запускает таймер в момент включения света в прихожей любым способом,
   # обеспечивая его автоматическое выключение по истечении заданного времени.
-
-  - id: hallway_timer_start_on_light_on
-    alias: "Прихожая: Запуск таймера при включении света"
+  # ! В режиме уборки не работает
+  - id: "3b6e37de-3b10-4201-afad-221dbe4cd4a0"
+    alias: "Прихожая: Запуск таймера при отсутствии движения"
     trigger:
       - platform: state
-        entity_id: light.hallway_switch
-        to: "on"
+        entity_id: binary_sensor.hallway_motion_occupancy
+        to: "off"
+        for:
+          minutes: 1
+    condition:
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: light.hallway_switch
+            state: "on"
+          - condition: state
+            entity_id: light.lumi_v3_7cdd_light
+            state: "on"
+      - condition: state
+        entity_id: input_boolean.bathroom_cleaning_mode
+        state: "off"
     action:
       - service: timer.start
         entity_id: timer.timer_hallway
@@ -85,15 +122,88 @@ automation:
   # Выключает освещение в прихожей по истечении времени таймера, обеспечивая
   # экономию электроэнергии и предотвращая работу света в отсутствие
   # необходимости.
+  # ! В режиме уборки не работает
 
-  - id: hallway_light_off_by_timer
+  - id: "7f6bdbae-a73b-4509-8db8-43f71a3525ca"
     alias: "Прихожая: Выключение света по таймеру"
     trigger:
       - platform: event
         event_type: timer.finished
         event_data:
           entity_id: timer.timer_hallway
+    condition:
+      - condition: state
+        entity_id: input_boolean.bathroom_cleaning_mode
+        state: "off"
     action:
       - service: light.turn_off
-        target:
-          area_id: prikhozhaia
+        entity_id: light.hallway_switch
+      - service: light.turn_off
+        entity_id: light.lumi_v3_7cdd_light
+
+  # Оповещения о нажатии кнопки звонка на входной двери. При срабатывании датчика
+  # нажатия кнопки происходят следующие действия:
+  #
+  # Воспроизведение звукового уведомления:
+  # Скрипт yandex_click_outdoor_button генерирует случайную фразу, например,
+  # "Тук-тук! К Вам гости!" или "Динь-дон! Кто там?".
+  # Фраза воспроизводится через медиаплеер Yandex Station.
+  # Визуальное оповещение:
+  # Светильники light.lumi_v3_7cdd_light и light.working_room_led мигают три раза.
+  # Если светильник light.working_room_led был включен до начала автоматизации,
+  # он остается включенным. В противном случае, оба светильника выключаются.
+
+  - id: "d03a5f5d-058f-4b9b-8977-adbc32a16640"
+    alias: "Уведомление. Яндекс: Звонок в дверь"
+    description: "Алиса говорит случайную фразу и моргает светом через Xiaomi Gateway при нажатии кнопки"
+    trigger:
+      - platform: state
+        entity_id: sensor.0x00158d0002582753_action_2
+        to:
+          - "single"
+          - "double"
+          - "hold"
+    action:
+      - service: script.yandex_click_outdoor_button # Вызов скрипта для воспроизведения звука
+      - repeat:
+          count: 3
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.lumi_v3_7cdd_light
+                  - light.working_room_led
+            - delay: "00:00:01"
+            - service: light.turn_off
+              target:
+                entity_id:
+                  - light.lumi_v3_7cdd_light
+                  - light.working_room_led
+            - delay: "00:00:01"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: light.working_room_led
+                state: "off"
+            sequence:
+              - service: light.turn_off
+                target:
+                  entity_id: light.working_room_led
+    mode: single
+
+  ##
+  # Обнаружение попыток снятия входной кнопки и отправка предупреждения.
+  ##
+  - id: "26345165-2c00-489c-af7b-c4b92110c937"
+    alias: "Уведомление. Входную кнопку пытаются снять"
+    description: "Обнаружение попыток снятия входной кнопки и отправка предупреждения"
+    trigger:
+      - platform: state
+        entity_id: sensor.0x00158d0002582753_action_2
+        to: "shake"
+    action:
+      - service: script.yandex_shaking_outdoor_button
+      - service: notify.master
+        data:
+          message: "⚠️ Внимание! Входную кнопку пытаются снять \U0001F6A8"
+    mode: single

@@ -89,10 +89,9 @@ template:
   - sensor:
       - name: "Норма атмосферного давления"
         unique_id: fixed_pressure_value
-        unit_of_measurement: 'mmHg'
+        unit_of_measurement: "mmHg"
         state: 739
 
-    
 # Входные Булевы
 # Фаза загрузки системы: Используется для определения начальной фазы работы
 # системы после запуска и исключению ложного запуска автоматизаций.
@@ -105,46 +104,159 @@ input_boolean:
     initial: on
     icon: mdi:timer-sand
 
-  co2_notification_sent:
-    name: "Уведомление о CO2 отправлено"
+  # Сенсоры для контроля отправки уведомлений о CO2:
+  # - для контроля отправки текстовых уведомлений о CO2
+  co2_text_notification_sensor:
+    name: "Сенсор текстовых уведомлений о CO2"
+    initial: "off"
+    icon: mdi:message-alert
+  # - для контроля отправки голосовых уведомлений о CO2
+  co2_voice_notification_sensor:
+    name: "Сенсор голосовых уведомлений о CO2"
+    initial: "off"
+    icon: mdi:account-voice
+
+  # Сенсор режима тишины
+  silent_mode:
+    name: "Режим тишины"
     initial: off
-    icon: mdi:alert-octagram
+    icon: mdi:emoticon-neutral-outline
+
+  # Сенсор необходимости включения вытяжки
+  kitchen_fan_cool_down:
+    name: Kitchen Fan Cool Down
+    initial: off
+    icon: mdi:fan-alert
+
+  # Режим уборки в ванной
+  bathroom_cleaning_mode:
+    name: Режим уборки в ванной
+    initial: off
+    icon: mdi:broom
+
+  # Вводные переменные для сохранения состояния устройств
+  climate_pre_restart_state:
+    name: "Climate Pre-Restart State"
+    initial: off
+  fan_pre_restart_state:
+    name: "Fan Pre-Restart State"
+    initial: off
+  humidifier_pre_restart_state:
+    name: "Humidifier Pre-Restart State"
+    initial: off
+  door_open_climate_pre_state:
+    name: "Climate Pre-State When Door Opened"
+    initial: off
+  door_open_fan_pre_state:
+    name: "Fan Pre-State When Door Opened"
+    initial: off
+  door_open_humidifier_pre_state:
+    name: "Humidifier Pre-State When Door Opened"
+    initial: off
+
+# Группы
+group:
+  all_residents:
+    name: Все Жильцы
+    entities:
+      - person.master
+      - person.tatiana
 
 # Автоматизации
 
 automation:
+  # Включение датчика фазы загрузки системы после старта
+  - id: "38ea50fb-09bc-4d39-a771-1727ab72f265"
+    alias: "Фаза загрузки системы включена"
+    description: "Автоматизация для включения фазы загрузки системы при старте Home Assistant."
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.system_startup_phase
+
   # Отключение датчика фазы загрузки системы после старта
-  # Переводит систему в рабочий режим после задержки в 2 минуты с момента
-  # запуска.
   - id: "03e3ffd0-4e1e-4200-b0e3-1ce6a2d77d6a"
     alias: "Вспомогательная автоматизация: Отключение датчика фазы загрузки системы после старта"
     trigger:
       - platform: homeassistant
         event: start
     action:
-      - delay: "00:02:00" # Задержка 2 минуты
+      - delay: "00:02:00"
       - service: input_boolean.turn_off
         entity_id: input_boolean.system_startup_phase
 
-  # Обновление сенсора контроля отправки уведомлений о уровне СО2
-  # Сбрасывает уведомления о необходимости проветривания, когда уровень CO2
-  # возвращается в норму.
+  # Работа с режимом тишины, который устанавливается на период с 23:00 до 09:00
+  - id: "cd269239-a6dd-422f-ba2a-3d57e4c5981e"
+    alias: "Вспомогательная автоматизация: Установка режима тишины"
+    trigger:
+      platform: time
+      at: "23:00:00"
+    action:
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.silent_mode
+    mode: single
+
+  - id: "6ed14663-ebe5-4ab3-bc3b-43e682c45f3b"
+    alias: "Вспомогательная автоматизация: Снятие режима тишины"
+    trigger:
+      platform: time
+      at: "09:00:00"
+    action:
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.silent_mode
+    mode: single
+
+  # Автоматизация для сброса co2_voice_notification_sensor и co2_text_notification_sensor
+  - id: "1c2b8101-2ec8-44c1-99cc-4a8abf934437"
+    alias: "Вспомогательная автоматизация: Сброс уведомлений о CO2"
+    trigger:
+      - platform: state
+        entity_id:
+          - input_boolean.co2_voice_notification_sensor
+          - input_boolean.co2_text_notification_sensor
+        to: "on"
+    action:
+      - delay: "00:22:00"
+      - service: input_boolean.turn_off
+        entity_id:
+          - input_boolean.co2_voice_notification_sensor
+          - input_boolean.co2_text_notification_sensor
+    mode: single
+
+  # Записываем историю состояний погоды, чтобы найти все возможные варианты для перевода
+  - id: "b2b5d19a-854a-4632-842f-6437951fd4e2"
+    alias: "Вспомогательная автоматизация: Логируем состояние погоды (для уточнения перевода)"
+    trigger:
+      - platform: state
+        entity_id: weather.kvartira_133
+    action:
+      - service: system_log.write
+        data:
+          message: "Weather condition changed to {{ states('weather.kvartira_133') }}"
+          level: info
+
+  # Обновление сенсора контроля отправки уведомлений о уровне CO2
   - id: "7df1e59a-af5d-4496-be72-e687afdbf08e"
-    alias: "Вспомогательная автоматизация: Обновление сенсора контроля отправки уведомлений касательно уровня СО2"
-    description: "Reset the input_boolean when CO2 levels return to normal"
+    alias: "Обновление сенсора контроля уведомлений о уровне CO2"
     trigger:
       - platform: state
         entity_id: binary_sensor.ventilation_status
         from: "on"
         to: "off"
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
     action:
       - service: input_boolean.turn_off
         entity_id: input_boolean.co2_notification_sent
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.co2_notification_sensor
     mode: single
 
   # Сохранение и восстановление состояний климатической техники
-  # Автоматизации для сохранения текущего состояния устройств перед
-  # выключением и восстановления их после запуска.
   - id: "5b187cde-0ad5-4132-bb68-a622dd15d6ff"
     alias: "Вспомогательная автоматизация: сохраняем состояния климатической техники"
     trigger:
@@ -176,7 +288,7 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: humidifier.smartmi_humidifier_rainforest_hum_dehum_3
+                entity_id: switch.livingroom_socket_l
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
@@ -213,10 +325,21 @@ automation:
                 entity_id: input_boolean.door_open_humidifier_pre_state
                 state: "on"
             sequence:
-              - service: humidifier.turn_on
-                entity_id: humidifier.smartmi_humidifier_rainforest_hum_dehum_3
+              - service: switch.turn_on
+                entity_id: switch.livingroom_socket_l
       - service: input_boolean.turn_off
         entity_id:
           - input_boolean.door_open_climate_pre_state
           - input_boolean.door_open_fan_pre_state
           - input_boolean.door_open_humidifier_pre_state
+
+  - id: "c49bb82a-3c5e-4890-b607-9ac26542471d"
+    alias: "Выключение камеры, когда кто-то пришёл домой"
+    trigger:
+      - platform: state
+        entity_id: group.all_residents
+        to: "home"
+    action:
+      - service: switch.turn_off
+        entity_id: switch.chuangmi_ipc019_37da_switch_status
+    mode: single

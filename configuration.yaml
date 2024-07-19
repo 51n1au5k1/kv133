@@ -5,6 +5,12 @@ default_config:
 frontend:
   themes: !include_dir_merge_named themes
 
+# Ресурсы для Lovelace
+lovelace:
+  resources:
+    - url: /local/custom_ui/aliexpress-tracker-card.js
+      type: module
+
 homeassistant:
   name: Квартира 133
   latitude: !secret latitude_coord
@@ -13,16 +19,16 @@ homeassistant:
   unit_system: metric
   country: !secret country
   time_zone: !secret time_zone
-# Используем пакеты для определенных групп
+  # Используем пакеты для определенных групп
   packages: !include_dir_named packages
 
-# Разносим по папкам  
+# Разносим по папкам
 automation: !include_dir_merge_list includes/automations
-script: !include includes/scripts.yaml
-sensor: !include_dir_merge_list includes/sensors
-binary_sensor: !include_dir_merge_list includes/bin_sensors
+# script: !include includes/scripts.yaml
+# sensor: !include_dir_merge_list includes/sensors
+# binary_sensor: !include_dir_merge_list includes/bin_sensors
 recorder: !include includes/recorder.yaml
-utility_meter: !include includes/utility_meter.yaml
+# utility_meter: !include includes/utility_meter.yaml
 
 # Уровень логирования - только ошибки
 logger:

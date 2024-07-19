@@ -1,0 +1,70 @@
+# packages/energy_meter.yaml #
+########################
+
+utility_meter:
+  daily_energy_stiralnaya_mashina:
+    source: sensor.potreblenie_stiralnoi_mashiny
+    cycle: daily
+  daily_energy_vytiazhka:
+    source: sensor.energopotreblenie_vytiazhka
+    cycle: daily
+  daily_energy_lightroom_left:
+    source: sensor.livingroom_socket_l_power
+    cycle: daily
+  daily_energy_lightroom_right:
+    source: sensor.livingroom_socket_r_power
+    cycle: daily
+  daily_energy_bedroom_left:
+    source: sensor.0x00158d0002530bd9_energy
+    cycle: daily
+  daily_energy_bedroom_right:
+    source: sensor.0x00158d0002530ba3_energy
+    cycle: daily
+  daily_energy_hallway_gateway:
+    source: sensor.0x00158d000255b36f_energy
+    cycle: daily
+
+template:
+  - sensor:
+      - name: "Stiralnaya Mashina Energy Cost"
+        unit_of_measurement: "BYN"
+        state: >
+          {% set energy = states('utility_meter.daily_energy_stiralnaya_mashina') | float(default=0) %}
+          {% set rate = 0.1294 if 23 <= now().hour < 6 else 0.3881 if 17 <= now().hour < 23 else 0.1509 %}
+          {{ (energy * rate) | round(2) }}
+      - name: "Vytiazhka Energy Cost"
+        unit_of_measurement: "BYN"
+        state: >
+          {% set energy = states('utility_meter.daily_energy_vytiazhka') | float(default=0) %}
+          {% set rate = 0.1294 if 23 <= now().hour < 6 else 0.3881 if 17 <= now().hour < 23 else 0.1509 %}
+          {{ (energy * rate) | round(2) }}
+      - name: "Lightroom Left Energy Cost"
+        unit_of_measurement: "BYN"
+        state: >
+          {% set energy = states('utility_meter.daily_energy_lightroom_left') | float(default=0) %}
+          {% set rate = 0.1294 if 23 <= now().hour < 6 else 0.3881 if 17 <= now().hour < 23 else 0.1509 %}
+          {{ (energy * rate) | round(2) }}
+      - name: "Lightroom Right Energy Cost"
+        unit_of_measurement: "BYN"
+        state: >
+          {% set energy = states('utility_meter.daily_energy_lightroom_right') | float(default=0) %}
+          {% set rate = 0.1294 if 23 <= now().hour < 6 else 0.3881 if 17 <= now().hour < 23 else 0.1509 %}
+          {{ (energy * rate) | round(2) }}
+      - name: "Bedroom Left Energy Cost"
+        unit_of_measurement: "BYN"
+        state: >
+          {% set energy = states('utility_meter.daily_energy_bedroom_left') | float(default=0) %}
+          {% set rate = 0.1294 if 23 <= now().hour < 6 else 0.3881 if 17 <= now().hour < 23 else 0.1509 %}
+          {{ (energy * rate) | round(2) }}
+      - name: "Bedroom Right Energy Cost"
+        unit_of_measurement: "BYN"
+        state: >
+          {% set energy = states('utility_meter.daily_energy_bedroom_right') | float(default=0) %}
+          {% set rate = 0.1294 if 23 <= now().hour < 6 else 0.3881 if 17 <= now().hour < 23 else 0.1509 %}
+          {{ (energy * rate) | round(2) }}
+      - name: "Hallway Gateway Energy Cost"
+        unit_of_measurement: "BYN"
+        state: >
+          {% set energy = states('utility_meter.daily_energy_hallway_gateway') | float(default=0) %}
+          {% set rate = 0.1294 if 23 <= now().hour < 6 else 0.3881 if 17 <= now().hour < 23 else 0.1509 %}
+          {{ (energy * rate) | round(2) }}

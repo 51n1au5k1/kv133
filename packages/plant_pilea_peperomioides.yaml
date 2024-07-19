@@ -42,28 +42,34 @@ binary_sensor:
         friendly_name: "Необходимость полива (Пилея)"
         device_class: problem
         value_template: >-
-          {{ states('sensor.pilea_peperomioides_soil_moisture') | int(default=0) < states('number.pilea_peperomioides_min_soil_moisture') | int(default=0) }}
+          {% set moisture = states('sensor.pilea_peperomioides_soil_moisture') | int(default=0) %}
+          {% set threshold = states('number.pilea_peperomioides_min_soil_moisture') | int(default=0) %}
+          {{ moisture > 0 and moisture < threshold }}
 
       plant_alert_pilea_peperomioides_temperature:
         unique_id: plant_alert_pilea_peperomioides_temperature
         friendly_name: "Необходимость согрева (Пилея)"
         device_class: problem
         value_template: >-
-          {{ states('sensor.pilea_peperomioides_temperature') | int(default=0) < states('number.pilea_peperomioides_min_temperature') | int(default=0) }}
+          {% set temperature = states('sensor.pilea_peperomioides_temperature') | int(default=0) %}
+          {% set threshold = states('number.pilea_peperomioides_min_temperature') | int(default=0) %}
+          {{ temperature > 0 and temperature < threshold }}
 
       plant_alert_pilea_peperomioides_illuminance:
         unique_id: plant_alert_pilea_peperomioides_illuminance
         friendly_name: "Необходимость освещения (Пилея)"
         device_class: problem
         value_template: >-
-          {{ states('sensor.pilea_peperomioides_illuminance') | int(default=0) < states('number.pilea_peperomioides_min_illuminance') | int(default=0) }}
+          {% set illuminance = states('sensor.pilea_peperomioides_illuminance') | int(default=0) %}
+          {% set threshold = states('number.pilea_peperomioides_min_illuminance') | int(default=0) %}
+          {{ illuminance > 0 and illuminance < threshold }}
 
       pilea_watering_needed_recently:
         unique_id: pilea_watering_needed_recently
         friendly_name: "Pilea Needs Watering Recently"
         value_template: >-
-          {{ is_state('binary_sensor.plant_alert_pilea_peperomioides_soil', 'on') 
-            and (as_timestamp(now()) - as_timestamp(states('input_datetime.last_pilea_soil_notification') | default(0))) > 10800 }}
+          {% set last_notification = as_timestamp(states('input_datetime.last_pilea_soil_notification') | default(0)) %}
+          {{ is_state('binary_sensor.plant_alert_pilea_peperomioides_soil', 'on') and (as_timestamp(now()) - last_notification) > 10800 }}
         delay_off:
           minutes: 1
 
@@ -82,7 +88,7 @@ automation:
         state: "off"
       - condition: template
         value_template: >-
-          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_pilea_soil_notification'))) > 10800 }}
+          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_pilea_soil_notification') | default(0))) > 10800 }}
       - condition: time
         after: "08:00:00"
         before: "22:00:00"
@@ -94,6 +100,9 @@ automation:
           - condition: state
             entity_id: person.tatiana
             state: "home"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
     action:
       - choose:
           - conditions:
@@ -120,15 +129,15 @@ automation:
         target:
           entity_id: input_datetime.last_pilea_soil_notification
         data:
-          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          datetime: "{{ now().strftime('%Y-%м-%d %H:%М:%С') }}"
       - service: input_text.set_value
         target:
           entity_id: input_text.notification_history_pilea
-        data_template:
-          value: >
+        data: # Исправлено: удалены фигурные скобки вокруг value
+          >
             {% set history = states('input_text.notification_history_pilea') %}
-            {% set new_entry = "Уведомление о поливе Пилеи: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
-            {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
+            {% set new_entry = "Уведомление о поливе Пилеи: " + now().strftime('%Y-%м-%d %H:%М:%С') %}
+            {{ history + '\н' + new_entry if history|length < 1000 else new_entry }}
     mode: single
 
   - id: "04fc3265-cd58-4b80-8aae-ae6c1025c166"
@@ -141,7 +150,7 @@ automation:
     condition:
       - condition: template
         value_template: >-
-          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_pilea_temperature_notification'))) > 10800 }}
+          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_pilea_temperature_notification') | default(0))) > 10800 }}
       - condition: or
         conditions:
           - condition: state
@@ -150,6 +159,9 @@ automation:
           - condition: state
             entity_id: person.tatiana
             state: "home"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
     action:
       - choose:
           - conditions:
@@ -158,7 +170,7 @@ automation:
                 state: "home"
             sequence:
               - service: notify.master
-                data:
+                data_template: # Используем data_template вместо data
                   message: "Пилею необходимо поставить в тёплое место, температура почвы составляет {{ states('sensor.pilea_peperomioides_temperature') }}°C."
                   data:
                     photo:
@@ -166,17 +178,17 @@ automation:
                       caption: "Пилею необходимо поставить в тёплое место, температура почвы составляет {{ states('sensor.pilea_peperomioides_temperature') }}°C."
         default:
           - service: notify.tatsiana
-            data:
-              message: "Я не панда, шубы нет - сошрей меня скорее! Температура почвы сейчас {{ states('sensor.pilea_peperomioides_temperature') }}°C."
+            data_template: # Используем data_template вместо data
+              message: "Я не панда, шубы нет - согрей меня скорее! Температура почвы сейчас {{ states('sensor.pilea_peperomioides_temperature') }}°C."
               data:
                 photo:
                   file: "/config/www/images/plants_alerts/Pilea_peperomioides_cold.webp"
-                  caption: "Я не панда, шубы нет - сошрей меня скорее! Температура почвы сейчас {{ states('sensor.pilea_peperomioides_temperature') }}°C."
+                  caption: "Я не панда, шубы нет - согрей меня скорее! Температура почвы сейчас {{ states('sensor.pilea_peperomioides_temperature') }}°C."
       - service: input_datetime.set_datetime
         target:
           entity_id: input_datetime.last_pilea_temperature_notification
         data:
-          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          datetime: "{{ now().strftime('%Y-%м-%d %H:%М:%С') }}"
     mode: single
 
   - id: "2f40a159-e083-4ea9-a983-5b7691ba9ef4"
@@ -198,6 +210,9 @@ automation:
           - condition: state
             entity_id: person.tatiana
             state: "home"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
     action:
       - choose:
           - conditions:
@@ -207,9 +222,9 @@ automation:
             sequence:
               - condition: template
                 value_template: >
-                  {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_pilea_soil_notification'))) > 10800 }}
+                  {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_pilea_soil_notification') | default(0))) > 10800 }}
               - service: notify.notify
-                data:
+                data_template: # Используем data_template вместо data
                   message: "Необходимо полить Пилею: влажность почвы составляет {{ states('sensor.pilea_peperomioides_soil_moisture') }}%."
                   data:
                     photo:
@@ -219,7 +234,7 @@ automation:
                 target:
                   entity_id: input_datetime.last_pilea_soil_notification
                 data:
-                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+                  datetime: "{{ now().strftime('%Y-%м-%d %H:%М:%С') }}"
           - conditions:
               - condition: state
                 entity_id: binary_sensor.plant_alert_pilea_peperomioides_temperature
@@ -227,9 +242,9 @@ automation:
             sequence:
               - condition: template
                 value_template: >
-                  {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_pilea_temperature_notification'))) > 10800 }}
+                  {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_pilea_temperature_notification') | default(0))) > 10800 }}
               - service: notify.notify
-                data:
+                data_template: # Используем data_template вместо data
                   message: "Пилею необходимо поставить в тёплое место, температура почвы составляет {{ states('sensor.pilea_peperomioides_temperature') }}°C."
                   data:
                     photo:
@@ -239,13 +254,13 @@ automation:
                 target:
                   entity_id: input_datetime.last_pilea_temperature_notification
                 data:
-                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+                  datetime: "{{ now().strftime('%Y-%м-%d %H:%М:%С') }}"
       - service: input_text.set_value
         target:
           entity_id: input_text.notification_history_pilea
-        data:
-          value: >
+        data: # Исправлено: удалены фигурные скобки вокруг value
+          >
             {% set history = states('input_text.notification_history_pilea') %}
-            {% set new_entry = "Уведомление о " + ('поливе' if trigger.entity_id == 'binary_sensor.plant_alert_pilea_peperomioides_soil' else 'температуре') + " Пилеи: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
-            {{ history + '\n' + new_entry if history | length < 1000 else new_entry }}
+            {% set new_entry = "Уведомление о " + ('поливе' if trigger.entity_id == 'binary_sensor.plant_alert_pilea_peperomioides_soil' else 'температуре') + " Пилеи: " + now().strftime('%Y-%м-%d %H:%М:%С') %}
+            {{ history + '\н' + new_entry if history|length < 1000 else new_entry }}
     mode: single

@@ -85,19 +85,19 @@ automation:
     description: "Отправляет прогноз погоды на сегодня в Телеграм каждое утро."
     trigger:
       - platform: time
-        at: "07:07:00" # Указывает время отправки сообщения
+        at: "07:45:00" # Указывает время отправки сообщения
     condition: []
     action:
       - service: notify.master
         data:
           title: "<b>Прогноз погоды на сегодня</b>"
           message: >
-            Сегодня {{ states('sensor.open_meteo_opisanie_na_russkom') }}. Температура: {{ state_attr('weather.kvartira_133', 'forecast')[0].templow }}°C — {{ state_attr('weather.kvartira_133', 'forecast')[0].temperature }}°C. Ветер {{ state_attr('weather.kvartira_133', 'forecast')[0].wind_speed }} м/с. {% if state_attr('weather.kvartira_133', 'forecast')[0].precipitation | float > 0 %}Ожидаются осадки.{% else %}Осадков не ожидается.{% endif %}
+            Сейчас {{ states('sensor.open_meteo_opisanie_na_russkom') }}. Температура: {{ state_attr('weather.kvartira_133', 'temperature') }}°C. Ветер {{ states('sensor.open_meteo_weather4notion_wind') }}, {{ state_attr('weather.kvartira_133', 'wind_speed') }} м/с. {% if state_attr('weather.kvartira_133', 'precipitation_unit') == 'mm' %}Ожидаются осадки.{% else %}Осадков не ожидается.{% endif %}
       - service: notify.tatsiana
         data:
           title: "<b>Прогноз погоды на сегодня</b>"
           message: >
-            Сегодня {{ states('sensor.open_meteo_opisanie_na_russkom') }}. Температура: {{ state_attr('weather.kvartira_133', 'forecast')[0].templow }}°C — {{ state_attr('weather.kvartira_133', 'forecast')[0].temperature }}°C. Ветер {{ state_attr('weather.kvartira_133', 'forecast')[0].wind_speed }} м/с. {% if state_attr('weather.kvartira_133', 'forecast')[0].precipitation | float > 0 %}Ожидаются осадки.{% else %}Осадков не ожидается.{% endif %}
+            Сейчас {{ states('sensor.open_meteo_opisanie_na_russkom') }}. Температура: {{ state_attr('weather.kvartira_133', 'temperature') }}°C. Ветер {{ state_attr('weather.kvartira_133', 'wind_speed') }} м/с, направление {{ states('sensor.open_meteo_weather4notion_wind') }}. {% if state_attr('weather.kvartira_133', 'precipitation_unit') == 'mm' %}Ожидаются осадки.{% else %}Осадков не ожидается.{% endif %}
     mode: single
 
   # Уведомление об открытии входной двери
@@ -120,12 +120,94 @@ automation:
     action:
       - service: notify.master
         data:
-          message: "The front door was opened!"
+          message: "⚠️ Открытие входной двери! 🔓"
     mode: single
 
-  # Уведомления о Старте и Остановке Home Assistant
-  # Информирует пользователя о запуске и выключении сервера Home Assistant.
+  - id: "857652d8-a81f-4297-bf5a-824030aca70a"
+    alias: "Уведомление. Телеграм: Уведомление о звонке в дверь"
+    trigger:
+      - platform: device
+        domain: mqtt
+        device_id: d2c3001cdc59660c456de45aec09da91
+        type: action
+        subtype: single
+    condition:
+      - condition: state
+        entity_id: person.master
+        state: "not_home"
+    action:
+      - service: notify.master
+        data:
+          message: "⚠️ Кто-то звонит в дверь"
+    mode: single
 
+  # Уведомление о включении камеры
+
+  - id: "417016e0-21fa-4ec3-a057-35deaa7a93f2"
+    alias: "Уведомление о включении камеры"
+    trigger:
+      - platform: state
+        entity_id: switch.chuangmi_ipc019_37da_switch_status
+        to: "on"
+    condition:
+      - condition: or
+        conditions:
+          - condition: time
+            weekday:
+              - mon
+              - tue
+              - wed
+              - thu
+              - fri
+            after: "09:00:00"
+            before: "02:00:00"
+          - condition: time
+            weekday:
+              - sat
+              - sun
+            after: "00:00:00"
+            before: "23:59:59"
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ now().weekday() in [5, 6] }}"
+            sequence:
+              - service: notify.master
+                data:
+                  message: >
+                    {% set messages = [
+                      "⚠️ Внимание! Камера включена! 🎥",
+                      "⚠️ Внимание! Камера активирована! 🎥",
+                      "⚠️ Внимание! Камера работает! 🎥"
+                    ] %}
+                    {{ messages | random }}
+    mode: single
+
+  - id: "ba69e825-6c4e-4451-bb6f-cbbb224b1631"
+    alias: "Уведомление о завершении стирки"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.washing_machine_finished
+        to: "on"
+        for:
+          minutes: 5
+    condition:
+      - condition: state
+        entity_id: sensor.washing_machine_active
+        state: "off"
+      - condition: template
+        value_template: >
+          {{ is_state('sensor.washing_machine_active', 'on') and
+            (as_timestamp(now()) - as_timestamp(states.sensor.washing_machine_active.last_changed)) >= 840 }}
+        # 840 секунд = 14 минут
+    action:
+      - service: notify.master
+        data:
+          message: "🏠 Стирка закончена! 🧼"
+
+  # Информирует пользователя о запуске и выключении сервера Home Assistant.
+  # Уведомления о Старте и Остановке Home Assistant
   # Старт системы
 
   - id: "686a3440-7629-4b55-b508-593caf3679af"
@@ -172,47 +254,47 @@ automation:
     alias: "Уведомление. Телеграм: Необходимо проветрить гостиную"
     description: "Отправляет уведомление о необходимости проветривания, если уровень CO2 высок."
     trigger:
-      - platform: state
-        entity_id: sensor.livingroom_ventilation_need
-        from: "off"
-        to: "on"
-        for:
-          hours: 0
-          minutes: 5
-          seconds: 0
+      platform: state
+      entity_id: sensor.livingroom_ventilation_need
+      from: "off"
+      to: "on"
     condition:
       - condition: state
-        entity_id: input_boolean.system_startup_phase
+        entity_id: input_boolean.silent_mode
         state: "off"
       - condition: state
-        entity_id: input_boolean.co2_notification_sent
+        entity_id: input_boolean.co2_text_notification_sensor
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
         state: "off"
     action:
       - condition: state
         entity_id: person.master
-        state: "home"
+        state: "not_home"
       - service: notify.master
         data:
-          message: "Необходимо проветрить помещение для снижения концентрации CO2."
+          message: "Необходимо проветрить помещение гостиную"
           data:
             photo:
               file: "/config/www/images/notify_alert/ha_co2_alert.png"
-              caption: "Необходимо проветрить помещение для снижения концентрации CO2"
+              caption: "Необходимо проветрить помещение"
       - condition: state
         entity_id: person.tatiana
-        state: "home"
+        state: "not_home"
       - service: notify.tatsiana
         data:
-          message: "Необходимо проветрить помещение для снижения концентрации CO2."
+          message: "Необходимо проветрить помещение гостиную"
           data:
             photo:
               file: "/config/www/images/notify_alert/ha_co2_alert.png"
-              caption: "Необходимо проветрить помещение для снижения концентрации CO2"
+              caption: "Необходимо проветрить помещение гостиную"
       - service: input_boolean.turn_on
-        entity_id: input_boolean.co2_notification_sent
+        entity_id: input_boolean.co2_text_notification_sensor
     mode: single
 
-  ### Уровень СО2 в пределах нормы
+
+### Уровень СО2 в пределах нормы
   - id: "e531db4f-e947-460b-a9b3-2d71648bc465"
     alias: "Уведомление. Телеграм: Проветривание в гостиной завершено"
     description: "Уведомление о том, что проветривание завершено"
@@ -223,11 +305,17 @@ automation:
         to: "on"
     condition:
       - condition: state
-        entity_id: input_boolean.system_startup_phase
+        entity_id: input_boolean.silent_mode
         state: "off"
       - condition: state
-        entity_id: input_boolean.ventilation_status_cool_down
+        entity_id: input_boolean.co2_text_notification_sensor
         state: "off"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: template
+        value_template: >
+          {{ is_state('group.all_residents', 'not_home') }}
     action:
       - wait_for_trigger:
           - platform: state
@@ -251,11 +339,12 @@ automation:
               - service: notify.tatsiana
                 data:
                   message: "Проветривание завершено! Уровень CO2 в пределах нормы."
-      - service: input_boolean.turn_off
-        entity_id: input_boolean.co2_notification_sent
       - service: input_boolean.turn_on
         entity_id: input_boolean.ventilation_status_cool_down
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.co2_text_notification_sensor
     mode: single
+
 
   # Температура ниже 20°
   # Уведомления, когда температура в определённых комнатах опускается ниже 20°C,
@@ -376,3 +465,20 @@ automation:
             {% else %}
               Ошибка: Данные обновления недоступны.
             {% endif %}
+
+  - id: "1712827987955"
+    alias: Телеграм. Необходимо заменить фильтр
+    description: ""
+    trigger:
+      - type: value
+        platform: device
+        device_id: 66bd0bcf10924787d43265639b39d58a
+        entity_id: 668a100b3712c29cbf678b65ae2348ae
+        domain: sensor
+        below: 10
+    condition: []
+    action:
+      - service: notify.master
+        data:
+          message: Необходимо заменить фильтр в кондиционере
+    mode: single

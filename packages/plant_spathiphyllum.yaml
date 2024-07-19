@@ -41,21 +41,25 @@ binary_sensor:
         friendly_name: "Необходимость полива (Спатифиллюм)"
         device_class: "problem"
         value_template: >-
-          {{ states('sensor.spathiphyllum_soil_moisture') | int(default=0) < states('number.spathiphyllum_min_soil_moisture') | int(default=0) }}
+          {% set moisture = states('sensor.spathiphyllum_soil_moisture') | int(default=0) %}
+          {% set threshold = states('number.spathiphyllum_min_soil_moisture') | int(default=0) %}
+          {{ moisture > 0 and moisture < threshold }}
 
       plant_alert_spathiphyllum_temperature:
         unique_id: plant_alert_spathiphyllum_temperature
         friendly_name: "Необходимость согрева (Спатифиллюм)"
         device_class: "problem"
         value_template: >-
-          {{ states('sensor.spathiphyllum_temperature') | int(default=0) < states('number.spathiphyllum_min_temperature') | int(default=0) }}
+          {% set temperature = states('sensor.spathiphyllum_temperature') | int(default=0) %}
+          {% set threshold = states('number.spathiphyllum_min_temperature') | int(default=0) %}
+          {{ temperature > 0 and temperature < threshold }}
 
       spathiphyllum_watering_needed_recently:
         unique_id: spathiphyllum_watering_needed_recently
         friendly_name: "Spathiphyllum Needs Watering Recently"
         value_template: >-
-          {{ is_state('binary_sensor.plant_alert_spathiphyllum_soil', 'on') 
-            and (as_timestamp(now()) - as_timestamp(states('input_datetime.last_spathiphyllum_soil_notification') | default(0))) > 10800 }}
+          {% set last_notification = as_timestamp(states('input_datetime.last_spathiphyllum_soil_notification') | default(0)) %}
+          {{ is_state('binary_sensor.plant_alert_spathiphyllum_soil', 'on') and (as_timestamp(now()) - last_notification) > 10800 }}
         delay_off:
           minutes: 1
 
@@ -73,20 +77,31 @@ automation:
         state: "off"
       - condition: template
         value_template: >-
-          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_spathiphyllum_soil_notification'))) > 10800 }}
+          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_spathiphyllum_soil_notification') | default(0))) > 10800 }}
       - condition: time
         after: "08:00:00"
         before: "22:00:00"
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: person.master
+            state: "home"
+          - condition: state
+            entity_id: person.tatiana
+            state: "home"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
     action:
       - service: notify.tatsiana
-        data:
+        data_template: # Используем data_template вместо data
           message: "Женское счастье нуждается в капельке твоего внимания..."
           data:
             photo:
               file: "/config/www/images/plants_alerts/Spathiphyllum_soil.webp"
               caption: "Женское счастье нуждается в капельке твоего внимания..."
       - service: notify.master
-        data:
+        data_template: # Используем data_template вместо data
           message: "Необходимо полить Женское счастье: влажность почвы составляет {{ states('sensor.spathiphyllum_soil_moisture') | round|int }}%"
           data:
             photo:
@@ -96,15 +111,14 @@ automation:
         target:
           entity_id: input_datetime.last_spathiphyllum_soil_notification
         data:
-          timestamp: "{{ now().timestamp() }}"
+          datetime: "{{ now().strftime('%Y-%м-%d %H:%М:%С') }}"
       - service: input_text.set_value
         target:
           entity_id: input_text.notification_history_spathiphyllum
-        data_template:
-          value: >
-            {% set history = states('input_text.notification_history_spathiphyllum') %}
-            {% set new_entry = "Уведомление о поливе Спатифиллума: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
-            {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
+        data: > # Исправлено: удалены фигурные скобки вокруг value
+          {% set history = states('input_text.notification_history_spathiphyllum') %}
+          {% set new_entry = "Уведомление о поливе Спатифиллума: " + now().strftime('%Y-%м-%d %H:%М:%С') %}
+          {{ history + '\н' + new_entry if history|length < 1000 else new_entry }}
     mode: single
 
   - id: "6d029e7d-6cf6-4aee-85ee-c1295158e442"
@@ -117,17 +131,28 @@ automation:
     condition:
       - condition: template
         value_template: >-
-          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_spathiphyllum_temperature_notification'))) > 10800 }}
+          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_spathiphyllum_temperature_notification') | default(0))) > 10800 }}
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: person.master
+            state: "home"
+          - condition: state
+            entity_id: person.tatiana
+            state: "home"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
     action:
       - service: notify.tatsiana
-        data_template:
+        data_template: # Используем data_template вместо data
           message: "Женское счастье нуждается в твоём тепле как никогда."
           data:
             photo:
               file: "/config/www/images/plants_alerts/Spathiphyllum_cold.webp"
               caption: "Женское счастье нуждается в твоём тепле как никогда."
       - service: notify.master
-        data_template:
+        data_template: # Используем data_template вместо data
           message: "Женское счастье необходимо поставить в тёплое место, температура почвы составляет {{states('sensor.spathiphyllum_temperature')|round}}°C."
           data:
             photo:
@@ -137,13 +162,12 @@ automation:
         target:
           entity_id: input_datetime.last_spathiphyllum_temperature_notification
         data:
-          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          datetime: "{{ now().strftime('%Y-%м-%d %H:%М:%С') }}"
       - service: input_text.set_value
         target:
           entity_id: input_text.notification_history_spathiphyllum
-        data_template:
-          value: >
-            {% set history = states('input_text.notification_history_spathiphyllum') %}
-            {% set new_entry = "Уведомление о температуре Спатифиллума: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
-            {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
+        data: > # Исправлено: удалены фигурные скобки вокруг value
+          {% set history = states('input_text.notification_history_spathiphyllum') %}
+          {% set new_entry = "Уведомление о температуре Спатифиллума: " + now().strftime('%Y-%м-%d %H:%М:%С') %}
+          {{ history + '\н' + new_entry if history|length < 1000 else new_entry }}
     mode: single

@@ -7,48 +7,56 @@
 # этими устройствами в зависимости от состояния двери между кухней и гостиной,
 # повышая комфорт и эффективность использования.
 
-# Вводные переменные
-# climate_pre_restart_state: Хранит предыдущее состояние кондиционера при
-# перезагрузке системы.
-# fan_pre_restart_state: Хранит предыдущее состояние очистителя воздуха при
-# перезагрузке системы.
-# humidifier_pre_restart_state: Хранит предыдущее состояние увлажнителя воздуха
-# при # перезагрузке системы.
-# door_open_climate_pre_state: Фиксирует, был ли кондиционер включен до момента
-# открытия двери.
-# door_open_fan_pre_state: Фиксирует, был ли очиститель воздуха включен до
-# момента открытия двери.
-# door_open_humidifier_pre_state: Фиксирует, был ли увлажнитель воздуха включен
-# до момента открытия двери.
-
-input_boolean:
-  climate_pre_restart_state:
-    name: "Climate Pre-Restart State"
-    initial: off
-  fan_pre_restart_state:
-    name: "Fan Pre-Restart State"
-    initial: off
-  humidifier_pre_restart_state:
-    name: "Humidifier Pre-Restart State"
-    initial: off
-  door_open_climate_pre_state:
-    name: "Climate Pre-State When Door Opened"
-    initial: off
-  door_open_fan_pre_state:
-    name: "Fan Pre-State When Door Opened"
-    initial: off
-  door_open_humidifier_pre_state:
-    name: "Humidifier Pre-State When Door Opened"
-    initial: off
-
 # Автоматизации
 automation:
+  # Управляет включением и выключением бра в гостиной при нажатии сценического
+  # выключателя.
+  # Это удобно для создания атмосферного или расслабляющего освещения в гостиной
+  # без необходимости взаимодействия с традиционными выключателями.
+  - id: "1712818445736"
+    alias: "Гостиная: переключение бра сценическим выключателем"
+    description: ""
+    trigger:
+      - platform: device
+        domain: mqtt
+        device_id: 719cda594198c3eafa3817b9230f2afa
+        type: action
+        subtype: 4_single
+    condition: []
+    action:
+      - service: light.toggle
+        metadata: {}
+        data: {}
+        target:
+          entity_id: light.livingroom_scone_dimmer
+    mode: single
+
+  # Позволяет управлять основным светом в гостиной с помощью сценического
+  # выключателя. Автоматизация удобна для быстрого переключения света при входе
+  # в комнату или изменении активности, требующей другого освещения.
+  - id: "1712818610357"
+    alias: "Гостиная: переключение люстры сценическим выключателем"
+    description: ""
+    trigger:
+      - platform: device
+        domain: mqtt
+        device_id: 719cda594198c3eafa3817b9230f2afa
+        type: action
+        subtype: 3_single
+    condition: []
+    action:
+      - service: light.toggle
+        metadata: {}
+        data: {}
+        target:
+          entity_id: light.livingroom_main_switch_left
+    mode: single
+
   # Климатическая техника
   # Отключение устройств при открытой двери
   # Отключает кондиционер, очиститель воздуха и увлажнитель при длительном
   # открытии двери между кухней и гостиной, сохраняя их предыдущее состояние для
   # последующего восстановления.
-
   - id: "f4e42442-155e-4d0a-87c2-3f21fd72025d"
     alias: "Гостиная: Климат, отключить устройства при открытии двери"
     description: "Отключает кондиционер, очиститель воздуха и увлажнитель при длительном открытии двери."
@@ -87,8 +95,8 @@ automation:
         entity_id: climate.konditsioner
       - service: switch.turn_off
         entity_id: switch.zhimi_mb3_a5d3_switch_status
-      - service: humidifier.turn_off
-        entity_id: humidifier.smartmi_humidifier_rainforest_hum_dehum_3
+      - service: switch.turn_off
+        entity_id: switch.livingroom_socket_l
 
   # Восстановление состояния устройств
   # После закрытия двери автоматически восстанавливает предыдущее состояние
@@ -124,8 +132,8 @@ automation:
                 entity_id: input_boolean.door_open_humidifier_pre_state
                 state: "on"
             sequence:
-              - service: humidifier.turn_on
-                entity_id: humidifier.smartmi_humidifier_rainforest_hum_dehum_3
+              - service: switch.turn_on
+                entity_id: switch.livingroom_socket_l
       - service: input_boolean.turn_off
         entity_id:
           - input_boolean.door_open_climate_pre_state

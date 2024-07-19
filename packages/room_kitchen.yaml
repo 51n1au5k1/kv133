@@ -1,16 +1,12 @@
 # packages/room_kitchen.yaml #
 ##############################
 
-# Этот пакет конфигураций Home Assistant предназначен для автоматизации
-# освещения и управления климатом на кухне, обеспечивая комфорт и эффективность
-# использования пространства.
+# Этот пакет конфигураций Home Assistant предназначен для автоматизации освещения и управления климатом на кухне, обеспечивая комфорт и эффективность использования пространства.
 
 # Автоматизации
 automation:
   # Переключение света по нажатию правой клавиши кухонного выключателя
-  # Реагирует на нажатие правой клавиши кухонного выключателя, включая или
-  # выключая освещение на кухне. Это обеспечивает удобное управление светом
-  # без необходимости использования смартфона или голосовых команд.
+  # Реагирует на нажатие правой клавиши кухонного выключателя, включая или выключая освещение на кухне. Это обеспечивает удобное управление светом без необходимости использования смартфона или голосовых команд.
   - id: "b29835d5-9911-47ec-8630-2adda70be854"
     alias: "Кухня: Переключение света включателем"
     description: ""
@@ -28,34 +24,87 @@ automation:
         domain: light
     mode: single
 
-  # Предупреждение о необходимости включения вытяжки
-  # Активируется, когда температура на кухне превышает температуру в гостиной
-  # на 5 градусов, а влажность — на 10% больше, чем в гостиной. Это указывает на
-  # возможное накопление влаги и тепла от приготовления пищи, и в таких случаях
-  # рекомендуется включение вытяжки. Для информирования используется скрипт с
-  # голосовым сообщением через Яндекс устройства и активируется индикатор
-  # охлаждения вытяжки, чтобы избежать частых уведомлений.
+  # Автоматизация позволяет управлять основным светом на кухне с помощью сценического выключателя.
+  # Реагирует на одиночное нажатие кнопки, переключая свет, что облегчает управление освещением во время готовки или другой деятельности на кухне.
+  - id: "1712818563900"
+    alias: "Кухня: Переключение света сценическим выключателем"
+    description: "Автоматизация позволяет управлять основным светом на кухне с помощью сценического выключателя. Реагирует на одиночное нажатие кнопки, переключая свет, что облегчает управление освещением во время готовки или другой деятельности на кухне."
+    trigger:
+      - platform: device
+        domain: mqtt
+        device_id: 719cda594198c3eafa3817b9230f2afa
+        type: action
+        subtype: 2_single
+    condition: []
+    action:
+      - service: light.toggle
+        target:
+          entity_id: light.kitchen_main_light
+    mode: single
 
-  - id: 09855552-5e38-4de7-afd4-03ef866d6f41
+  - id: "1712818380030"
+    alias: "Кухня: Переключение подсветки рабочей поверхности сценическим выключателем"
+    description: ""
+    trigger:
+      - platform: device
+        domain: mqtt
+        device_id: 719cda594198c3eafa3817b9230f2afa
+        type: action
+        subtype: 1_single
+    condition: []
+    action:
+      - service: light.toggle
+        metadata: {}
+        data: {}
+        target:
+          entity_id: light.kitchen_fartuh
+    mode: single
+
+  # Предупреждение о необходимости включения вытяжки / Сброс датчика вытяжки
+  # Активируется, когда температура на кухне превышает температуру в гостиной на 5 градусов, а влажность — на 10% больше, чем в гостиной. Это указывает на возможное накопление влаги и тепла от приготовления пищи, и в таких случаях рекомендуется включение вытяжки. Для информирования используется скрипт с голосовым сообщением через Яндекс устройства и активируется индикатор охлаждения вытяжки, чтобы избежать частых уведомлений.
+  # Предупреждение о необходимости включения вытяжки
+  - id: "09855552-5e38-4de7-afd4-03ef866d6f41"
     alias: "Кухня: Предупреждение о необходимости включения вытяжки"
     trigger:
-      - platform: state
-        entity_id: sensor.kitchen_th_temperature
-      - platform: state
-        entity_id: sensor.kitchen_th_humidity
+      - platform: template
+        value_template: >
+          {{ states('sensor.kitchen_th_temperature') | float(default=0) > states('sensor.livingroom_climat_sensor_temperature') | float(default=0) + 5 }}
+      - platform: template
+        value_template: >
+          {{ states('sensor.kitchen_th_humidity') | float(default=0) > states('sensor.livingroom_climat_sensor_humidity') | float(default=0) + 10 }}
     condition:
-      - condition: template
-        value_template: "{{ (states('sensor.kitchen_th_temperature')|float - states('sensor.livingroom_climat_sensor_temperature')|float) > 5 }}"
-      - condition: template
-        value_template: "{{ (states('sensor.kitchen_th_humidity')|float - states('sensor.livingroom_climat_sensor_humidity')|float) > 10 }}"
       - condition: state
         entity_id: input_boolean.kitchen_fan_cool_down
         state: "off"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
     action:
-      - service: script.turn_on
-        data: {}
-        target:
-          entity_id: script.yandex_tts_kitchen_fan_alert
+      - service: script.yandex_tts_kitchen_fan_alert
       - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.kitchen_fan_cool_down
+
+  # Сброс предупреждения о необходимости включения вытяжки
+  - id: "8b7c3a73-7d74-4e6f-b1d5-4a9c1e3a9c12"
+    alias: "Кухня: Сброс предупреждения о необходимости включения вытяжки"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.kitchen_fan_cool_down
+        to: "on"
+        for:
+          minutes: 10
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('sensor.kitchen_th_temperature') | float(default=0) < states('sensor.livingroom_climat_sensor_temperature') | float(default=0) + 4 }}
+      - condition: template
+        value_template: >
+          {{ states('sensor.kitchen_th_humidity') | float(default=0) < states('sensor.livingroom_climat_sensor_humidity') | float(default=0) + 9 }}
+    action:
+      - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.kitchen_fan_cool_down

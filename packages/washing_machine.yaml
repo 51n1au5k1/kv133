@@ -1,0 +1,115 @@
+# packages/washing_machine.yaml #
+#################################
+
+# Этот пакет конфигураций Home Assistant обеспечивает работы системы уведомлений
+# по стиральной машине.
+
+input_boolean:
+  washing_machine_running:
+    name: "Стиральная машина работает"
+    initial: off
+    icon: mdi:washing-machine
+
+binary_sensor:
+  - platform: template
+    sensors:
+      washing_machine_active:
+        friendly_name: "Стиральная машина активна"
+        value_template: >-
+          {{ states('sensor.bathroom_washing_machine_power') | float(default=0) > 5 }}
+        # Сенсор состояния, активный когда стиральная машина потребляет более 5 Вт
+
+      washing_machine_finished:
+        friendly_name: "Стиральная машина завершила стирку"
+        value_template: >
+          {{ states('sensor.bathroom_washing_machine_power') | float(default=0) < 5 }}
+        delay_on:
+          minutes: 2
+        # Сенсор состояния, активный когда стиральная машина потребляет менее 5 Вт в течение 2 минут
+
+automation:
+  - id: "055f9541-0e9f-40c3-b786-1cc9d17b15bb"
+    alias: "Сброс статуса стиральной машины при старте системы"
+    description: "Автоматизация для сброса статуса стиральной машины при старте Home Assistant."
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.washing_machine_running
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.washing_machine_finished
+
+  - id: "04a14878-99d3-4030-a17d-bfa3c75b1f9b"
+    alias: "Стиральная машина: Сброс статуса при запуске"
+    description: "Автоматизация для сброса статуса стиральной машины, когда она начинает работать."
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.bathroom_washing_machine_power
+        above: 5
+    action:
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.washing_machine_running
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.washing_machine_finished
+
+  - id: "2d3371e6-23df-4710-be67-c79088517d33"
+    alias: "Стиральная машина: Завершение работы"
+    description: "Автоматизация для завершения работы стиральной машины."
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.bathroom_washing_machine_power
+        below: 5
+        for:
+          minutes: 5
+    condition:
+      - condition: state
+        entity_id: input_boolean.washing_machine_running
+        state: "on"
+    action:
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.washing_machine_running
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.washing_machine_finished
+
+  - id: "d1e78a7d-56c3-4d4e-b2a4-8a23f1a62a45"
+    alias: "Уведомление о завершении стирки"
+    description: "Автоматизация для отправки уведомления, когда стирка завершена."
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.washing_machine_finished
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.washing_machine_running
+        state: "off"
+    action:
+      - service: notify.notify
+        data:
+          message: "Стирка завершена! Пожалуйста, заберите белье."
+    mode: single
+
+  - id: "washing_machine_reminder_no_motion"
+    alias: "Напоминание о стирке при отсутствии движения"
+    description: "Напоминание через 15 минут, если после уведомления о завершении стирки не было движения или открытия дверей."
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.washing_machine_finished
+        to: "on"
+        for:
+          minutes: 15
+    condition:
+      - condition: state
+        entity_id: binary_sensor.bathroom_motions
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.bathroom_open_door
+        state: "off"
+    action:
+      - service: script.yandex_tts_washing_machine_reminder

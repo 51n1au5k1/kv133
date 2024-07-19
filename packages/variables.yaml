@@ -1,0 +1,189 @@
+# packages/variables.yaml #
+###########################
+
+# Этот пакет конфигураций Home Assistant определяет переменные и всё, что с ними связано
+
+input_number:
+  kitchen_fan_temp_limit:
+    name: "Кухня: Лимит температуры для вытяжки"
+    min: 0
+    max: 50
+    step: 0.1
+    unit_of_measurement: "°C"
+    initial: 25 # Фиксированное начальное значение
+
+  kitchen_fan_hum_limit:
+    name: "Кухня: Лимит влажности для вытяжки"
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    initial: 60 # Фиксированное начальное значение
+
+sensor:
+  - platform: template
+    sensors:
+      kitchen_fan_temp_initial:
+        friendly_name: "Кухня: Начальное значение температуры для вытяжки"
+        unit_of_measurement: "°C"
+        value_template: "{{ states('sensor.livingroom_average_temperature') | float(default=20) + 5 }}" # Добавлено default=20
+
+      kitchen_fan_hum_initial:
+        friendly_name: "Кухня: Начальное значение влажности для вытяжки"
+        unit_of_measurement: "%"
+        value_template: "{{ states('sensor.livingroom_average_humidity') | float(default=50) + 10 }}" # Добавлено default=50
+
+      livingroom_average_temperature:
+        friendly_name: "Living Room Average Temperature"
+        unit_of_measurement: "°C"
+        value_template: >-
+          {% set temp1 = states('sensor.livingroom_climat_sensor_temperature') | float(0) %}
+          {% set temp2 = states('sensor.co2_monitor_temperature') | float(0) %}
+          {% if temp1 is not none and temp2 is not none %}
+            {{ ((temp1 + temp2) / 2) | round(1) }}
+          {% else %}
+            20.0
+          {% endif %}
+
+      livingroom_average_humidity:
+        friendly_name: "Living Room Average Humidity"
+        unit_of_measurement: "%"
+        value_template: >-
+          {% set hum1 = states('sensor.livingroom_climat_sensor_humidity') | float(0) %}
+          {% set hum2 = states('sensor.co2_monitor_humidity') | float(0) %}
+          {% if hum1 is not none and hum2 is not none %}
+            {{ ((hum1 + hum2) / 2) | round(1) }}
+          {% else %}
+            50.0
+          {% endif %}
+      # Шаблонные датчики для отображения погоды для OpenWeather
+      # Перевод направлений ветра в человечесукю речь
+      open_meteo_weather4notion_wind:
+        friendly_name: "Направление ветра"
+        value_template: >-
+          {% set bearing = state_attr('weather.kvartira_133', 'wind_bearing') | float %}
+          {% if 337.5 <= bearing < 360 or 0 <= bearing < 22.5 %}
+            северный
+          {% elif 22.5 <= bearing < 67.5 %}
+            северо-восточный
+          {% elif 67.5 <= bearing < 112.5 %}
+            восточный
+          {% elif 112.5 <= bearing < 157.5 %}
+            юго-восточный
+          {% elif 157.5 <= bearing < 202.5 %}
+            южный
+          {% elif 202.5 <= bearing < 247.5 %}
+            юго-западный
+          {% elif 247.5 <= bearing < 292.5 %}
+            западный
+          {% elif 292.5 <= bearing < 337.5 %}
+            северо-западный
+          {% else %}
+            Направление ветра не определено
+          {% endif %}
+      # Перевод состояний погоды в человеческую речь
+      open_meteo_opisanie_na_russkom:
+        friendly_name: "Погодные условия"
+        value_template: >-
+          {% set condition = states('weather.kvartira_133') %}
+          {% if condition == 'sunny' %}
+            ясно
+          {% elif condition == 'partlycloudy' %}
+            малооблачно
+          {% elif condition == 'cloudy' %}
+            облачно с прояснениями
+          {% elif condition == 'overcast' %}
+            пасмурно
+          {% elif condition == 'fog' %}
+            туман
+          {% elif condition == 'drizzle' %}
+            морось
+          {% elif condition == 'rainy' %}
+            дождливо
+          {% elif condition == 'light-rain' %}
+            небольшой дождь
+          {% elif condition == 'rain' %}
+            дождь
+          {% elif condition == 'pouring' %}
+            ливень
+          {% elif condition == 'snowy' %}
+            снег
+          {% elif condition == 'snowy-heavy' %}
+            сильный снег
+          {% elif condition == 'sleet' %}
+            дождь со снегом
+          {% elif condition == 'lightning' %}
+            гроза
+          {% else %}
+            неопределенные погодные условия
+          {% endif %}
+      # Шаблонные датчики для отображения погоды на Яндекс устройствах
+      # Перевод направлений ветра в человечесукю речь
+      yandex_weather4notion_wind:
+        friendly_name: "Направление ветра"
+        value_template: >-
+          {% set bearing = states('sensor.yandex_weather_wind_bearing') | int %}
+          {% if bearing == 0 %}
+            отсуствует (штиль)
+          {% elif bearing == 45 %}
+            северо-восточный
+          {% elif bearing == 90 %}
+            восточный
+          {% elif bearing == 135 %}
+            юго-восточный
+          {% elif bearing == 180 %}
+            южный
+          {% elif bearing == 225 %}
+            юго-западный
+          {% elif bearing == 270 %}
+            западный
+          {% elif bearing == 315 %}
+            северо-западный
+          {% else %}
+            северный
+          {% endif %}
+
+      # Перевод состояний погоды в человеческую речь
+      yandex_weather4notion_conditions:
+        friendly_name: "Погодные условия"
+        value_template: >-
+          {% set condition = states('sensor.yandex_weather_condition_yandex_2') %}
+          {% if condition == 'clear' %}
+            ясно
+          {% elif condition == 'partly-cloudy' %}
+            малооблачно
+          {% elif condition == 'cloudy' %}
+            облачно с прояснениями
+          {% elif condition == 'overcast' %}
+            пасмурно
+          {% elif condition == 'drizzle' %}
+            морось
+          {% elif condition == 'light-rain' %}
+            небольшой дождь
+          {% elif condition == 'rain' %}
+            дождь
+          {% elif condition == 'moderate-rain' %}
+            умеренно-сильный дождь
+          {% elif condition == 'heavy-rain' %}
+            сильный дождь
+          {% elif condition == 'continuous-heavy-rain' %}
+            длительный сильный дождь
+          {% elif condition == 'showers' %}
+            ливень
+          {% elif condition == 'wet-snow' %}
+            дождь со снегом
+          {% elif condition == 'light-snow' %}
+            небольшой снег
+          {% elif condition == 'snow' %}
+            снег
+          {% elif condition == 'snow-showers' %}
+            снегопад
+          {% elif condition == 'hail' %}
+            град
+          {% elif condition == 'thunderstorm' %}
+            гроза
+          {% elif condition == 'thunderstorm-with-rain' %}
+            дождь с грозой
+          {% else %}
+            гроза с градом
+          {% endif %}
