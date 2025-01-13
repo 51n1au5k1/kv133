@@ -1,8 +1,33 @@
-# packages/variables.yaml #
-###########################
+################################################################################
+# /packages/variables.yaml
+################################################################################
+#
+# Назначение:
+#   В данном пакете собраны переменные (input_number) и вычисляемые сенсоры
+#   (template), используемые в различных частях системы умного дома.
+#   Например, здесь определяются:
+#   1) Лимиты для управляющей логики вытяжки на кухне (kitchen_fan_temp_limit,
+#      kitchen_fan_hum_limit);
+#   2) Шаблонные сенсоры для вычисления усредненной температуры/влажности
+#      в гостиной (livingroom_average_temperature/humidity);
+#   3) Начальные значения для температуры/влажности кухни (kitchen_fan_temp_initial,
+#      kitchen_fan_hum_initial), которые зависят от гостиной + некоторой дельты;
+#   4) Погодные переводы (направления ветра, погода) как для OpenWeather
+#      (open_meteo_*) так и для Яндекс (yandex_weather4notion_*).
+#
+################################################################################
 
-# Этот пакет конфигураций Home Assistant определяет переменные и всё, что с ними связано
-
+##############################################################################
+#                               INPUT_NUMBER
+##############################################################################
+#
+# Лимитные значения (порог температуры и влажности) для вытяжки на кухне.
+# В автоматизациях можно сравнивать фактические показатели:
+#   sensor.kitchen_th_temperature / sensor.kitchen_th_humidity
+# c установленными kitchen_fan_temp_limit или kitchen_fan_hum_limit,
+# чтобы принять решение, когда включать/выключать вытяжку.
+#
+##############################################################################
 input_number:
   kitchen_fan_temp_limit:
     name: "Кухня: Лимит температуры для вытяжки"
@@ -10,7 +35,7 @@ input_number:
     max: 50
     step: 0.1
     unit_of_measurement: "°C"
-    initial: 25 # Фиксированное начальное значение
+    initial: 25 # Начальное значение; можно поменять
 
   kitchen_fan_hum_limit:
     name: "Кухня: Лимит влажности для вытяжки"
@@ -18,21 +43,54 @@ input_number:
     max: 100
     step: 1
     unit_of_measurement: "%"
-    initial: 60 # Фиксированное начальное значение
+    initial: 60 # Начальное значение; можно подкорректировать
+
+##############################################################################
+#                             TEMPLATE SENSORS
+##############################################################################
+#
+#  1) kitchen_fan_temp_initial / kitchen_fan_hum_initial
+#     - Предлагаемые «стартовые» значения температурного и влажностного порога
+#       (добавляют +5°C/+10% к усреднённым данным гостиной).
+#       Могут использоваться для инициализации input_number или другой логики.
+#
+#  2) livingroom_average_temperature / livingroom_average_humidity
+#     - Усреднённая температура/влажность в гостиной. Берутся два сенсора
+#       (livingroom_climat_sensor_..., co2_monitor_...) и вычисляется среднее.
+#       Значения округляются до десятых. Если сенсоры недоступны, подставляются
+#       дефолты (20°C, 50%).
+#
+#  3) open_meteo_weather4notion_wind / open_meteo_opisanie_na_russkom
+#     - Перевод wind_bearing и состояния погоды из weather.kvartira_133
+#       в удобное отображение по-русски.
+#       «north», «east», «rainy» и т.д. → «северный», «дождливо» и т.п.
+#
+#  4) yandex_weather4notion_wind / yandex_weather4notion_conditions
+#     - Аналогично, но для Яндекс погоды.
+#
+##############################################################################
 
 sensor:
+  # ==================================================================
+  # 1) Температура/влажность стартового значения для вытяжки на кухне
+  # ==================================================================
   - platform: template
     sensors:
       kitchen_fan_temp_initial:
         friendly_name: "Кухня: Начальное значение температуры для вытяжки"
         unit_of_measurement: "°C"
-        value_template: "{{ states('sensor.livingroom_average_temperature') | float(default=20) + 5 }}" # Добавлено default=20
+        value_template: >
+          {{ states('sensor.livingroom_average_temperature') | float(default=20) + 5 }}
 
       kitchen_fan_hum_initial:
         friendly_name: "Кухня: Начальное значение влажности для вытяжки"
         unit_of_measurement: "%"
-        value_template: "{{ states('sensor.livingroom_average_humidity') | float(default=50) + 10 }}" # Добавлено default=50
+        value_template: >
+          {{ states('sensor.livingroom_average_humidity') | float(default=50) + 10 }}
 
+      # ================================================================
+      # 2) Усреднённая температура / влажность в гостиной
+      # ================================================================
       livingroom_average_temperature:
         friendly_name: "Living Room Average Temperature"
         unit_of_measurement: "°C"
@@ -56,10 +114,12 @@ sensor:
           {% else %}
             50.0
           {% endif %}
-      # Шаблонные датчики для отображения погоды для OpenWeather
-      # Перевод направлений ветра в человечесукю речь
+
+      # ================================================================
+      # 3) Перевод состояний погоды OpenWeather (weather.kvartira_133)
+      # ================================================================
       open_meteo_weather4notion_wind:
-        friendly_name: "Направление ветра"
+        friendly_name: "Направление ветра (OpenWeather)"
         value_template: >-
           {% set bearing = state_attr('weather.kvartira_133', 'wind_bearing') | float %}
           {% if 337.5 <= bearing < 360 or 0 <= bearing < 22.5 %}
@@ -81,9 +141,9 @@ sensor:
           {% else %}
             Направление ветра не определено
           {% endif %}
-      # Перевод состояний погоды в человеческую речь
+
       open_meteo_opisanie_na_russkom:
-        friendly_name: "Погодные условия"
+        friendly_name: "Погодные условия (OpenWeather, рус.)"
         value_template: >-
           {% set condition = states('weather.kvartira_133') %}
           {% if condition == 'sunny' %}
@@ -117,14 +177,16 @@ sensor:
           {% else %}
             неопределенные погодные условия
           {% endif %}
-      # Шаблонные датчики для отображения погоды на Яндекс устройствах
-      # Перевод направлений ветра в человечесукю речь
+
+      # ================================================================
+      # 4) Перевод состояний и направлений ветра для Яндекс Погоды
+      # ================================================================
       yandex_weather4notion_wind:
-        friendly_name: "Направление ветра"
+        friendly_name: "Направление ветра (Яндекс)"
         value_template: >-
           {% set bearing = states('sensor.yandex_weather_wind_bearing') | int %}
           {% if bearing == 0 %}
-            отсуствует (штиль)
+            отсутствует (штиль)
           {% elif bearing == 45 %}
             северо-восточный
           {% elif bearing == 90 %}
@@ -143,9 +205,8 @@ sensor:
             северный
           {% endif %}
 
-      # Перевод состояний погоды в человеческую речь
       yandex_weather4notion_conditions:
-        friendly_name: "Погодные условия"
+        friendly_name: "Погодные условия (Яндекс, рус.)"
         value_template: >-
           {% set condition = states('sensor.yandex_weather_condition_yandex_2') %}
           {% if condition == 'clear' %}

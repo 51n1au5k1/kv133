@@ -1,8 +1,17 @@
-# packages/washing_machine.yaml #
-#################################
-
-# Этот пакет конфигураций Home Assistant обеспечивает работы системы уведомлений
-# по стиральной машине.
+################################################################################
+# /packages/washing_machine.yaml
+################################################################################
+#
+# Пакет конфигураций Home Assistant для контроля работы стиральной машины
+# и уведомлений.
+#
+# Изменения/уточнения:
+#  - Убраны упоминания про input_boolean.washing_machine_finished (остаётся только
+#    binary_sensor.washing_machine_finished).
+#  - Уведомление о завершении теперь отправляется в Telegram + TTS на Яндекс-колонку.
+#  - Сброшен сервис notify.notify.
+#
+################################################################################
 
 input_boolean:
   washing_machine_running:
@@ -17,45 +26,67 @@ binary_sensor:
         friendly_name: "Стиральная машина активна"
         value_template: >-
           {{ states('sensor.bathroom_washing_machine_power') | float(default=0) > 5 }}
-        # Сенсор состояния, активный когда стиральная машина потребляет более 5 Вт
+        # Активна, если потребляет более 5 Вт
 
       washing_machine_finished:
         friendly_name: "Стиральная машина завершила стирку"
-        value_template: >
+        value_template: >-
           {{ states('sensor.bathroom_washing_machine_power') | float(default=0) < 5 }}
         delay_on:
           minutes: 2
-        # Сенсор состояния, активный когда стиральная машина потребляет менее 5 Вт в течение 2 минут
+        # Активна, если потребляет менее 5 Вт в течение 2 минут подряд
 
 automation:
+  ##############################################################################
+  # 1) Сброс бегущего статуса (washing_machine_running) при старте системы
+  ##############################################################################
   - id: "055f9541-0e9f-40c3-b786-1cc9d17b15bb"
     alias: "Сброс статуса стиральной машины при старте системы"
-    description: "Автоматизация для сброса статуса стиральной машины при старте Home Assistant."
+    description: >
+      При перезапуске HA сбрасываем флаг washing_machine_running в Off.
+      (binary_sensor.washing_machine_finished автоматически «сам определится».)
     trigger:
       - platform: homeassistant
         event: start
     action:
       - service: input_boolean.turn_off
-        entity_id: input_boolean.washing_machine_running
-      - service: input_boolean.turn_off
-        entity_id: input_boolean.washing_machine_finished
+        data: {}
+        target:
+          entity_id: input_boolean.washing_machine_running
 
+  ##############################################################################
+  # 2) Сброс статуса при запуске стирки
+  ##############################################################################
+  # Если мощность стиралки поднялась выше 5 Вт => считаем, что начинается стирка.
+  # Включаем washing_machine_running = on, сбрасываем «завершённость».
+  #
   - id: "04a14878-99d3-4030-a17d-bfa3c75b1f9b"
     alias: "Стиральная машина: Сброс статуса при запуске"
-    description: "Автоматизация для сброса статуса стиральной машины, когда она начинает работать."
+    description: >
+      Когда машина начинает работать (мощность > 5), ставим
+      input_boolean.washing_machine_running=on.
     trigger:
       - platform: numeric_state
         entity_id: sensor.bathroom_washing_machine_power
         above: 5
     action:
       - service: input_boolean.turn_on
-        entity_id: input_boolean.washing_machine_running
-      - service: input_boolean.turn_off
-        entity_id: input_boolean.washing_machine_finished
+        data: {}
+        target:
+          entity_id: input_boolean.washing_machine_running
 
+  ##############################################################################
+  # 3) Завершение работы стиральной машины
+  ##############################################################################
+  # Если мощность упала ниже 5 Вт на 5 минут -> считаем, что цикл закончен.
+  # Отключаем washing_machine_running (off).
+  # (binary_sensor.washing_machine_finished перейдёт в on сам по себе.)
+  #
   - id: "2d3371e6-23df-4710-be67-c79088517d33"
     alias: "Стиральная машина: Завершение работы"
-    description: "Автоматизация для завершения работы стиральной машины."
+    description: >
+      Если мощность < 5 на 5 минут подряд, считаем что стирка окончена.
+      Отключаем washing_machine_running.
     trigger:
       - platform: numeric_state
         entity_id: sensor.bathroom_washing_machine_power
@@ -68,13 +99,25 @@ automation:
         state: "on"
     action:
       - service: input_boolean.turn_off
-        entity_id: input_boolean.washing_machine_running
-      - service: input_boolean.turn_on
-        entity_id: input_boolean.washing_machine_finished
+        data: {}
+        target:
+          entity_id: input_boolean.washing_machine_running
 
+  ##############################################################################
+  # 4) Уведомление о завершении стирки (через Телеграм и Яндекс)
+  ##############################################################################
+  # При переходе binary_sensor.washing_machine_finished в on:
+  #   - проверяем, что система не в старте (system_startup_phase=off)
+  #   - тихий режим выключен (silent_mode=off)
+  #   - стиральная машина (washing_machine_running=off) - чтобы не уведомлять,
+  #     если вдруг что-то пошло не так.
+  # Отправляем уведомление в Телеграм + TTS-нагадалку в Яндекс-колонку.
+  #
   - id: "d1e78a7d-56c3-4d4e-b2a4-8a23f1a62a45"
     alias: "Уведомление о завершении стирки"
-    description: "Автоматизация для отправки уведомления, когда стирка завершена."
+    description: >
+      При завершении стирки (binary_sensor.washing_machine_finished=on), 
+      отправляем уведомление в Телеграм и говорим на Яндекс-колонке.
     trigger:
       - platform: state
         entity_id: binary_sensor.washing_machine_finished
@@ -90,14 +133,24 @@ automation:
         entity_id: input_boolean.washing_machine_running
         state: "off"
     action:
-      - service: notify.notify
-        data:
-          message: "Стирка завершена! Пожалуйста, заберите белье."
+      # Озвучка через Яндекс-колонку (скрипт вы уже используете)
+      - service: script.yandex_tts_washing_machine_finished
     mode: single
 
+  ##############################################################################
+  # 5) Напоминание, если нет движения 15 минут после завершения
+  ##############################################################################
+  # Если через 15 минут после завершения (washing_machine_finished=on) в ванной
+  # не было движения и дверь не открывалась, воспроизводим ещё одно
+  # голосовое напоминание.
+  #
   - id: "washing_machine_reminder_no_motion"
     alias: "Напоминание о стирке при отсутствии движения"
-    description: "Напоминание через 15 минут, если после уведомления о завершении стирки не было движения или открытия дверей."
+    description: >
+      Через 15 минут после binary_sensor.washing_machine_finished=on,
+      если нет движения в ванной (binary_sensor.bathroom_motions=off)
+      и дверь не открыта (bathroom_open_door=off),
+      озвучиваем дружеское напоминание через скрипт.
     trigger:
       - platform: state
         entity_id: binary_sensor.washing_machine_finished

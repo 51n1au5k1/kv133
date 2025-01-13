@@ -1,27 +1,41 @@
-db_url: !secret db_link
-purge_keep_days: 30
+recorder:
+  db_url: !secret db_link
+  purge_keep_days: 90
+  purge_interval: 1 # ежедневная очистка старше 30 дней
 
-include:
-  domains:
-    - light
-    - switch
-    - sensor
-  entities:
-    - sensor.livingroom_temperature
-    - sensor.livingroom_humidity
-    - sensor.co2_level
-    - sensor.pm2_5_level
+  include:
+    domains:
+      - light
+      - switch
+      - sensor
+      - binary_sensor
+      - input_boolean
+      - select
+    # если нужны другие домены (input_boolean, climate, и т.д.) — добавьте их сюда
 
-exclude:
-  entities:
-    - sensor.zhimi_mb3_a5d3_motor_speed
-    - sensor.time
-    - sensor.date
-    - sensor.livingroom_socket_l_energy
-    - sensor.bathroom_washing_machine_energy
-    - sensor.0x00158d0002530bd9_energy
-    - sensor.0x00158d0002530ba3_energy
-    - sensor.0x00158d000255b36f_energy
-    - sensor.livingroom_socket_l_energy
-    - sensor.livingroom_socket_r_energy
+  exclude:
+    domains:
+      - update
+      - camera
+      - button
+      - script
+      - media_player
+      - automation
 
+    entities:
+      # Системные сенсоры времени/даты
+      - sensor.time
+      - sensor.date
+
+      # Служебные сенсоры Xiaomi, Mi Home, Zigbee2MQTT, не несущие пользы в истории
+      - sensor.mi_66684496_message
+      - sensor.mi_66684496_525001142665_scene_history
+      - sensor.zhimi_mb3_a5d3_motor_speed
+
+      # # Счётчики энергии (если вы их не используете для аналитики)
+      # - sensor.livingroom_socket_l_energy
+      # - sensor.bathroom_washing_machine_energy
+      # - sensor.0x00158d0002530bd9_energy
+      # - sensor.0x00158d0002530ba3_energy
+      # - sensor.0x00158d000255b36f_energy
+      # - sensor.livingroom_socket_r_energy

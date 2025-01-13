@@ -1,21 +1,35 @@
-# packages/room_livingroom.yaml #
-#################################
+################################################################################
+# /packages/room_livingroom.yaml
+################################################################################
+#
+# Назначение:
+#   Данный пакет Home Assistant предназначен для управления освещением
+#   (бра, свет в зоне диване, люстрой) и климатическими устройствами
+#   (кондиционер, очиститель воздуха и увлажнитель) в гостиной.
+# Автоматизации позволяют:
+#   • Включать/выключать свет по нажатию сценического выключателя;
+#   • Отключать/восстанавливать климатические приборы при открытии/закрытии дверей
+#     между кухней и гостиной, сохраняя предыдущее состояние устройств.
+#
+# Особенности:
+#   1. Если дверь в кухню открыта более 1 минуты, отключаются кондиционер,
+#      очиститель воздуха и увлажнитель (если они были включены) — чтобы
+#      не тратить энергию впустую и исключить конфликты воздушных потоков.
+#      При этом система запоминает, какие из устройств были включены, с помощью
+#      нескольких input_boolean (door_open_climate_pre_state, door_open_fan_pre_state,
+#      door_open_humidifier_pre_state).
+#   2. При последующем закрытии двери устройства, которые были отключены,
+#      восстанавливаются в прежнее состояние (если не активирован зимний режим).
+#   3. Управление освещением двумя видами выключателей (сценическим).
+#
+################################################################################
 
-# Этот пакет конфигураций Home Assistant предназначен для интеллектуального
-# управления климатическими устройствами в гостиной, включая кондиционер,
-# очиститель воздуха и увлажнитель. Он обеспечивает автоматическое управление
-# этими устройствами в зависимости от состояния двери между кухней и гостиной,
-# повышая комфорт и эффективность использования.
-
-# Автоматизации
 automation:
-  # Управляет включением и выключением бра в гостиной при нажатии сценического
-  # выключателя.
-  # Это удобно для создания атмосферного или расслабляющего освещения в гостиной
-  # без необходимости взаимодействия с традиционными выключателями.
-  - id: "1712818445736"
-    alias: "Гостиная: переключение бра сценическим выключателем"
-    description: ""
+  ##########################################################################
+  # 1) ПЕРЕКЛЮЧЕНИЕ БРА ПО СЦЕНИЧЕСКОМУ ВЫКЛЮЧАТЕЛЮ (4_single)
+  ##########################################################################
+  - id: "9fff2de3-f169-4fda-8a8a-91966fc51f13"
+    alias: "Гостиная: переключение бра (кнопка 4, одиночное нажатие)"
     trigger:
       - platform: device
         domain: mqtt
@@ -25,18 +39,15 @@ automation:
     condition: []
     action:
       - service: light.toggle
-        metadata: {}
-        data: {}
         target:
           entity_id: light.livingroom_scone_dimmer
     mode: single
 
-  # Позволяет управлять основным светом в гостиной с помощью сценического
-  # выключателя. Автоматизация удобна для быстрого переключения света при входе
-  # в комнату или изменении активности, требующей другого освещения.
-  - id: "1712818610357"
-    alias: "Гостиная: переключение люстры сценическим выключателем"
-    description: ""
+  ##########################################################################
+  # 2) ПЕРЕКЛЮЧЕНИЕ ЛЮСТРЫ ПО СЦЕНИЧЕСКОМУ ВЫКЛЮЧАТЕЛЮ (3_single)
+  ##########################################################################
+  - id: "54ea7c3d-a37d-4ce4-80ff-f2da00a450c2"
+    alias: "Гостиная: переключение люстры (кнопка 3, одиночное нажатие)"
     trigger:
       - platform: device
         domain: mqtt
@@ -46,35 +57,69 @@ automation:
     condition: []
     action:
       - service: light.toggle
-        metadata: {}
-        data: {}
         target:
           entity_id: light.livingroom_main_switch_left
     mode: single
 
-  # Климатическая техника
-  # Отключение устройств при открытой двери
-  # Отключает кондиционер, очиститель воздуха и увлажнитель при длительном
-  # открытии двери между кухней и гостиной, сохраняя их предыдущее состояние для
-  # последующего восстановления.
+  ##########################################################################
+  # 3) ПЕРЕКЛЮЧЕНИЕ СВЕТА В ЗОНЕ ДИВАНА ПРИ ДВОЙНОМ НАЖАТИИ НА 4-Ю КНОПКУ (4_double)
+  ##########################################################################
+  # Новая автоматизация: при двойном нажатии 4-й кнопки включаем/выключаем
+  # свет livingroom_main_switch_right.
+  #
+  - id: "916eb0c3-eee6-409d-9ce2-4dc00c9f7051"
+    alias: "Гостиная: переключение правого света (кнопка 4, двойное нажатие)"
+    trigger:
+      - platform: device
+        domain: mqtt
+        device_id: 719cda594198c3eafa3817b9230f2afa
+        type: action
+        subtype: 4_double
+    condition: []
+    action:
+      - service: light.toggle
+        target:
+          entity_id: light.livingroom_main_switch_right
+    mode: single
+
+  ##############################################################################
+  # 4) Климатическая техника: отключение при открытой двери (на 1 мин)
+  ##############################################################################
+  # Отключает кондиционер, очиститель воздуха и увлажнитель, когда дверь
+  # между гостиной и кухней открыта более 1 минуты, сохраняя предыдущее состояние.
+  #
   - id: "f4e42442-155e-4d0a-87c2-3f21fd72025d"
     alias: "Гостиная: Климат, отключить устройства при открытии двери"
-    description: "Отключает кондиционер, очиститель воздуха и увлажнитель при длительном открытии двери."
+    description: >
+      Отключает кондиционер (climate.konditsioner), очиститель воздуха 
+      (switch.zhimi_mb3_a5d3_switch_status) и увлажнитель (switch.livingroom_socket_l) 
+      через 1 минуту после открытия двери, если они были включены. Сохраняет 
+      в input_boolean.*_pre_state, чтобы при закрытии двери восстановить работу.
     trigger:
-      platform: state
-      entity_id: binary_sensor.doors_in_kitchen_livingroom
-      to: "on"
-      for:
-        minutes: 1
+      - platform: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom
+        to: "on"
+        for:
+          minutes: 1
     action:
+      # 4.1) Кондиционер
       - choose:
           - conditions:
               - condition: state
                 entity_id: climate.konditsioner
                 state: "on"
+              - condition: state
+                entity_id: input_boolean.winter_mode
+                state: "off"
             sequence:
               - service: input_boolean.turn_on
-                entity_id: input_boolean.door_open_climate_pre_state
+                target:
+                  entity_id: input_boolean.door_open_climate_pre_state
+              - service: climate.turn_off
+                target:
+                  entity_id: climate.konditsioner
+
+      # 4.2) Очиститель воздуха
       - choose:
           - conditions:
               - condition: state
@@ -82,7 +127,13 @@ automation:
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
-                entity_id: input_boolean.door_open_fan_pre_state
+                target:
+                  entity_id: input_boolean.door_open_fan_pre_state
+              - service: switch.turn_off
+                target:
+                  entity_id: switch.zhimi_mb3_a5d3_switch_status
+
+      # 4.3) Увлажнитель
       - choose:
           - conditions:
               - condition: state
@@ -90,34 +141,47 @@ automation:
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
-                entity_id: input_boolean.door_open_humidifier_pre_state
-      - service: climate.turn_off
-        entity_id: climate.konditsioner
-      - service: switch.turn_off
-        entity_id: switch.zhimi_mb3_a5d3_switch_status
-      - service: switch.turn_off
-        entity_id: switch.livingroom_socket_l
+                target:
+                  entity_id: input_boolean.door_open_humidifier_pre_state
+              - service: switch.turn_off
+                target:
+                  entity_id: switch.livingroom_socket_l
 
-  # Восстановление состояния устройств
-  # После закрытия двери автоматически восстанавливает предыдущее состояние
-  # кондиционера, очистителя воздуха и увлажнителя, основываясь на сохраненных
-  # данных о их состоянии до открытия двери.
+  ##############################################################################
+  # 5) Климатическая техника: восстановление состояния при закрытой двери
+  ##############################################################################
+  # Если дверь снова закрыта (binary_sensor.doors_in_kitchen_livingroom == off),
+  # восстанавливаем кондиционер/очиститель/увлажнитель, но только если
+  # соответствующие флаги pre_state были установлены в on (значит устройство
+  # было включено ранее). В случае кондиционера — проверяем, что не зима
+  # (winter_mode == off).
+  #
   - id: "0347cae6-1b2f-436a-a54c-792feafa9620"
     alias: "Гостиная: Климат, восстановление состояния устройств"
-    description: "Восстанавливает состояние устройств при закрытии двери."
+    description: >
+      Восстанавливает состояние кондиционера, очистителя воздуха 
+      и увлажнителя при закрытии двери, если они были выключены 
+      предыдущей автоматизацией. После включения сбрасывает флаги pre_state.
     trigger:
-      platform: state
-      entity_id: binary_sensor.doors_in_kitchen_livingroom
-      to: "off"
+      - platform: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom
+        to: "off"
     action:
+      # 5.1) Кондиционер
       - choose:
           - conditions:
               - condition: state
                 entity_id: input_boolean.door_open_climate_pre_state
                 state: "on"
+              - condition: state
+                entity_id: input_boolean.winter_mode
+                state: "off"
             sequence:
               - service: climate.turn_on
-                entity_id: climate.konditsioner
+                target:
+                  entity_id: climate.konditsioner
+
+      # 5.2) Очиститель воздуха
       - choose:
           - conditions:
               - condition: state
@@ -125,7 +189,10 @@ automation:
                 state: "on"
             sequence:
               - service: switch.turn_on
-                entity_id: switch.zhimi_mb3_a5d3_switch_status
+                target:
+                  entity_id: switch.zhimi_mb3_a5d3_switch_status
+
+      # 5.3) Увлажнитель
       - choose:
           - conditions:
               - condition: state
@@ -133,9 +200,13 @@ automation:
                 state: "on"
             sequence:
               - service: switch.turn_on
-                entity_id: switch.livingroom_socket_l
+                target:
+                  entity_id: switch.livingroom_socket_l
+
+      # Очистка флагов pre_state
       - service: input_boolean.turn_off
-        entity_id:
-          - input_boolean.door_open_climate_pre_state
-          - input_boolean.door_open_fan_pre_state
-          - input_boolean.door_open_humidifier_pre_state
+        target:
+          entity_id:
+            - input_boolean.door_open_climate_pre_state
+            - input_boolean.door_open_fan_pre_state
+            - input_boolean.door_open_humidifier_pre_state

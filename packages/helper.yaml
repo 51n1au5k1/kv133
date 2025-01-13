@@ -1,77 +1,138 @@
-# packages/helper.yaml #
-########################
-
+################################################################################
+# /packages/helper.yaml
+################################################################################
+#
 # Этот пакет конфигураций Home Assistant обеспечивает вспомогательные функции
 # для мониторинга и управления различными аспектами умного дома.
-# Он включает в себя датчики для измерения размера базы данных и мониторинга
-# уровней CO2, а также автоматизации для управления состоянием системы и
-# климатической техникой.
+# Он включает в себя:
+# 1) Различные сенсоры (SQL, шаблонные бинарные сенсоры) — для контроля размера БД,
+#    уровня CO2, состояния дверей и температурного порога.
+# 2) Шаблонные сенсоры для хранения постоянных значений (например, «Норма давления»).
+# 3) Input_boolean (булевые флаги), управляющие режимами/состояниями (фаза загрузки,
+#    тихий режим, зимний режим, режим уборки и т.д.).
+# 4) Группы (например, group.all_residents) для упрощенного слежения за тем,
+#    кто дома.
+# 5) Автоматизации, в числе которых:
+#    • Включение/выключение зимнего режима по календарным месяцам.
+#    • Управление «фазой загрузки» (system_startup_phase) при запуске/после запуска.
+#    • Автоматический «тихий режим» (silent_mode) каждый вечер в 23:00 и отключение
+#      в 09:00.
+#    • Сброс уведомлений о CO2 по таймеру.
+#    • Логирование изменений погоды.
+#    • Сброс состояния уведомлений при изменении livingroom_ventilation_status.
+#    • Сохранение/восстановление состояния климатических приборов при выключении/старте HA.
+#    • Выключение камеры, если кто-то вернулся домой.
+#
+################################################################################
 
-# Конфигурации
-
-# Датчики
-
-# Maria DB size: Измеряет размер базы данных MariaDB для контроля использования
-# хранилища.
-# Необходимость проветривания: Активируется, когда уровень CO2 превышает
-# 1000 ppm, сигнализируя о необходимости проветрить помещение.
-# Статус проветривания: Показывает, достаточно ли проветрено помещение,
-# активируясь при уровне CO2 ниже 550 ppm.
+##############################################################################
+#                               СЕНСОРЫ
+##############################################################################
+#
+# Данный раздел содержит различные сенсоры: как напрямую связанные с БД,
+# так и шаблонные бинарные сенсоры для CO2, дверей и температуры.
+#
+# 1) sensor (SQL-платформа):
+#    - Измеряет размер базы данных MariaDB, чтобы контролировать объем
+#      занимаемого хранилища. Это полезно, если вы ведете журнал в
+#      MariaDB и не хотите, чтобы размер БД рос бесконтрольно.
+#
+# 2) binary_sensor (template-платформа):
+#    - livingroom_ventilation_need: определяет, нужно ли проветривать
+#      комнату (CO2 выше 1000 ppm).
+#    - livingroom_ventilation_status: показывает, что проветривание
+#      "достаточное" (CO2 упал ниже 550 ppm).
+#    - doors_in_kitchen_livingroom: отмечает, открыты ли двери
+#      на балкон (может использоваться для отключения приборов при
+#      проветривании).
+#    - temperature_below_20: бинарный датчик, который сигнализирует,
+#      что температура в одной из комнат упала ниже 20°C, возможно,
+#      требуется отопление или дополнительный обогрев.
+#
+##############################################################################
 
 sensor:
-  # Измерение размера базы данных MariaDB для мониторинга использования
+  # --------------------------------------------------------------------------
+  # Измерение размера БД MariaDB
+  # --------------------------------------------------------------------------
+  # SQL-сенсор, который выполняет запрос к таблице information_schema.tables
+  # и вычисляет общий размер (данные + индексы) в мегабайтах для схемы "homeassistant".
+  # Используется для наблюдения за разрастанием БД.
   - platform: sql
     db_url: !secret db_link
     queries:
       - name: Maria DB size
-        query: 'SELECT table_schema "database", Round(Sum(data_length + index_length) / 1048576, 2) "value" FROM information_schema.tables WHERE table_schema="homeassistant" GROUP BY table_schema;'
+        query: >
+          SELECT 
+            table_schema AS "database", 
+            ROUND(SUM(data_length + index_length) / 1048576, 2) AS "value" 
+          FROM information_schema.tables 
+          WHERE table_schema = "homeassistant" 
+          GROUP BY table_schema;
         column: "value"
         unit_of_measurement: MB
 
-  # Шаблонные датчики для мониторинга условий окружающей среды
+##############################################################################
+#                          БИНАРНЫЕ ДАТЧИКИ
+##############################################################################
+
+binary_sensor:
+  # --------------------------------------------------------------------------
+  # 1) Датчики CO2 (проветривание)
+  # --------------------------------------------------------------------------
+  # livingroom_ventilation_need:
+  #   - 'on', если уровень CO2 > 1000 ppm => нужно проветривать.
+  #   - 'off', иначе.
+  # livingroom_ventilation_status:
+  #   - 'on', если уровень CO2 < 550 => помещение уже достаточно проветрено.
+  #   - 'off', иначе.
   - platform: template
     sensors:
-      # Датчик необходимости проветривания, активируется при CO2 выше 1000 ppm
       livingroom_ventilation_need:
         unique_id: livingroom_ventilation_need
         friendly_name: "Необходимость проветривания"
         value_template: >
-          {% if states('sensor.co2_monitor_co2') is not none and states('sensor.co2_monitor_co2') != 'unknown' %}
+          {% if states('sensor.co2_monitor_co2') is not none 
+                and states('sensor.co2_monitor_co2') != 'unknown' %}
             {{ 'on' if (states('sensor.co2_monitor_co2') | float) > 1000 else 'off' }}
           {% else %}
             off
           {% endif %}
 
-      # Датчик статуса проветривания, активируется при CO2 ниже 550 ppm
       livingroom_ventilation_status:
         unique_id: livingroom_ventilation_status
         friendly_name: "Статус проветривания"
         value_template: >
-          {% if states('sensor.co2_monitor_co2') is not none and states('sensor.co2_monitor_co2') != 'unknown' %}
+          {% if states('sensor.co2_monitor_co2') is not none 
+                and states('sensor.co2_monitor_co2') != 'unknown' %}
             {{ 'on' if (states('sensor.co2_monitor_co2') | float) < 550 else 'off' }}
           {% else %}
             off
           {% endif %}
 
-# Бинарные Датчики
-# Состояние дверей: Определяет открыты ли двери на балконе для управления
-# работой очистителей воздуха.
-# Температура ниже 20 градусов: Сигнализирует о снижении температуры ниже
-# 20 градусов в комнатах, что может потребовать дополнительного отопления.
-
-binary_sensor:
+  # --------------------------------------------------------------------------
+  # 2) Датчики состояния дверей и температуры
+  # --------------------------------------------------------------------------
+  # doors_in_kitchen_livingroom:
+  #   - 'on', если хотя бы одна из дверей на балкон открыта.
+  #   - 'off', если все двери закрыты.
+  #   Можно применять для автоматического отключения кондиционера/увлажнителя
+  #   при проветривании.
+  #
+  # temperature_below_20:
+  #   - 'on', если хотя бы в одной из перечисленных комнат
+  #     температура ≤ 20°C.
+  #   - 'off', иначе.
   - platform: template
     sensors:
-      # Состояние дверей для определения необходимости работы очистителя воздуха
       doors_in_kitchen_livingroom:
         unique_id: doors_in_kitchen_livingroom
         friendly_name: "Двери на балкон с гостиной"
         device_class: door
         value_template: >
           {{ is_state('binary_sensor.gostinaia_balkon_contact', 'on')
-              or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') }}
+             or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') }}
 
-      # Сенсор падения температуры ниже 20 градусов в комнатах
       temperature_below_20:
         unique_id: temperature_below_20
         friendly_name: "Температура ниже 20 градусов"
@@ -80,137 +141,411 @@ binary_sensor:
           {% set temp1 = states('sensor.livingroom_climat_sensor_temperature') %}
           {% set temp2 = states('sensor.bedroom_th_sensor_temperature') %}
           {% set temp3 = states('sensor.cgllc_dove_f637_temperature_humidity_sensor') %}
-          {{ (temp1 not in ['unknown', 'unavailable'] and temp1 | float(20) <= 20)
-            or (temp2 not in ['unknown', 'unavailable'] and temp2 | float(20) <= 20)
-            or (temp3 not in ['unknown', 'unavailable'] and temp3 | float(20) <= 20) }}
+          {{ (temp1 not in ['unknown','unavailable'] and temp1|float <= 20)
+             or (temp2 not in ['unknown','unavailable'] and temp2|float <= 20)
+             or (temp3 not in ['unknown','unavailable'] and temp3|float <= 20) }}
+  # --------------------------------------------------------------------------
+  # 3) Общий бинарный сенсор kitchen_need_ventilation с гистерезисом
+  # --------------------------------------------------------------------------
+  # Идея в том, чтобы:
+  # • При превышении порогов по температуре (более чем на +5°C относительно
+  # гостиной) или влажности (более чем на +10% относительно гостиной) — датчик
+  # переходит в состояние “on”.
+  # • Возвращается обратно в “off” только когда параметры вернутся в зону, где
+  # превышение меньше более «мягких» значений (например, +3°C и +8%).
+  # • Таким образом, если сенсор уже “on”, не требуем сразу «идеальных» значений
+  # для возврата в “off», а чуть «побольше» (мягкие границы).
+  # Это и есть гистерезис.
 
-# Фиксированное значение атмосферного давления (норма для координат)
+  - platform: template
+    sensors:
+      kitchen_need_ventilation:
+        friendly_name: "Кухня: Нужна вытяжка (с гистерезисом)"
+        value_template: >
+          {% set k_temp = states('sensor.kitchen_th_temperature') | float(default=0) %}
+          {% set l_temp = states('sensor.livingroom_climat_sensor_temperature') | float(default=0) %}
+          {% set k_hum  = states('sensor.kitchen_th_humidity') | float(default=0) %}
+          {% set l_hum  = states('sensor.livingroom_climat_sensor_humidity') | float(default=0) %}
+
+          {% set temp_diff = k_temp - l_temp %}
+          {% set hum_diff  = k_hum  - l_hum %}
+
+          {% set old_state = states('binary_sensor.kitchen_need_ventilation') %}
+
+          {# 
+            Если сенсор уже "on", то для перехода в "off" 
+            используем более мягкие условия (temp_diff <= 3, hum_diff <= 8). 
+            Иначе (сенсор "off"), переходим в "on" лишь при превышении 
+            жёстких порогов (temp_diff > 5 или hum_diff > 10). 
+          #}
+          {% if old_state == 'on' %}
+            {{ temp_diff > 3 or hum_diff > 8 }}
+          {% else %}
+            {{ temp_diff > 5 or hum_diff > 10 }}
+          {% endif %}
+
+##############################################################################
+#                           ШАБЛОННЫЕ СЕНСОРЫ
+##############################################################################
+#
+# Блок template-сенсоров, которые могут быть использованы для вычисления
+# или хранения постоянных (фиксированных) значений, недоступных в виде отдельных
+# физических датчиков. В этом случае задан «Норма атмосферного давления» —
+# постоянное значение, которое можно, например, сравнивать с реальным
+# давлением, получаемым от другого датчика.
+#
+# Вы можете использовать этот сенсор в автоматизациях или в карточках Lovelace,
+# если хотите проверить отклонение текущего давления от «нормы», а также
+# отображать его в интерфейсе.
+#
+##############################################################################
+
 template:
   - sensor:
       - name: "Норма атмосферного давления"
         unique_id: fixed_pressure_value
         unit_of_measurement: "mmHg"
+        # Фиксированное значение давления (739 мм рт. ст.),
+        # установленное в качестве эталонной "нормы".
+        # При необходимости можно изменить на любое подходящее значение.
         state: 739
 
-# Входные Булевы
-# Фаза загрузки системы: Используется для определения начальной фазы работы
-# системы после запуска и исключению ложного запуска автоматизаций.
-# Контроль отправки сообщений о необходимости проветривания для исключения
-# повторной отправки уведомления.
+##############################################################################
+#                          ВХОДНЫЕ БУЛЕВЫ (INPUT_BOOLEAN)
+##############################################################################
+#
+# Блок булевых сенсоров, которые служат для переключения и учета различных
+# состояний и режимов в системе Home Assistant. Это могут быть как технические
+# (при загрузке системы, при необходимости выключить уведомления), так и
+# пользовательские режимы (режим тишины, зимний режим и т.д.).
+#
+# Использование input_boolean упрощает логику автоматизаций, делая её более
+# наглядной и гибкой. Ниже описано каждое поле, его назначение и начальное
+# значение (initial).
+#
+##############################################################################
+
 input_boolean:
-  # Фаза загрузки системы для контроля начальной фазы работы
+  # --------------------------------------------------------------------------
+  # 1) Фаза загрузки системы
+  # --------------------------------------------------------------------------
+  # Активируется при старте Home Assistant, указывая, что система в процессе
+  # загрузки (например, чтобы временно приостановить срабатывание некоторых
+  # автоматизаций). Позже автоматически отключается.
   system_startup_phase:
     name: "Фаза загрузки системы"
     initial: on
     icon: mdi:timer-sand
 
-  # Сенсоры для контроля отправки уведомлений о CO2:
-  # - для контроля отправки текстовых уведомлений о CO2
-  co2_text_notification_sensor:
-    name: "Сенсор текстовых уведомлений о CO2"
-    initial: "off"
-    icon: mdi:message-alert
-  # - для контроля отправки голосовых уведомлений о CO2
-  co2_voice_notification_sensor:
-    name: "Сенсор голосовых уведомлений о CO2"
-    initial: "off"
-    icon: mdi:account-voice
-
-  # Сенсор режима тишины
+  # --------------------------------------------------------------------------
+  # 2) Режим тишины
+  # --------------------------------------------------------------------------
+  # Используется, чтобы переключать «тихий режим» в определенные часы суток
+  # (23:00–09:00 по умолчанию). В этом режиме система блокирует громкие
+  # уведомления или отключает/уменьшает громкость оповещений.
+  #
+  # Если пользователь вручную включает silent_mode в другое время,
+  # автоматизация все равно переключит его в off в 09:00 на следующий день,
+  # обеспечивая гарантированный выход из режима тишины.
   silent_mode:
     name: "Режим тишины"
     initial: off
     icon: mdi:emoticon-neutral-outline
 
-  # Сенсор необходимости включения вытяжки
-  kitchen_fan_cool_down:
-    name: Kitchen Fan Cool Down
+  # --------------------------------------------------------------------------
+  # 3) Зимний режим
+  # --------------------------------------------------------------------------
+  # Активирует особые сценарии/автоматизации для зимних месяцев.
+  # Например, может поддерживать более высокий уровень обогрева
+  # или запускать другие специфичные для зимы процессы.
+  winter_mode:
+    name: "Зимний режим"
     initial: off
-    icon: mdi:fan-alert
+    icon: mdi:snowflake
 
-  # Режим уборки в ванной
+  # --------------------------------------------------------------------------
+  # 4) Режим уборки в ванной
+  # --------------------------------------------------------------------------
+  # Может использоваться для автоматизаций, связанных с уборкой:
+  # включение вытяжки, освещения или других устройств в ванной
+  # в «режиме уборки», чтобы удобно и безопасно заниматься чисткой/мойкой.
   bathroom_cleaning_mode:
-    name: Режим уборки в ванной
+    name: "Режим уборки в ванной"
     initial: off
     icon: mdi:broom
 
-  # Вводные переменные для сохранения состояния устройств
+  # --------------------------------------------------------------------------
+  # 5) Уведомление о замене фильтра отправлено
+  # --------------------------------------------------------------------------
+  # Флаг, показывающий, что пользователю уже было отправлено уведомление
+  # о необходимости замены фильтра (например, в очистителе воздуха).
+  # Используется, чтобы не присылать повторные уведомления.
+  filter_replace_notified:
+    name: "Уведомление о замене фильтра отправлено"
+    initial: off
+    icon: mdi:filter-outline
+
+  # --------------------------------------------------------------------------
+  # 6) Сенсор текстовых уведомлений о СО2
+  # --------------------------------------------------------------------------
+  # Активируется, если было отправлено текстовое уведомление о повышенном
+  # уровне CO2. Автоматизации могут затем сбрасывать этот флаг по таймеру
+  # или при смене условий.
+  co2_text_notification_sensor:
+    name: "Сенсор текстовых уведомлений о СО2"
+    initial: false
+    icon: mdi:message-alert
+
+  # --------------------------------------------------------------------------
+  # 7) Сенсор голосовых уведомлений о СО2
+  # --------------------------------------------------------------------------
+  # Аналогично предыдущему, но для голосовых уведомлений
+  # (например, через TTS-модуль).
+  co2_voice_notification_sensor:
+    name: "Сенсор голосовых уведомлений о СО2"
+    initial: false
+    icon: mdi:account-voice
+
+  # --------------------------------------------------------------------------
+  # 8) Kitchen Fan Cool Down
+  # --------------------------------------------------------------------------
+  # Флаг, указывающий, что нужно оставить кухонную вытяжку включенной
+  # для "охлаждения" (или продувки) кухни после готовки. Может отключаться
+  # автоматически по таймеру или при достижении нужной температуры/влажности.
+  kitchen_fan_cool_down:
+    name: "Kitchen Fan Cool Down"
+    initial: off
+    icon: mdi:fan-alert
+
+  # --------------------------------------------------------------------------
+  # 9) Climate Pre-Restart State
+  # --------------------------------------------------------------------------
+  # Технический флаг, запоминающий состояние климатической системы
+  # (например, кондиционера) перед перезагрузкой Home Assistant.
+  # После рестарта используется для восстановления прежнего состояния.
   climate_pre_restart_state:
     name: "Climate Pre-Restart State"
     initial: off
+
+  # --------------------------------------------------------------------------
+  # 10) Fan Pre-Restart State
+  # --------------------------------------------------------------------------
+  # Аналогично предыдущему пункту, но для вентилятора/очистителя воздуха.
+  # Запоминает состояние устройства.
   fan_pre_restart_state:
     name: "Fan Pre-Restart State"
     initial: off
+
+  # --------------------------------------------------------------------------
+  # 11) Humidifier Pre-Restart State
+  # --------------------------------------------------------------------------
+  # Аналогично предыдущим пунктам (9, 10), но для увлажнителя.
   humidifier_pre_restart_state:
     name: "Humidifier Pre-Restart State"
     initial: off
+
+  # --------------------------------------------------------------------------
+  # 12) Climate Pre-State When Door Opened
+  # --------------------------------------------------------------------------
+  # Запоминает состояние климатической системы при открытии двери
+  # (например, при проветривании). Может использоваться, чтобы автоматически
+  # вернуть систему в исходный режим, когда дверь закрывается.
   door_open_climate_pre_state:
     name: "Climate Pre-State When Door Opened"
     initial: off
+
+  # --------------------------------------------------------------------------
+  # 13) Fan Pre-State When Door Opened
+  # --------------------------------------------------------------------------
+  # Аналогично предыдущему пункту (12), но для вентилятора.
   door_open_fan_pre_state:
     name: "Fan Pre-State When Door Opened"
     initial: off
+
+  # --------------------------------------------------------------------------
+  # 14) Humidifier Pre-State When Door Opened
+  # --------------------------------------------------------------------------
+  # Аналогично предыдущим пунктам. Запоминает состояние увлажнителя.
   door_open_humidifier_pre_state:
     name: "Humidifier Pre-State When Door Opened"
     initial: off
 
-# Группы
+  # --------------------------------------------------------------------------
+  # 15) Washing Machine Pre-State When Door Opened
+  # --------------------------------------------------------------------------
+  # Аналогично тому, как храним состояние «climate_pre_restart_state»,
+  # мы заводим похожий флаг для стиральной машины.
+  # Это позволит «запомнить», что машина была включена и шёл цикл стирки
+  # до перезагрузки (или, например, что стирка уже была завершена).
+  # --------------------------------------------------------------------------
+
+  washing_machine_pre_restart_state:
+    name: "Washing Machine Pre-Restart State"
+    initial: off
+    icon: mdi:washing-machine
+
+##############################################################################
+#                                 ГРУППЫ
+##############################################################################
+#
+# Группировка сущностей для удобного контроля присутствия пользователей.
+# group.all_residents указывает, что «дом» считается занятым,
+# если хотя бы один человек (master или tatiana) находится дома.
+#
+##############################################################################
+
 group:
   all_residents:
-    name: Все Жильцы
+    name: "Все Жильцы"
     entities:
       - person.master
       - person.tatiana
 
-# Автоматизации
+##############################################################################
+#                        КНОПКА ОТКЛЮЧЕНИЯ «ТИХОГО РЕЖИМА»
+##############################################################################
+#
+# Добавьте в тот же YAML-файл (helper.yaml) или отдельный файл пакета
+# (поместив его в /packages), чтобы появилась кнопка input_button.silent_mode_force_off.
+# При нажатии — немедленно отключает «Режим тишины» (silent_mode) без ожидания 09:00.
+#
+##############################################################################
+
+input_button:
+  silent_mode_force_off:
+    name: "Отключить режим тишины сейчас"
+    icon: mdi:volume-off
+
+##############################################################################
+#                             АВТОМАТИЗАЦИИ
+##############################################################################
+#
+# Ниже собраны автоматизации, упрощающие управление системой:
+#   - Включение/выключение зимнего режима по месяцам;
+#   - Управление фазой загрузки (system_startup_phase);
+#   - Авто-режим «тишины» (silent_mode) с 23:00 до 09:00 (и его завершение);
+#   - Сброс флагов уведомлений (CO2) по таймеру;
+#   - Логирование изменений погоды;
+#   - Сброс уведомлений о CO2 при завершении проветривания;
+#   - Сохранение/восстановление состояний климатической техники при остановке и старте HA;
+#   - Выключение камеры при возвращении жильцов.
+#
+##############################################################################
 
 automation:
+  # --------------------------------------------------------------------------
+  # АВТОМАТИЧЕСКОЕ ВКЛЮЧЕНИЕ/ВЫКЛЮЧЕНИЕ ЗИМНЕГО РЕЖИМА НА ОСНОВЕ МЕСЯЦА
+  # --------------------------------------------------------------------------
+  - id: "d8084e61-405b-4f92-8c86-527254cc6753"
+    alias: "Переключение зимнего режима по месяцам"
+    description: >
+      Автоматизация, которая ежедневно проверяет, нужно ли включить
+      или выключить зимний режим в зависимости от текущего месяца.
+      Считаем «зимой» период с ноября (11) по март (3).
+      Если время года подходит под зимний период, включаем boolean.winter_mode,
+      иначе — выключаем.
+    mode: single
+    trigger:
+      - platform: time
+        at: "00:01:00"
+      - platform: homeassistant
+        event: start
+    condition: []
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >
+                  {{ now().month >= 11 or now().month <= 3 }}
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.winter_mode
+        default:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.winter_mode
+
+  # --------------------------------------------------------------------------
   # Включение датчика фазы загрузки системы после старта
+  # --------------------------------------------------------------------------
   - id: "38ea50fb-09bc-4d39-a771-1727ab72f265"
-    alias: "Фаза загрузки системы включена"
-    description: "Автоматизация для включения фазы загрузки системы при старте Home Assistant."
+    alias: "Фаза: Включение датчика загрузки"
+    description: "Активируем system_startup_phase при старте Home Assistant"
+    mode: single
     trigger:
       - platform: homeassistant
         event: start
     action:
       - service: input_boolean.turn_on
-        entity_id: input_boolean.system_startup_phase
+        target:
+          entity_id: input_boolean.system_startup_phase
 
-  # Отключение датчика фазы загрузки системы после старта
+  # --------------------------------------------------------------------------
+  # Отключение датчика фазы загрузки через 2 минуты после старта
+  # --------------------------------------------------------------------------
   - id: "03e3ffd0-4e1e-4200-b0e3-1ce6a2d77d6a"
-    alias: "Вспомогательная автоматизация: Отключение датчика фазы загрузки системы после старта"
+    alias: "Фаза: Отключение датчика загрузки (2 минуты)"
+    description: "Выключаем input_boolean.system_startup_phase спустя 2 минуты после старта"
+    mode: single
     trigger:
       - platform: homeassistant
         event: start
     action:
       - delay: "00:02:00"
       - service: input_boolean.turn_off
-        entity_id: input_boolean.system_startup_phase
+        target:
+          entity_id: input_boolean.system_startup_phase
 
-  # Работа с режимом тишины, который устанавливается на период с 23:00 до 09:00
-  - id: "cd269239-a6dd-422f-ba2a-3d57e4c5981e"
-    alias: "Вспомогательная автоматизация: Установка режима тишины"
+  # --------------------------------------------------------------------------
+  # Режим тишины (c 23:00 до 09:00)
+  # --------------------------------------------------------------------------
+  # Эти две автоматизации управляют включением/выключением silent_mode по времени.
+  # Если пользователь вдруг вручную включил «тихий режим» ранее, все равно
+  # в 09:00 утра он будет выключен. Гарантирует, что режим «тишины»
+  # не останется активным на весь день.
+  - id: "cc269239-a6dd-422f-ba2a-3d57e4c5981e"
+    alias: "Вспомогательная: Установка режима тишины (23:00)"
+    mode: single
     trigger:
-      platform: time
-      at: "23:00:00"
+      - platform: time
+        at: "23:00:00"
     action:
       - service: input_boolean.turn_on
-        entity_id: input_boolean.silent_mode
-    mode: single
+        target:
+          entity_id: input_boolean.silent_mode
 
   - id: "6ed14663-ebe5-4ab3-bc3b-43e682c45f3b"
-    alias: "Вспомогательная автоматизация: Снятие режима тишины"
+    alias: "Вспомогательная: Снятие режима тишины (09:00)"
+    mode: single
     trigger:
-      platform: time
-      at: "09:00:00"
+      - platform: time
+        at: "09:00:00"
     action:
       - service: input_boolean.turn_off
-        entity_id: input_boolean.silent_mode
-    mode: single
+        target:
+          entity_id: input_boolean.silent_mode
 
-  # Автоматизация для сброса co2_voice_notification_sensor и co2_text_notification_sensor
+  - id: "3588e8d5-ba43-421b-850b-67b3f3f07e92"
+    alias: "Немедленное отключение режима тишины"
+    description: >
+      При нажатии кнопки silent_mode_force_off сразу переводит
+      input_boolean.silent_mode в off.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: input_button.silent_mode_force_off
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.silent_mode
+
+  # --------------------------------------------------------------------------
+  # Сброс co2_voice_notification_sensor и co2_text_notification_sensor через 22 минуты
+  # --------------------------------------------------------------------------
   - id: "1c2b8101-2ec8-44c1-99cc-4a8abf934437"
-    alias: "Вспомогательная автоматизация: Сброс уведомлений о CO2"
+    alias: "Вспомогательная: Сброс уведомлений СО2"
+    mode: single
     trigger:
       - platform: state
         entity_id:
@@ -220,14 +555,17 @@ automation:
     action:
       - delay: "00:22:00"
       - service: input_boolean.turn_off
-        entity_id:
-          - input_boolean.co2_voice_notification_sensor
-          - input_boolean.co2_text_notification_sensor
-    mode: single
+        target:
+          entity_id:
+            - input_boolean.co2_voice_notification_sensor
+            - input_boolean.co2_text_notification_sensor
 
-  # Записываем историю состояний погоды, чтобы найти все возможные варианты для перевода
+  # --------------------------------------------------------------------------
+  # Логирование изменений погоды
+  # --------------------------------------------------------------------------
   - id: "b2b5d19a-854a-4632-842f-6437951fd4e2"
-    alias: "Вспомогательная автоматизация: Логируем состояние погоды (для уточнения перевода)"
+    alias: "Логирование состояния погоды"
+    mode: single
     trigger:
       - platform: state
         entity_id: weather.kvartira_133
@@ -237,12 +575,15 @@ automation:
           message: "Weather condition changed to {{ states('weather.kvartira_133') }}"
           level: info
 
-  # Обновление сенсора контроля отправки уведомлений о уровне CO2
+  # --------------------------------------------------------------------------
+  # Сброс boolean-сенсоров при завершении проветривания (livingroom_ventilation_status)
+  # --------------------------------------------------------------------------
   - id: "7df1e59a-af5d-4496-be72-e687afdbf08e"
     alias: "Обновление сенсора контроля уведомлений о уровне CO2"
+    mode: single
     trigger:
       - platform: state
-        entity_id: binary_sensor.ventilation_status
+        entity_id: binary_sensor.livingroom_ventilation_status
         from: "on"
         to: "off"
     condition:
@@ -251,14 +592,17 @@ automation:
         state: "off"
     action:
       - service: input_boolean.turn_off
-        entity_id: input_boolean.co2_notification_sent
-      - service: input_boolean.turn_off
-        entity_id: input_boolean.co2_notification_sensor
-    mode: single
+        target:
+          entity_id:
+            - input_boolean.co2_voice_notification_sensor
+            - input_boolean.co2_text_notification_sensor
 
-  # Сохранение и восстановление состояний климатической техники
+  # --------------------------------------------------------------------------
+  # Сохранение состояний климатической техники при завершении работы HA
+  # --------------------------------------------------------------------------
   - id: "5b187cde-0ad5-4132-bb68-a622dd15d6ff"
-    alias: "Вспомогательная автоматизация: сохраняем состояния климатической техники"
+    alias: "Сохранение состояний климатической техники"
+    mode: single
     trigger:
       - platform: homeassistant
         event: shutdown
@@ -268,12 +612,18 @@ automation:
               - condition: state
                 entity_id: climate.konditsioner
                 state: "on"
+              - condition: state
+                entity_id: input_boolean.winter_mode
+                state: "off"
             sequence:
               - service: input_boolean.turn_on
-                entity_id: input_boolean.climate_pre_restart_state
+                target:
+                  entity_id: input_boolean.climate_pre_restart_state
         default:
           - service: input_boolean.turn_off
-            entity_id: input_boolean.climate_pre_restart_state
+            target:
+              entity_id: input_boolean.climate_pre_restart_state
+
       - choose:
           - conditions:
               - condition: state
@@ -281,10 +631,13 @@ automation:
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
-                entity_id: input_boolean.fan_pre_restart_state
+                target:
+                  entity_id: input_boolean.fan_pre_restart_state
         default:
           - service: input_boolean.turn_off
-            entity_id: input_boolean.fan_pre_restart_state
+            target:
+              entity_id: input_boolean.fan_pre_restart_state
+
       - choose:
           - conditions:
               - condition: state
@@ -292,13 +645,19 @@ automation:
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
-                entity_id: input_boolean.humidifier_pre_restart_state
+                target:
+                  entity_id: input_boolean.humidifier_pre_restart_state
         default:
           - service: input_boolean.turn_off
-            entity_id: input_boolean.humidifier_pre_restart_state
+            target:
+              entity_id: input_boolean.humidifier_pre_restart_state
 
+  # --------------------------------------------------------------------------
+  # Восстановление состояний климатической техники при старте HA
+  # --------------------------------------------------------------------------
   - id: "457a6711-67fa-4cb2-bcab-63c0cc58e054"
-    alias: "Вспомогательная автоматизация: восстановление состояний климатической техники"
+    alias: "Восстановление состояний климатической техники"
+    mode: single
     trigger:
       - platform: homeassistant
         event: start
@@ -306,40 +665,130 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: input_boolean.door_open_climate_pre_state
+                entity_id: input_boolean.climate_pre_restart_state
                 state: "on"
+              - condition: state
+                entity_id: input_boolean.winter_mode
+                state: "off"
             sequence:
               - service: climate.turn_on
-                entity_id: climate.konditsioner
+                target:
+                  entity_id: climate.konditsioner
       - choose:
           - conditions:
               - condition: state
-                entity_id: input_boolean.door_open_fan_pre_state
+                entity_id: input_boolean.fan_pre_restart_state
                 state: "on"
             sequence:
               - service: switch.turn_on
-                entity_id: switch.zhimi_mb3_a5d3_switch_status
+                target:
+                  entity_id: switch.zhimi_mb3_a5d3_switch_status
       - choose:
           - conditions:
               - condition: state
-                entity_id: input_boolean.door_open_humidifier_pre_state
+                entity_id: input_boolean.humidifier_pre_restart_state
                 state: "on"
             sequence:
               - service: switch.turn_on
-                entity_id: switch.livingroom_socket_l
+                target:
+                  entity_id: switch.livingroom_socket_l
       - service: input_boolean.turn_off
-        entity_id:
-          - input_boolean.door_open_climate_pre_state
-          - input_boolean.door_open_fan_pre_state
-          - input_boolean.door_open_humidifier_pre_state
+        target:
+          entity_id:
+            - input_boolean.climate_pre_restart_state
+            - input_boolean.fan_pre_restart_state
+            - input_boolean.humidifier_pre_restart_state
 
+  # --------------------------------------------------------------------------
+  # Выключение камеры, когда кто-то возвращается домой
+  # --------------------------------------------------------------------------
   - id: "c49bb82a-3c5e-4890-b607-9ac26542471d"
     alias: "Выключение камеры, когда кто-то пришёл домой"
+    mode: single
     trigger:
       - platform: state
         entity_id: group.all_residents
         to: "home"
     action:
       - service: switch.turn_off
-        entity_id: switch.chuangmi_ipc019_37da_switch_status
+        target:
+          entity_id: switch.chuangmi_ipc019_37da_switch_status
+  ##############################################################################
+  #
+  #
+  # 1) Сохранение состояния стиральной машины при завершении работы HA
+  #    - Если binary_sensor.washing_machine_active == on, то включаем washing_machine_pre_restart_state.
+  #      Иначе выключаем.
+  #
+  # 2) Восстановление состояния стиральной машины при старте HA
+  #    - Если washing_machine_pre_restart_state == on, значит
+  #      стиральная машина «работала» до перезагрузки. Можно при желании
+  #      включать какую-то логику (но поскольку сам binary_sensor.washing_machine_active —
+  #      обычно «физический» датчик или приходящий с MQTT/ESPHome, мы не можем
+  #      прямо выставить ему состояние).
+  #    - Для предотвращения лишних уведомлений о «Завершении стирки», мы
+  #      вторым действием (после проверки) выключаем флаг input_boolean.washing_machine_pre_restart_state,
+  #      чтобы вернуть систему в согласованное состояние.
+  #
+  ##############################################################################
+  # --------------------------------------------------------------------------
+  # СОХРАНЕНИЕ СОСТОЯНИЯ СТИРАЛЬНОЙ МАШИНЫ ПРИ ЗАВЕРШЕНИИ РАБОТЫ HA
+  # --------------------------------------------------------------------------
+  # Если стиральная машина была «активна» при выключении, значит цикл
+  # стирки не закончился до конца. Запомним это.
+  - id: "064cbd85-8d52-40ac-98bd-98164ad1434c"
+    alias: "Сохранение состояния стиральной машины при завершении HA"
     mode: single
+    trigger:
+      - platform: homeassistant
+        event: shutdown
+    action:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.washing_machine_active
+                state: "on"
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.washing_machine_pre_restart_state
+        default:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.washing_machine_pre_restart_state
+
+  # --------------------------------------------------------------------------
+  # ВОССТАНОВЛЕНИЕ СОСТОЯНИЯ СТИРАЛЬНОЙ МАШИНЫ ПРИ СТАРТЕ HA
+  # --------------------------------------------------------------------------
+  # Если при прошлом выключении HA стиралка работала, текущий
+  # sensor.washing_machine_active может на короткий момент прийти в «off»
+  # (зависит от опроса). Избегаем ложного «завершения».
+  # Здесь вы можете при необходимости выполнить дополнительные действия,
+  # если хотите явно восстановить «машина в процессе стирки». Но обычно
+  # стиральная машина сама «сообщит» новый стейт (on/off), когда возникнет связь.
+  #
+  # В конце выключаем input_boolean.washing_machine_pre_restart_state, чтобы
+  # всё вернулось в нормальное состояние.
+  - id: "a49b7efb-5294-4361-90f2-73943aa71194"
+    alias: "Восстановление стиральной машины при старте HA"
+    mode: single
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      # Здесь можно делать какую-то логику, если нужно.
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.washing_machine_pre_restart_state
+                state: "on"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: "System start: стиральная машина была активна до перезагрузки."
+                  level: warning
+        default: []
+      # В любом случае гасим наш флаг.
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.washing_machine_pre_restart_state
