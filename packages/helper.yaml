@@ -792,3 +792,30 @@ automation:
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.washing_machine_pre_restart_state
+  # --------------------------------------------------------------------------
+  # ЗАЩИТА ОТ ДУРАКА
+  # --------------------------------------------------------------------------
+  # Не даём включить кондиционер зимой
+  #
+  - id: "b9867c28-be9f-425e-9fee-0aea777d04c0"
+    alias: "Защита: не включать кондиционер при активном Зимнем режиме"
+    description: >
+      Если включён input_boolean.winter_mode, при попытке включить
+      кондиционер автоматически возвращаем его в off.
+    trigger:
+      - platform: state
+        entity_id: climate.konditsioner
+        from: "off"
+        # Не указываем to:, чтобы сработать на любой режим (cool/heat/..).
+    condition:
+      - condition: state
+        entity_id: input_boolean.winter_mode
+        state: "on"
+    action:
+      - service: climate.turn_off
+        target:
+          entity_id: climate.konditsioner
+      - service: notify.telegram # или notify.mobile, если нужно
+        data:
+          message: "Кондиционер принудительно отключён: включён Зимний режим."
+    mode: single
