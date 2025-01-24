@@ -1,0 +1,161 @@
+# /packages/yandex_notifications #
+#######################################
+
+# Данный набор конфигураций представляет собой часть интеграции умного дома с
+# Яндекс устройствами через Home Assistant, позволяя расширить возможности
+# управления и взаимодействия с домашней автоматизацией. Конфигурация включает
+# автоматизации для интерактивного взаимодействия с помощью Яндекс станции,
+
+# Автоматизации для взаимодействия с Яндекс колонкой
+
+automation:
+  # Приветствие
+  - id: "2f26dfda-2840-424a-a840-8c4acda8eaf6"
+    alias: "Уведомление. Яндекс: Приветствие"
+    description: "Отключение камеры, включение света в прихожей и доклад о климате"
+    triggers:
+      - trigger: event
+        event_type: yandex_speaker
+        event_data:
+          value: "С возвращением, дорогой мне человек! Я скучала без тебя!"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+    actions:
+      - service: light.turn_on
+        target:
+          entity_id: light.light_bathroom
+      - delay:
+          seconds: 4
+      - service: script.yandex_tts_ppm_status
+      - delay:
+          seconds: 6
+      - service: script.yandex_tts_temp_status
+      - delay:
+          seconds: 3
+      - service: script.yandex_tts_hum_status
+    mode: single
+
+  # Прощание
+  - id: "661464a3-ab6d-438e-847b-f2b6ddfee59a"
+    alias: "Уведомление. Яндекс: Прощание"
+    description: "Выключает весь свет в доме, включает камеру в полноцветном режиме и произносит прощальное сообщение через Яндекс колонку."
+    triggers:
+      - trigger: event
+        event_type: yandex_speaker
+        event_data:
+          value: "Я буду скучать! Возвращайся быстрее"
+    actions:
+      - delay: "00:00:04"
+      - service: script.yandex_tts_door_status
+      - service: light.turn_off
+        target:
+          entity_id: light.all
+      - service: switch.turn_on
+        target:
+          entity_id: switch.chuangmi_ipc019_37da_glimmer_full_color
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: person.master
+                state: "home"
+            sequence:
+              - service: notify.master
+                data:
+                  message: "Свет в квартире выключен! Приятной дороги!"
+          - conditions:
+              - condition: state
+                entity_id: person.tatiana
+                state: "home"
+            sequence:
+              - service: notify.tatsiana
+                data:
+                  message: "Свет в квартире выключен! Приятной дороги!"
+    mode: single
+
+  # Уведомление. Яндекс: Гостиная, необходимо проветрить
+  - id: "fd913662-45dc-4dc5-bcbb-55aea5a669b1"
+    alias: "Уведомление. Яндекс: Гостиная, необходимо проветрить"
+    description: ""
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.livingroom_ventilation_need
+        from: "off"
+        to: "on"
+        for:
+          minutes: 1 # Убедимся, что состояние "on" устойчиво в течение 1 минуты
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.co2_voice_notification_sensor
+        state: "off"
+    actions:
+      - service: script.yandex_tts_co2_alert
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.co2_voice_notification_sensor
+    mode: single
+
+  # Уведомление. Яндекс: Гостиная, проветривание завершено
+  - id: "727d6609-4d07-4c6a-b860-1a9a9cccdfe8"
+    alias: "Уведомление. Яндекс: Гостиная, проветривание завершено"
+    description: ""
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.livingroom_ventilation_status
+        from: "off"
+        to: "on"
+        for:
+          minutes: 1 # Убедимся, что состояние "on" устойчиво в течение 1 минуты
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.co2_text_notification_sensor
+        state: "off"
+    actions:
+      - wait_for_trigger:
+          - trigger: state
+            entity_id: binary_sensor.livingroom_ventilation_status
+            to: "off"
+        timeout: "00:03:00"
+        continue_on_timeout: true
+      - service: script.yandex_tts_co2_normal
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.co2_voice_notification_sensor
+    mode: single
+
+  # Уведомление. Яндекс: Температура ниже установленного уровня
+  - id: "a8c5eb07-9381-46d5-bc65-0f52dd7079a8"
+    alias: "Уведомление. Яндекс: Температура ниже установленного уровня"
+    description: ""
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.temperature_below_20
+        to: "on"
+        for:
+          minutes: 1 # Убедимся, что состояние "on" устойчиво в течение 1 минуты
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+    actions:
+      - service: script.yandex_tts_door_status
+    mode: single

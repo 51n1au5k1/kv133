@@ -76,24 +76,32 @@ sensor:
   # ==================================================================
   - platform: template
     sensors:
+      # 1.1) Начальное значение температуры (кухня)
       kitchen_fan_temp_initial:
+        unique_id: "kitchen_fan_temp_initial" # Уникальный ID
         friendly_name: "Кухня: Начальное значение температуры для вытяжки"
         unit_of_measurement: "°C"
+        icon_template: "mdi:thermometer" # Иконка термометра
         value_template: >
           {{ states('sensor.livingroom_average_temperature') | float(default=20) + 5 }}
 
+      # 1.2) Начальное значение влажности (кухня)
       kitchen_fan_hum_initial:
+        unique_id: "kitchen_fan_hum_initial"
         friendly_name: "Кухня: Начальное значение влажности для вытяжки"
         unit_of_measurement: "%"
+        icon_template: "mdi:water-percent" # Иконка процента воды
         value_template: >
           {{ states('sensor.livingroom_average_humidity') | float(default=50) + 10 }}
 
       # ================================================================
-      # 2) Усреднённая температура / влажность в гостиной
+      # 2.1) Усреднённая температура в гостиной
       # ================================================================
       livingroom_average_temperature:
+        unique_id: "livingroom_average_temperature"
         friendly_name: "Living Room Average Temperature"
         unit_of_measurement: "°C"
+        icon_template: "mdi:thermometer" # Иконка термометра
         value_template: >-
           {% set temp1 = states('sensor.livingroom_climat_sensor_temperature') | float(0) %}
           {% set temp2 = states('sensor.co2_monitor_temperature') | float(0) %}
@@ -103,9 +111,14 @@ sensor:
             20.0
           {% endif %}
 
+      # ================================================================
+      # 2.2) Усреднённая влажность в гостиной
+      # ================================================================
       livingroom_average_humidity:
+        unique_id: "livingroom_average_humidity"
         friendly_name: "Living Room Average Humidity"
         unit_of_measurement: "%"
+        icon_template: "mdi:water-percent" # Иконка процента воды
         value_template: >-
           {% set hum1 = states('sensor.livingroom_climat_sensor_humidity') | float(0) %}
           {% set hum2 = states('sensor.co2_monitor_humidity') | float(0) %}

@@ -1,0 +1,136 @@
+# /packages/bathroom_lights.yaml
+#############################
+# Пакет конфигураций для ванной комнаты (bathroom_lights).
+# В этом файле описаны настройки освещения в ванной, а также
+# автоматизации, позволяющие управлять яркостью и цветовой температурой
+# в ночное и утреннее время.
+#
+#############################
+
+##############################################################################
+#                                  ОСВЕЩЕНИЕ
+##############################################################################
+light:
+  - platform: xiaomi_miio_philipslight
+    name: Bathroom_spot_r1_philips
+    host: 192.168.100.134
+    token: 0a7909adff65b1adfa2438f86083ab69
+    model: philips.light.downlight
+
+  - platform: xiaomi_miio_philipslight
+    name: Bathroom_spot_r2_philips
+    host: 192.168.100.135
+    token: c5a13adcdc1e66c8abb1df54a2619706
+    model: philips.light.downlight
+
+  - platform: xiaomi_miio_philipslight
+    name: Bathroom_spot_l1_philips
+    host: 192.168.100.136
+    token: 53a54a16ced566dbbc2756e83204fc81
+    model: philips.light.downlight
+
+  - platform: xiaomi_miio_philipslight
+    name: Bathroom_spot_c1_philips
+    host: 192.168.100.133
+    token: 46baaa249e228230853ea3e52c6326aa
+    model: philips.light.downlight
+
+  - platform: xiaomi_miio_philipslight
+    name: Bathroom_spot_c2_philips
+    host: 192.168.100.137
+    token: ee12db87977765f6316f6e576642de1e
+    model: philips.light.downlight
+
+##############################################################################
+#                                   ГРУППЫ
+##############################################################################
+group:
+  bathroom_lights_group:
+    name: Bathroom Lights
+    entities:
+      - light.bathroom_spot_r1_philips
+      - light.bathroom_spot_r2_philips
+      - light.bathroom_spot_l1_philips
+      - light.bathroom_spot_c1_philips
+      - light.bathroom_spot_c2_philips
+
+##############################################################################
+#                             АВТОМАТИЗАЦИИ
+##############################################################################
+automation:
+  # ------------------------------------------------------------------------
+  # УСТАНОВКА МИНИМАЛЬНОЙ ЯРКОСТИ ДЛЯ СВЕТА В ВАННОЙ НОЧЬЮ
+  # ------------------------------------------------------------------------
+  # Данная автоматизация срабатывает, когда любой из спотов в ванной
+  # включается между полуночью и 06:00 утра. Свет автоматически
+  # устанавливается на 10% яркости и более тёплую цветовую температуру (333),
+  # чтобы не слепить глаза и создать мягкое освещение в ночные часы.
+  #
+  # Применяется к:
+  #   - light.bathroom_spot_r1_philips
+  #   - light.bathroom_spot_r2_philips
+  #   - light.bathroom_spot_l1_philips
+  #   - light.bathroom_spot_c1_philips
+  #   - light.bathroom_spot_c2_philips
+  # ------------------------------------------------------------------------
+  - id: "5751bda3-f9c2-4173-808e-c44b12519960"
+    alias: "Ванная: Снижение яркости и температуры освещения"
+    mode: queued
+
+    # Триггер: включает логику при включении любого из спотов.
+    trigger:
+      - platform: state
+        entity_id:
+          - light.bathroom_spot_r1_philips
+          - light.bathroom_spot_r2_philips
+          - light.bathroom_spot_l1_philips
+          - light.bathroom_spot_c1_philips
+          - light.bathroom_spot_c2_philips
+        to: "on"
+
+    # Условие: срабатывает только в период с 00:00 до 06:00.
+    condition:
+      - condition: time
+        after: "00:00:00"
+        before: "06:00:00"
+
+    # Действие: устанавливаем яркость 10% и цветовую температуру 333.
+    action:
+      - service: light.turn_on
+        data:
+          brightness_pct: 10
+          color_temp: 333
+        target:
+          entity_id: "{{ trigger.entity_id }}"
+
+  # ------------------------------------------------------------------------
+  # ВОССТАНОВЛЕНИЕ ПОЛНОЙ ЯРКОСТИ СВЕТА УТРОМ
+  # ------------------------------------------------------------------------
+  # Эта автоматизация срабатывает в 06:00 утра, чтобы вернуть освещение
+  # в ванной к полному уровню яркости (100%) и более холодной цветовой
+  # температуре (175).
+  # ------------------------------------------------------------------------
+
+  - id: "20ce33b4-0084-450a-aa8c-3faa6db984c7"
+    alias: "Ванная: Восстановление яркости и температуры освещения"
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id:
+          - light.bathroom_spot_r1_philips
+          - light.bathroom_spot_r2_philips
+          - light.bathroom_spot_l1_philips
+          - light.bathroom_spot_c1_philips
+          - light.bathroom_spot_c2_philips
+        to: "on"
+    condition:
+      - condition: time
+        after: "06:00:00"
+        before: "23:59:00"
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: "{{ trigger.entity_id }}"
+        data:
+          brightness_pct: 100
+          color_temp: 175

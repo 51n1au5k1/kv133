@@ -34,21 +34,16 @@ group:
 # Используем новый сенсор, который получает данные из sensor.bathroom_th_2_humidity
 # и усредняет их по скользящему окну в 5 минут. Это смягчит быстрые колебания.
 #
-# Для работы filter-сенсора нужно добавить в configuration.yaml:
-#   sensor:
-#     - platform: filter
-#       ...
-#
-# Ниже пример YAML, который кладём в этот пакет (room_bathroom.yaml):
 #
 ##############################################################################
 sensor:
   - platform: filter
     name: "Влажность ванной (усреднённая за 5 минут)"
     entity_id: sensor.bathroom_th_2_humidity
+    unique_id: bathroom_filtered_humidity
     filters:
       - filter: time_simple_moving_average
-        window_size: "00:05"
+        window_size: "00:03"
         precision: 2
 
 ##############################################################################
@@ -56,7 +51,7 @@ sensor:
 ##############################################################################
 #
 # Регулируемые пороги влажности. Теперь будем ссылаться на усреднённый сенсор
-# sensor.влажность_ванной_(усреднённая), а не на исходный
+# sensor.bathroom_filtered_humidity, а не на исходный
 # sensor.bathroom_th_2_humidity.
 # При желании можно оставить прежние настройки порогов.
 #
@@ -83,7 +78,7 @@ input_number:
 #
 # 1) bathroom_humidity_max / _min
 #    - теперь используют усреднённый сенсор
-#      sensor.vlazhnost_vannoi_usrednennaya_za_5_minut
+#      sensor.bathroom_filtered_humidity
 # 2) bathroom_motions
 #    - теперь проще: is_state('group.bathroom_motion_sensors', 'on')
 # 3) bathroom_open_door, no_activity_in_bathroom_recently
@@ -98,7 +93,7 @@ binary_sensor:
         friendly_name: "Влажность в ванной выше порога"
         device_class: problem
         value_template: >
-          {% set humidity = states('sensor.vlazhnost_vannoy_usrednyonnaya_za_5_minut') %}
+          {% set humidity = states('sensor.vlazhnost_vannoi_usrednennaia_za_5_minut') %}
           {% set threshold = states('input_number.bathroom_humidity_max_threshold') | float %}
           {% if humidity not in ['unknown', 'unavailable'] %}
             {{ humidity | float > threshold }}
@@ -111,7 +106,7 @@ binary_sensor:
         friendly_name: "Влажность в ванной ниже порога"
         device_class: problem
         value_template: >
-          {% set humidity = states('sensor.vlazhnost_vannoy_usrednyonnaya_za_5_minut') %}
+          {% set humidity = states('sensor.vlazhnost_vannoi_usrednennaia_za_5_minut') %}
           {% set threshold = states('input_number.bathroom_humidity_min_threshold') | float %}
           {% if humidity not in ['unknown', 'unavailable'] %}
             {{ humidity | float < threshold }}

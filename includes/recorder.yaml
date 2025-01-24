@@ -1,6 +1,6 @@
 db_url: !secret db_link
 purge_keep_days: 90
-purge_interval: 1 # ежедневная очистка старше 30 дней
+purge_interval: 1 # ежедневная очистка старше 90 дней
 
 include:
   domains:
@@ -30,11 +30,3 @@ exclude:
     - sensor.mi_66684496_message
     - sensor.mi_66684496_525001142665_scene_history
     - sensor.zhimi_mb3_a5d3_motor_speed
-
-    # # Счётчики энергии (если вы их не используете для аналитики)
-    # - sensor.livingroom_socket_l_energy
-    # - sensor.bathroom_washing_machine_energy
-    # - sensor.0x00158d0002530bd9_energy
-    # - sensor.0x00158d0002530ba3_energy
-    # - sensor.0x00158d000255b36f_energy
-    # - sensor.livingroom_socket_r_energy

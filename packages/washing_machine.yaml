@@ -41,7 +41,7 @@ automation:
   # 1) Сброс бегущего статуса (washing_machine_running) при старте системы
   ##############################################################################
   - id: "055f9541-0e9f-40c3-b786-1cc9d17b15bb"
-    alias: "Сброс статуса стиральной машины при старте системы"
+    alias: "HELPER: Сброс статуса стиральной машины при старте системы"
     description: >
       При перезапуске HA сбрасываем флаг washing_machine_running в Off.
       (binary_sensor.washing_machine_finished автоматически «сам определится».)
@@ -61,7 +61,7 @@ automation:
   # Включаем washing_machine_running = on, сбрасываем «завершённость».
   #
   - id: "04a14878-99d3-4030-a17d-bfa3c75b1f9b"
-    alias: "Стиральная машина: Сброс статуса при запуске"
+    alias: "HELPER: Стиральная машина: Сброс статуса при запуске"
     description: >
       Когда машина начинает работать (мощность > 5), ставим
       input_boolean.washing_machine_running=on.
@@ -83,7 +83,7 @@ automation:
   # (binary_sensor.washing_machine_finished перейдёт в on сам по себе.)
   #
   - id: "2d3371e6-23df-4710-be67-c79088517d33"
-    alias: "Стиральная машина: Завершение работы"
+    alias: "HELPER: Стиральная машина: Завершение работы"
     description: >
       Если мощность < 5 на 5 минут подряд, считаем что стирка окончена.
       Отключаем washing_machine_running.
@@ -114,7 +114,7 @@ automation:
   # Отправляем уведомление в Телеграм + TTS-нагадалку в Яндекс-колонку.
   #
   - id: "d1e78a7d-56c3-4d4e-b2a4-8a23f1a62a45"
-    alias: "Уведомление о завершении стирки"
+    alias: "Уведомление. Яндекс: Стирка: Завершена"
     description: >
       При завершении стирки (binary_sensor.washing_machine_finished=on), 
       отправляем уведомление в Телеграм и говорим на Яндекс-колонке.
@@ -145,7 +145,7 @@ automation:
   # голосовое напоминание.
   #
   - id: "washing_machine_reminder_no_motion"
-    alias: "Напоминание о стирке при отсутствии движения"
+    alias: "Уведомление. Яндекс: Стирка: Напоминание при отсутствии движения"
     description: >
       Через 15 минут после binary_sensor.washing_machine_finished=on,
       если нет движения в ванной (binary_sensor.bathroom_motions=off)
@@ -159,6 +159,12 @@ automation:
           minutes: 15
     condition:
       - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      - condition: state
         entity_id: binary_sensor.bathroom_motions
         state: "off"
       - condition: state
@@ -166,3 +172,4 @@ automation:
         state: "off"
     action:
       - service: script.yandex_tts_washing_machine_reminder
+    mode: single

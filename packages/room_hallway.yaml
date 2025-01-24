@@ -73,12 +73,12 @@ automation:
       - condition: time
         after: "08:30:00"
         before: "23:00:00"
-        weekday:
-          - mon
-          - tue
-          - wed
-          - thu
-          - fri
+        # weekday:
+        #   - mon
+        #   - tue
+        #   - wed
+        #   - thu
+        #   - fri
     actions:
       - service: light.turn_on
         target:
@@ -105,7 +105,7 @@ automation:
         to: "on"
     conditions:
       - condition: numeric_state
-        entity_id: sensor.lumi_v3_7cdd_illumination
+        entity_id: sensor.lumi_cn_132386223_v3_illumination_p_5_1
         below: 450
     actions:
       - service: light.turn_on
@@ -208,7 +208,7 @@ automation:
         domain: mqtt
         device_id: d2c3001cdc59660c456de45aec09da91
         type: action
-        subtype: release
+        subtype: single
     actions:
       - service: script.yandex_click_outdoor_button # Вызов скрипта для воспроизведения звука
       - repeat:
@@ -258,16 +258,58 @@ automation:
     mode: single
 
   - id: "847c8b3f-04e4-4892-96be-48966feec167"
-    alias: "Уведомление. Видеодомофон: Звонок в дверь"
-    description: >
-      Уведомление при нажатии кнопки видеодомофона.
+    alias: "ТЕСТ! Уведомление. Видеодомофон: Звонок в дверь"
+    description: "Уведомление при нажатии кнопки видеодомофона."
     trigger:
       - platform: event
-        event_type: doorbell
+        event_type: Doorbell Ring
         event_data:
-          entity_id: binary_sensor.videodoorbell
+          device_class: doorbell
+    condition: []
     action:
       - service: notify.master
         data:
-          message: "⚠️ Внимание! Кто-то нажал кнопку видеодомофона!"
+          message: "⚠️ Внимание! Кто-то нажал кнопку видеодомофона! ВАРИАНТ 1"
+      - repeat:
+          count: 3
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.lumi_v3_7cdd_light
+                  - light.working_room_led
+            - delay: "00:00:01"
+            - service: light.turn_off
+              target:
+                entity_id:
+                  - light.lumi_v3_7cdd_light
+                  - light.working_room_led
+            - delay: "00:00:01"
+    mode: single
+
+  - id: "712c32d1-23ee-4a6b-89eb-4868f1891d3f"
+    alias: "ТЕСТ! Уведомление. Видеодомофон: Звонок в дверь"
+    description: "Уведомление при нажатии кнопки видеодомофона."
+    trigger:
+      - platform: event
+        event_type: madv_cn_329651133_miowlv2l_doorbell_ring_e_2_1
+    action:
+      - service: notify.master
+        data:
+          message: "⚠️ Внимание! Кто-то нажал кнопку видеодомофона! ВАРИАНТ 2"
+      - repeat:
+          count: 3
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id:
+                  - light.lumi_v3_7cdd_light
+                  - light.working_room_led
+            - delay: "00:00:01"
+            - service: light.turn_off
+              target:
+                entity_id:
+                  - light.lumi_v3_7cdd_light
+                  - light.working_room_led
+            - delay: "00:00:01"
     mode: single

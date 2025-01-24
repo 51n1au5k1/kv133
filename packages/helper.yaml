@@ -208,7 +208,7 @@ template:
         # Фиксированное значение давления (739 мм рт. ст.),
         # установленное в качестве эталонной "нормы".
         # При необходимости можно изменить на любое подходящее значение.
-        state: 739
+        state: "739"
 
 ##############################################################################
 #                          ВХОДНЫЕ БУЛЕВЫ (INPUT_BOOLEAN)
@@ -433,11 +433,40 @@ input_button:
 ##############################################################################
 
 automation:
+  # ----------------------------------------------------------------------------
+  # Обновление списка пользователей, находящихся дома
+  # ----------------------------------------------------------------------------
+  # Эта автоматизация следит за изменениями состояния person.master и person.tatiana.
+  # При срабатывании записывает всех «домашних» в input_text.currently_home.
+  # Это может быть использовано в уведомлениях, где нужно явно указывать,
+  # кто присутствует (или для информативного отображения в интерфейсе).
+  - id: "c6382818-05ed-4590-be92-b367489fb0e1"
+    alias: "HELPER: Обновление списка пользователей, находящихся дома"
+    description: "Обновляет список пользователей, находящихся дома, для последующего использования в уведомлениях."
+    triggers:
+      - trigger: state
+        entity_id:
+          - person.master
+          - person.tatiana
+    actions:
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.currently_home
+        data:
+          value: >
+            {% set home_users = [] %}
+            {% if is_state('person.master', 'home') %}
+              {% set home_users = home_users + ['Andrei'] %}
+            {% endif %}
+            {% if is_state('person.tatiana', 'home') %}
+              {% set home_users = home_users + ['Tatiana'] %}
+            {% endif %}
+            {{ home_users | join(', ') }}
   # --------------------------------------------------------------------------
   # АВТОМАТИЧЕСКОЕ ВКЛЮЧЕНИЕ/ВЫКЛЮЧЕНИЕ ЗИМНЕГО РЕЖИМА НА ОСНОВЕ МЕСЯЦА
   # --------------------------------------------------------------------------
   - id: "d8084e61-405b-4f92-8c86-527254cc6753"
-    alias: "Переключение зимнего режима по месяцам"
+    alias: "HELPER:Переключение зимнего режима по месяцам"
     description: >
       Автоматизация, которая ежедневно проверяет, нужно ли включить
       или выключить зимний режим в зависимости от текущего месяца.
@@ -470,7 +499,7 @@ automation:
   # Включение датчика фазы загрузки системы после старта
   # --------------------------------------------------------------------------
   - id: "38ea50fb-09bc-4d39-a771-1727ab72f265"
-    alias: "Фаза: Включение датчика загрузки"
+    alias: "HELPER: Фаза: Включение датчика загрузки"
     description: "Активируем system_startup_phase при старте Home Assistant"
     mode: single
     trigger:
@@ -485,7 +514,7 @@ automation:
   # Отключение датчика фазы загрузки через 2 минуты после старта
   # --------------------------------------------------------------------------
   - id: "03e3ffd0-4e1e-4200-b0e3-1ce6a2d77d6a"
-    alias: "Фаза: Отключение датчика загрузки (2 минуты)"
+    alias: "HELPER: Фаза: Отключение датчика загрузки (2 минуты)"
     description: "Выключаем input_boolean.system_startup_phase спустя 2 минуты после старта"
     mode: single
     trigger:
@@ -505,7 +534,7 @@ automation:
   # в 09:00 утра он будет выключен. Гарантирует, что режим «тишины»
   # не останется активным на весь день.
   - id: "cc269239-a6dd-422f-ba2a-3d57e4c5981e"
-    alias: "Вспомогательная: Установка режима тишины (23:00)"
+    alias: "HELPER: Установка режима тишины (23:00)"
     mode: single
     trigger:
       - platform: time
@@ -516,7 +545,7 @@ automation:
           entity_id: input_boolean.silent_mode
 
   - id: "6ed14663-ebe5-4ab3-bc3b-43e682c45f3b"
-    alias: "Вспомогательная: Снятие режима тишины (09:00)"
+    alias: "HELPER: Снятие режима тишины (09:00)"
     mode: single
     trigger:
       - platform: time
@@ -527,7 +556,7 @@ automation:
           entity_id: input_boolean.silent_mode
 
   - id: "3588e8d5-ba43-421b-850b-67b3f3f07e92"
-    alias: "Немедленное отключение режима тишины"
+    alias: "HELPER: Немедленное отключение режима тишины"
     description: >
       При нажатии кнопки silent_mode_force_off сразу переводит
       input_boolean.silent_mode в off.
@@ -544,7 +573,7 @@ automation:
   # Сброс co2_voice_notification_sensor и co2_text_notification_sensor через 22 минуты
   # --------------------------------------------------------------------------
   - id: "1c2b8101-2ec8-44c1-99cc-4a8abf934437"
-    alias: "Вспомогательная: Сброс уведомлений СО2"
+    alias: "HELPER: Сброс уведомлений СО2"
     mode: single
     trigger:
       - platform: state
@@ -561,25 +590,10 @@ automation:
             - input_boolean.co2_text_notification_sensor
 
   # --------------------------------------------------------------------------
-  # Логирование изменений погоды
-  # --------------------------------------------------------------------------
-  - id: "b2b5d19a-854a-4632-842f-6437951fd4e2"
-    alias: "Логирование состояния погоды"
-    mode: single
-    trigger:
-      - platform: state
-        entity_id: weather.kvartira_133
-    action:
-      - service: system_log.write
-        data:
-          message: "Weather condition changed to {{ states('weather.kvartira_133') }}"
-          level: info
-
-  # --------------------------------------------------------------------------
   # Сброс boolean-сенсоров при завершении проветривания (livingroom_ventilation_status)
   # --------------------------------------------------------------------------
   - id: "7df1e59a-af5d-4496-be72-e687afdbf08e"
-    alias: "Обновление сенсора контроля уведомлений о уровне CO2"
+    alias: "HELPER: Обновление сенсора контроля уведомлений о уровне CO2"
     mode: single
     trigger:
       - platform: state
@@ -601,7 +615,7 @@ automation:
   # Сохранение состояний климатической техники при завершении работы HA
   # --------------------------------------------------------------------------
   - id: "5b187cde-0ad5-4132-bb68-a622dd15d6ff"
-    alias: "Сохранение состояний климатической техники"
+    alias: "HELPER: Сохранение состояний климатической техники"
     mode: single
     trigger:
       - platform: homeassistant
@@ -641,7 +655,7 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: switch.livingroom_socket_l
+                entity_id: switch.evolution_hf_878
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
@@ -656,7 +670,7 @@ automation:
   # Восстановление состояний климатической техники при старте HA
   # --------------------------------------------------------------------------
   - id: "457a6711-67fa-4cb2-bcab-63c0cc58e054"
-    alias: "Восстановление состояний климатической техники"
+    alias: "HELPER: Восстановление состояний климатической техники"
     mode: single
     trigger:
       - platform: homeassistant
@@ -691,7 +705,7 @@ automation:
             sequence:
               - service: switch.turn_on
                 target:
-                  entity_id: switch.livingroom_socket_l
+                  entity_id: switch.evolution_hf_878
       - service: input_boolean.turn_off
         target:
           entity_id:
@@ -703,7 +717,7 @@ automation:
   # Выключение камеры, когда кто-то возвращается домой
   # --------------------------------------------------------------------------
   - id: "c49bb82a-3c5e-4890-b607-9ac26542471d"
-    alias: "Выключение камеры, когда кто-то пришёл домой"
+    alias: "HELPER: Выключение камеры, когда кто-то пришёл домой"
     mode: single
     trigger:
       - platform: state
@@ -737,7 +751,7 @@ automation:
   # Если стиральная машина была «активна» при выключении, значит цикл
   # стирки не закончился до конца. Запомним это.
   - id: "064cbd85-8d52-40ac-98bd-98164ad1434c"
-    alias: "Сохранение состояния стиральной машины при завершении HA"
+    alias: "HELPER: Сохранение состояния стиральной машины при завершении HA"
     mode: single
     trigger:
       - platform: homeassistant
@@ -770,7 +784,7 @@ automation:
   # В конце выключаем input_boolean.washing_machine_pre_restart_state, чтобы
   # всё вернулось в нормальное состояние.
   - id: "a49b7efb-5294-4361-90f2-73943aa71194"
-    alias: "Восстановление стиральной машины при старте HA"
+    alias: "HELPER: Восстановление стиральной машины при старте HA"
     mode: single
     trigger:
       - platform: homeassistant
@@ -798,7 +812,7 @@ automation:
   # Не даём включить кондиционер зимой
   #
   - id: "b9867c28-be9f-425e-9fee-0aea777d04c0"
-    alias: "Защита: не включать кондиционер при активном Зимнем режиме"
+    alias: "HELPER: Защита: не включать кондиционер при активном Зимнем режиме"
     description: >
       Если включён input_boolean.winter_mode, при попытке включить
       кондиционер автоматически возвращаем его в off.
@@ -818,4 +832,25 @@ automation:
       - service: notify.telegram # или notify.mobile, если нужно
         data:
           message: "Кондиционер принудительно отключён: включён Зимний режим."
+    mode: single
+
+  # ----------------------------------------------------------------------------
+  # Автоматизация для сброса уведомления после замены фильтра
+  # ----------------------------------------------------------------------------
+  # Если sensor.konditsioner_filter_remaining_life снова поднялся выше 10%,
+  # по прошествии 1 минуты, сбрасываем флаг filter_replace_notified в off.
+  # ----------------------------------------------------------------------------
+  - id: "reset_filter_replace_notified"
+    alias: "HELPER: Сброс уведомления о замене фильтра"
+    description: "Сброс флага уведомления после замены фильтра"
+    triggers:
+      - platform: numeric_state
+        entity_id: sensor.konditsioner_filter_remaining_life
+        above: 10
+        for:
+          minutes: 1
+    actions:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.filter_replace_notified
     mode: single

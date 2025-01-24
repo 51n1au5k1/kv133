@@ -26,7 +26,7 @@
 
 automation:
   ##########################################################################
-  # 1) ПЕРЕКЛЮЧЕНИЕ БРА ПО СЦЕНИЧЕСКОМУ ВЫКЛЮЧАТЕЛЮ (4_single)
+  # ПЕРЕКЛЮЧЕНИЕ БРА ПО СЦЕНИЧЕСКОМУ ВЫКЛЮЧАТЕЛЮ (4_single)
   ##########################################################################
   - id: "9fff2de3-f169-4fda-8a8a-91966fc51f13"
     alias: "Гостиная: переключение бра (кнопка 4, одиночное нажатие)"
@@ -44,7 +44,7 @@ automation:
     mode: single
 
   ##########################################################################
-  # 2) ПЕРЕКЛЮЧЕНИЕ ЛЮСТРЫ ПО СЦЕНИЧЕСКОМУ ВЫКЛЮЧАТЕЛЮ (3_single)
+  # ПЕРЕКЛЮЧЕНИЕ ЛЮСТРЫ ПО СЦЕНИЧЕСКОМУ ВЫКЛЮЧАТЕЛЮ (3_single)
   ##########################################################################
   - id: "54ea7c3d-a37d-4ce4-80ff-f2da00a450c2"
     alias: "Гостиная: переключение люстры (кнопка 3, одиночное нажатие)"
@@ -62,7 +62,7 @@ automation:
     mode: single
 
   ##########################################################################
-  # 3) ПЕРЕКЛЮЧЕНИЕ СВЕТА В ЗОНЕ ДИВАНА ПРИ ДВОЙНОМ НАЖАТИИ НА 4-Ю КНОПКУ (4_double)
+  # ПЕРЕКЛЮЧЕНИЕ СВЕТА В ЗОНЕ ДИВАНА ПРИ ДВОЙНОМ НАЖАТИИ НА 4-Ю КНОПКУ (4_double)
   ##########################################################################
   # Новая автоматизация: при двойном нажатии 4-й кнопки включаем/выключаем
   # свет livingroom_main_switch_right.
@@ -83,7 +83,7 @@ automation:
     mode: single
 
   ##############################################################################
-  # 4) Климатическая техника: отключение при открытой двери (на 1 мин)
+  # Климатическая техника: отключение при открытой двери (на 1 мин)
   ##############################################################################
   # Отключает кондиционер, очиститель воздуха и увлажнитель, когда дверь
   # между гостиной и кухней открыта более 1 минуты, сохраняя предыдущее состояние.
@@ -102,7 +102,7 @@ automation:
         for:
           minutes: 1
     action:
-      # 4.1) Кондиционер
+      # 1) Кондиционер
       - choose:
           - conditions:
               - condition: state
@@ -119,7 +119,7 @@ automation:
                 target:
                   entity_id: climate.konditsioner
 
-      # 4.2) Очиститель воздуха
+      # 2) Очиститель воздуха
       - choose:
           - conditions:
               - condition: state
@@ -133,11 +133,11 @@ automation:
                 target:
                   entity_id: switch.zhimi_mb3_a5d3_switch_status
 
-      # 4.3) Увлажнитель
+      # 3) Увлажнитель
       - choose:
           - conditions:
               - condition: state
-                entity_id: humidifier.smartmi_humidifier_rainforest_hum_dehum_3
+                entity_id: switch.evolution_hf_878
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
@@ -145,10 +145,10 @@ automation:
                   entity_id: input_boolean.door_open_humidifier_pre_state
               - service: switch.turn_off
                 target:
-                  entity_id: switch.livingroom_socket_l
+                  entity_id: switch.evolution_hf_878
 
   ##############################################################################
-  # 5) Климатическая техника: восстановление состояния при закрытой двери
+  # Климатическая техника: восстановление состояния при закрытой двери
   ##############################################################################
   # Если дверь снова закрыта (binary_sensor.doors_in_kitchen_livingroom == off),
   # восстанавливаем кондиционер/очиститель/увлажнитель, но только если
@@ -167,7 +167,7 @@ automation:
         entity_id: binary_sensor.doors_in_kitchen_livingroom
         to: "off"
     action:
-      # 5.1) Кондиционер
+      # 1) Кондиционер
       - choose:
           - conditions:
               - condition: state
@@ -181,7 +181,7 @@ automation:
                 target:
                   entity_id: climate.konditsioner
 
-      # 5.2) Очиститель воздуха
+      # 2) Очиститель воздуха
       - choose:
           - conditions:
               - condition: state
@@ -192,7 +192,7 @@ automation:
                 target:
                   entity_id: switch.zhimi_mb3_a5d3_switch_status
 
-      # 5.3) Увлажнитель
+      # 3) Увлажнитель
       - choose:
           - conditions:
               - condition: state
@@ -201,7 +201,7 @@ automation:
             sequence:
               - service: switch.turn_on
                 target:
-                  entity_id: switch.livingroom_socket_l
+                  entity_id: switch.evolution_hf_878
 
       # Очистка флагов pre_state
       - service: input_boolean.turn_off
