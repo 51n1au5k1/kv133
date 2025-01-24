@@ -13,33 +13,34 @@
 light:
   - platform: xiaomi_miio_philipslight
     name: Bathroom_spot_r1_philips
-    host: 192.168.100.134
-    token: 0a7909adff65b1adfa2438f86083ab69
+    host: !secret bathroom_spot_r1_ip
+    token: !secret bathroom_spot_r1_token
     model: philips.light.downlight
 
   - platform: xiaomi_miio_philipslight
     name: Bathroom_spot_r2_philips
-    host: 192.168.100.135
-    token: c5a13adcdc1e66c8abb1df54a2619706
+    host: !secret bathroom_spot_r2_ip
+    token: !secret bathroom_spot_r2_token
     model: philips.light.downlight
 
   - platform: xiaomi_miio_philipslight
     name: Bathroom_spot_l1_philips
-    host: 192.168.100.136
-    token: 53a54a16ced566dbbc2756e83204fc81
+    host: !secret bathroom_spot_l1_ip
+    token: !secret bathroom_spot_l1_token
     model: philips.light.downlight
 
   - platform: xiaomi_miio_philipslight
     name: Bathroom_spot_c1_philips
-    host: 192.168.100.133
-    token: 46baaa249e228230853ea3e52c6326aa
+    host: !secret bathroom_spot_c1_ip
+    token: !secret bathroom_spot_c1_token
     model: philips.light.downlight
 
   - platform: xiaomi_miio_philipslight
     name: Bathroom_spot_c2_philips
-    host: 192.168.100.137
-    token: ee12db87977765f6316f6e576642de1e
+    host: !secret bathroom_spot_c2_ip
+    token: !secret bathroom_spot_c2_token
     model: philips.light.downlight
+
 
 ##############################################################################
 #                                   ГРУППЫ
