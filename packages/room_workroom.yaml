@@ -4,34 +4,49 @@
 #
 # Назначение:
 #   Данный пакет Home Assistant управляет подсветкой рабочей зоны (working_room_led)
-#   в кабинете. Он обеспечивает удобное включение/выключение света одной кнопкой
-#   (через Zigbee2MQTT или иной MQTT-протокол).
+#   в кабинете и контролирует температуру в помещении. Уведомления отправляются
+#   при критическом снижении температуры, если дверь/окно открыты.
 #
 # Структура:
 #   automation:
 #     1) "Кабинет: Вкл/выкл подсветки рабочей зоны кнопкой" —
 #        срабатывает на одиночное нажатие кнопки (single) и переключает (toggle)
 #        состояние подсветки рабочего стола.
+#     2) Уведомления при низкой температуре —
+#        отправка уведомлений в Telegram и голосом через Яндекс.Станцию.
 #
 # Особенности:
 #   • Используется domain: mqtt c type: action и subtype: single.
-#     Это связано с тем, что Zigbee2MQTT 2.0+ отправляет в HA события вида
-#     device_id: ... , discovery_id: ... , subtype: single и т.д.
-#   • Automation не имеет дополнительных условий (condition: []),
-#     поэтому реакция происходит при каждом одиночном нажатии.
-#   • В action применяется команда "toggle" для light.working_room_led:
-#     если свет выключен, он включится; если включен — выключится.
+#   • Контроль температуры в мастерской с учетом усреднённого значения.
+#   • Уведомления отправляются в зависимости от режима тишины и наличия людей дома.
 #
 ################################################################################
+
+sensor:
+  # Сенсор для усреднённого значения температуры в спальне
+  # srednee_znachenie_temperatury_v_masterskoi_2
+  - platform: filter
+    name: "Температура в мастерской (сглаженная)"
+    entity_id: sensor.cgllc_cn_blt_3_15gd8656slo00_dove_temperature_p_2_1
+    unique_id: workroom_filtered_th
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "00:02" # Окно усреднения — 2 минуты
+        precision: 2 # Округление до двух знаков после запятой
+
+input_boolean:
+  # --------------------------------------------------------------------------
+  # Сенсор уведомлений о падении температуры
+  # --------------------------------------------------------------------------
+  workroom_th_notice:
+    name: "Мастерская: Сенсор уведомлений о температуре"
+    initial: false
+    icon: mdi:bell-ring
 
 automation:
   # ----------------------------------------------------------------------------
   # 1) ВКЛ/ВЫКЛ ПОДСВЕТКИ РАБОЧЕЙ ЗОНЫ КНОПКОЙ
   # ----------------------------------------------------------------------------
-  # Автоматизация, которая реагирует на одиночное нажатие сцены (или кнопки).
-  # По нажатию subtype: single происходит переключение (toggle) состояния
-  # подсветки рабочего стола в кабинете (light.working_room_led).
-  #
   - id: "29873ab9-335c-4c39-9898-b01b5a482606"
     alias: "Кабинет: Вкл/выкл подсветки рабочей зоны кнопкой"
     description: >
@@ -51,3 +66,92 @@ automation:
         entity_id: light.working_room_led
         domain: light
     mode: single
+
+  # ----------------------------------------------------------------------------
+  # Уведомление: Температура в мастерской ниже 20° (с использованием усреднённого значения)
+  # ----------------------------------------------------------------------------
+  - id: "abe6206a-a428-4b31-928f-789c38355279"
+    alias: "Уведомление о низкой температуре в мастерской (усреднённое значение)"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.srednee_znachenie_temperatury_v_masterskoi_2
+        below: 20
+    condition:
+      - condition: state
+        entity_id: binary_sensor.masterskaia_balkon_contact
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    action:
+      - variables:
+          telegram_message: "Температура в мастерской ниже 20°. Это мастерская, а не холодильник! Закройте дверь."
+      - choose:
+          # Условие: Если режим тишины выключен и кто-то дома, отправляем голосовое уведомление
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.silent_mode
+                state: "off"
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity_id: person.master
+                    state: "home"
+                  - condition: state
+                    entity_id: person.tatiana
+                    state: "home"
+            sequence:
+              - service: media_player.play_media
+                target:
+                  entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+                data:
+                  media_content_id: >
+                    Внимание! Температура в мастерской ниже 20 градусов. Закройте дверь!
+                  media_content_type: "text"
+
+          # Условие: Если режим тишины включён, отправляем текстовое сообщение в Телеграм
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.silent_mode
+                state: "on"
+            sequence:
+              - choose:
+                  # Если master дома, отправляем уведомление ему
+                  - conditions:
+                      - condition: state
+                        entity_id: person.master
+                        state: "home"
+                    sequence:
+                      - action: notify.master
+                        data:
+                          message: "{{ telegram_message }}"
+                  # Если tatiana дома, отправляем уведомление ей
+                  - conditions:
+                      - condition: state
+                        entity_id: person.tatiana
+                        state: "home"
+                    sequence:
+                      - action: notify.tatiana
+                        data:
+                          message: "{{ telegram_message }}"
+
+      # Устанавливаем флаг, чтобы уведомление не отправлялось повторно
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.workroom_th_notice
+
+  # --------------------------------------------------------------------------
+  # Сброс temperature_notification_sent через установленное время
+  # --------------------------------------------------------------------------
+  - id: "9bdeb719-0792-4176-8451-367273fdbb4c"
+    alias: "HELPER: Сброс уведомлений о температуре в мастерской"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.workroom_th_notice
+        to: "on"
+    action:
+      - delay: >
+          00:{{ states('input_number.low_th_notification_reset_period') | int }}:00
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.workroom_th_notice

@@ -38,10 +38,6 @@
 #      MariaDB и не хотите, чтобы размер БД рос бесконтрольно.
 #
 # 2) binary_sensor (template-платформа):
-#    - livingroom_ventilation_need: определяет, нужно ли проветривать
-#      комнату (CO2 выше 1000 ppm).
-#    - livingroom_ventilation_status: показывает, что проветривание
-#      "достаточное" (CO2 упал ниже 550 ppm).
 #    - doors_in_kitchen_livingroom: отмечает, открыты ли двери
 #      на балкон (может использоваться для отключения приборов при
 #      проветривании).
@@ -78,111 +74,36 @@ sensor:
 
 binary_sensor:
   # --------------------------------------------------------------------------
-  # 1) Датчики CO2 (проветривание)
+  # Датчики состояния
   # --------------------------------------------------------------------------
-  # livingroom_ventilation_need:
-  #   - 'on', если уровень CO2 > 1000 ppm => нужно проветривать.
-  #   - 'off', иначе.
-  # livingroom_ventilation_status:
-  #   - 'on', если уровень CO2 < 550 => помещение уже достаточно проветрено.
-  #   - 'off', иначе.
-  - platform: template
-    sensors:
-      livingroom_ventilation_need:
-        unique_id: livingroom_ventilation_need
-        friendly_name: "Необходимость проветривания"
-        value_template: >
-          {% if states('sensor.co2_monitor_co2') is not none 
-                and states('sensor.co2_monitor_co2') != 'unknown' %}
-            {{ 'on' if (states('sensor.co2_monitor_co2') | float) > 1000 else 'off' }}
-          {% else %}
-            off
-          {% endif %}
-
-      livingroom_ventilation_status:
-        unique_id: livingroom_ventilation_status
-        friendly_name: "Статус проветривания"
-        value_template: >
-          {% if states('sensor.co2_monitor_co2') is not none 
-                and states('sensor.co2_monitor_co2') != 'unknown' %}
-            {{ 'on' if (states('sensor.co2_monitor_co2') | float) < 550 else 'off' }}
-          {% else %}
-            off
-          {% endif %}
-
-  # --------------------------------------------------------------------------
-  # 2) Датчики состояния дверей и температуры
-  # --------------------------------------------------------------------------
-  # doors_in_kitchen_livingroom:
-  #   - 'on', если хотя бы одна из дверей на балкон открыта.
-  #   - 'off', если все двери закрыты.
-  #   Можно применять для автоматического отключения кондиционера/увлажнителя
-  #   при проветривании.
-  #
   # temperature_below_20:
   #   - 'on', если хотя бы в одной из перечисленных комнат
   #     температура ≤ 20°C.
   #   - 'off', иначе.
   - platform: template
     sensors:
-      doors_in_kitchen_livingroom:
-        unique_id: doors_in_kitchen_livingroom
-        friendly_name: "Двери на балкон с гостиной"
-        device_class: door
-        value_template: >
-          {{ is_state('binary_sensor.gostinaia_balkon_contact', 'on')
-             or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') }}
-
       temperature_below_20:
         unique_id: temperature_below_20
         friendly_name: "Температура ниже 20 градусов"
         device_class: cold
         value_template: >
-          {% set temp1 = states('sensor.livingroom_climat_sensor_temperature') %}
-          {% set temp2 = states('sensor.bedroom_th_sensor_temperature') %}
-          {% set temp3 = states('sensor.cgllc_dove_f637_temperature_humidity_sensor') %}
+          {% set temp1 = states('sensor.temperatura_v_gostinnoi_sglazhennaia') %}
+          {% set temp2 = states('sensor.temperatura_v_spalne_sglazhennaia') %}
+          {% set temp3 = states('sensor.srednee_znachenie_temperatury_v_masterskoi_2') %}
           {{ (temp1 not in ['unknown','unavailable'] and temp1|float <= 20)
              or (temp2 not in ['unknown','unavailable'] and temp2|float <= 20)
              or (temp3 not in ['unknown','unavailable'] and temp3|float <= 20) }}
-  # --------------------------------------------------------------------------
-  # 3) Общий бинарный сенсор kitchen_need_ventilation с гистерезисом
-  # --------------------------------------------------------------------------
-  # Идея в том, чтобы:
-  # • При превышении порогов по температуре (более чем на +5°C относительно
-  # гостиной) или влажности (более чем на +10% относительно гостиной) — датчик
-  # переходит в состояние “on”.
-  # • Возвращается обратно в “off” только когда параметры вернутся в зону, где
-  # превышение меньше более «мягких» значений (например, +3°C и +8%).
-  # • Таким образом, если сенсор уже “on”, не требуем сразу «идеальных» значений
-  # для возврата в “off», а чуть «побольше» (мягкие границы).
-  # Это и есть гистерезис.
+
+  # temperature_below_20:
+  #   - 'on', если кто-то дома
+  #   - 'off', иначе.
 
   - platform: template
     sensors:
-      kitchen_need_ventilation:
-        friendly_name: "Кухня: Нужна вытяжка (с гистерезисом)"
+      someone_is_home:
+        friendly_name: "Кто-то дома"
         value_template: >
-          {% set k_temp = states('sensor.kitchen_th_temperature') | float(default=0) %}
-          {% set l_temp = states('sensor.livingroom_climat_sensor_temperature') | float(default=0) %}
-          {% set k_hum  = states('sensor.kitchen_th_humidity') | float(default=0) %}
-          {% set l_hum  = states('sensor.livingroom_climat_sensor_humidity') | float(default=0) %}
-
-          {% set temp_diff = k_temp - l_temp %}
-          {% set hum_diff  = k_hum  - l_hum %}
-
-          {% set old_state = states('binary_sensor.kitchen_need_ventilation') %}
-
-          {# 
-            Если сенсор уже "on", то для перехода в "off" 
-            используем более мягкие условия (temp_diff <= 3, hum_diff <= 8). 
-            Иначе (сенсор "off"), переходим в "on" лишь при превышении 
-            жёстких порогов (temp_diff > 5 или hum_diff > 10). 
-          #}
-          {% if old_state == 'on' %}
-            {{ temp_diff > 3 or hum_diff > 8 }}
-          {% else %}
-            {{ temp_diff > 5 or hum_diff > 10 }}
-          {% endif %}
+          {{ expand('group.all_residents') | selectattr('state', 'eq', 'home') | list | length > 0 }}
 
 ##############################################################################
 #                           ШАБЛОННЫЕ СЕНСОРЫ
@@ -211,8 +132,11 @@ template:
         state: "739"
 
 ##############################################################################
-#                          ВХОДНЫЕ БУЛЕВЫ (INPUT_BOOLEAN)
+#  ВХОДНЫЕ ПАРАМЕТРЫ
+#  Входные переменные сохраняются между перезагрузками системы
 ##############################################################################
+#  ВХОДНЫЕ БУЛЕВЫ (INPUT_BOOLEAN)
+#############################################################################
 #
 # Блок булевых сенсоров, которые служат для переключения и учета различных
 # состояний и режимов в системе Home Assistant. Это могут быть как технические
@@ -307,17 +231,6 @@ input_boolean:
     icon: mdi:account-voice
 
   # --------------------------------------------------------------------------
-  # 8) Kitchen Fan Cool Down
-  # --------------------------------------------------------------------------
-  # Флаг, указывающий, что нужно оставить кухонную вытяжку включенной
-  # для "охлаждения" (или продувки) кухни после готовки. Может отключаться
-  # автоматически по таймеру или при достижении нужной температуры/влажности.
-  kitchen_fan_cool_down:
-    name: "Kitchen Fan Cool Down"
-    initial: off
-    icon: mdi:fan-alert
-
-  # --------------------------------------------------------------------------
   # 9) Climate Pre-Restart State
   # --------------------------------------------------------------------------
   # Технический флаг, запоминающий состояние климатической системы
@@ -369,20 +282,35 @@ input_boolean:
   door_open_humidifier_pre_state:
     name: "Humidifier Pre-State When Door Opened"
     initial: off
-
   # --------------------------------------------------------------------------
-  # 15) Washing Machine Pre-State When Door Opened
+  # 15) Force Camera Off
   # --------------------------------------------------------------------------
-  # Аналогично тому, как храним состояние «climate_pre_restart_state»,
-  # мы заводим похожий флаг для стиральной машины.
-  # Это позволит «запомнить», что машина была включена и шёл цикл стирки
-  # до перезагрузки (или, например, что стирка уже была завершена).
-  # --------------------------------------------------------------------------
-
-  washing_machine_pre_restart_state:
-    name: "Washing Machine Pre-Restart State"
+  # Переключатель форсированного режима отключения камер
+  force_camera_off:
+    name: "Форсированное отключение камер"
     initial: off
-    icon: mdi:washing-machine
+    icon: mdi:cctv-off
+
+##############################################################################
+#  ВХОДНЫЕ БУЛЕВЫ (INPUT_BOOLEAN)
+#############################################################################
+input_text:
+  # ----------------------------------------------------------------------------
+  # Текстовое поле, которое в автоматизации "Обновление списка пользователей,
+  # находящихся дома" хранит список имен тех, кто фактически находится дома.
+  # ----------------------------------------------------------------------------
+  currently_home:
+    name: "Currently Home"
+    min: 0
+    max: 255
+
+input_number:
+  low_th_notification_reset_period:
+    name: "Период сброса уведомлений о низкой температуре"
+    min: 5
+    max: 60
+    step: 1
+    initial: 20
 
 ##############################################################################
 #                                 ГРУППЫ
@@ -401,20 +329,14 @@ group:
       - person.master
       - person.tatiana
 
-##############################################################################
-#                        КНОПКА ОТКЛЮЧЕНИЯ «ТИХОГО РЕЖИМА»
-##############################################################################
-#
-# Добавьте в тот же YAML-файл (helper.yaml) или отдельный файл пакета
-# (поместив его в /packages), чтобы появилась кнопка input_button.silent_mode_force_off.
-# При нажатии — немедленно отключает «Режим тишины» (silent_mode) без ожидания 09:00.
-#
-##############################################################################
-
-input_button:
-  silent_mode_force_off:
-    name: "Отключить режим тишины сейчас"
-    icon: mdi:volume-off
+  # ----------------------------------------------------------------------------
+  # Группа камер
+  # ----------------------------------------------------------------------------
+  cameras:
+    name: "Камеры"
+    entities:
+      - switch.chuangmi_cn_309825146_ipc019_on_p_2_1
+      - switch.chuangmi_cn_311366982_ipc019_on_p_2_1
 
 ##############################################################################
 #                             АВТОМАТИЗАЦИИ
@@ -436,29 +358,30 @@ automation:
   # ----------------------------------------------------------------------------
   # Обновление списка пользователей, находящихся дома
   # ----------------------------------------------------------------------------
-  # Эта автоматизация следит за изменениями состояния person.master и person.tatiana.
+  # Срабатывает при изменении состояния пользователей или их устройств
+  # (например, смена Wi-Fi-сети или статуса присутствия).
   # При срабатывании записывает всех «домашних» в input_text.currently_home.
-  # Это может быть использовано в уведомлениях, где нужно явно указывать,
-  # кто присутствует (или для информативного отображения в интерфейсе).
   - id: "c6382818-05ed-4590-be92-b367489fb0e1"
     alias: "HELPER: Обновление списка пользователей, находящихся дома"
     description: "Обновляет список пользователей, находящихся дома, для последующего использования в уведомлениях."
-    triggers:
-      - trigger: state
+    trigger:
+      - platform: state
         entity_id:
           - person.master
           - person.tatiana
-    actions:
-      - action: input_text.set_value
+          - sensor.iphone_tatsiana_3_ssid
+          - sensor.pixel_8_pro_wifi_connection
+    action:
+      - service: input_text.set_value
         target:
           entity_id: input_text.currently_home
         data:
           value: >
             {% set home_users = [] %}
-            {% if is_state('person.master', 'home') %}
+            {% if is_state('person.master', 'home') or is_state('sensor.pixel_8_pro_wifi_connection', 'mdhouse') %}
               {% set home_users = home_users + ['Andrei'] %}
             {% endif %}
-            {% if is_state('person.tatiana', 'home') %}
+            {% if is_state('person.tatiana', 'home') or is_state('sensor.iphone_tatsiana_3_ssid', 'mdhouse') %}
               {% set home_users = home_users + ['Tatiana'] %}
             {% endif %}
             {{ home_users | join(', ') }}
@@ -555,40 +478,6 @@ automation:
         target:
           entity_id: input_boolean.silent_mode
 
-  - id: "3588e8d5-ba43-421b-850b-67b3f3f07e92"
-    alias: "HELPER: Немедленное отключение режима тишины"
-    description: >
-      При нажатии кнопки silent_mode_force_off сразу переводит
-      input_boolean.silent_mode в off.
-    mode: single
-    trigger:
-      - platform: state
-        entity_id: input_button.silent_mode_force_off
-    action:
-      - service: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.silent_mode
-
-  # --------------------------------------------------------------------------
-  # Сброс co2_voice_notification_sensor и co2_text_notification_sensor через 22 минуты
-  # --------------------------------------------------------------------------
-  - id: "1c2b8101-2ec8-44c1-99cc-4a8abf934437"
-    alias: "HELPER: Сброс уведомлений СО2"
-    mode: single
-    trigger:
-      - platform: state
-        entity_id:
-          - input_boolean.co2_voice_notification_sensor
-          - input_boolean.co2_text_notification_sensor
-        to: "on"
-    action:
-      - delay: "00:22:00"
-      - service: input_boolean.turn_off
-        target:
-          entity_id:
-            - input_boolean.co2_voice_notification_sensor
-            - input_boolean.co2_text_notification_sensor
-
   # --------------------------------------------------------------------------
   # Сброс boolean-сенсоров при завершении проветривания (livingroom_ventilation_status)
   # --------------------------------------------------------------------------
@@ -614,6 +503,8 @@ automation:
   # --------------------------------------------------------------------------
   # Сохранение состояний климатической техники при завершении работы HA
   # --------------------------------------------------------------------------
+  # Этот блок сохраняет состояние климатической техники (кондиционера, вентилятора, увлажнителя)
+  # при выключении HA. Это позволяет избежать "потери" состояния устройств.
   - id: "5b187cde-0ad5-4132-bb68-a622dd15d6ff"
     alias: "HELPER: Сохранение состояний климатической техники"
     mode: single
@@ -669,6 +560,8 @@ automation:
   # --------------------------------------------------------------------------
   # Восстановление состояний климатической техники при старте HA
   # --------------------------------------------------------------------------
+  # После перезапуска HA восстанавливаем состояние климатической техники (если было сохранено).
+  # Например, если кондиционер был включён, он снова включится.
   - id: "457a6711-67fa-4cb2-bcab-63c0cc58e054"
     alias: "HELPER: Восстановление состояний климатической техники"
     mode: single
@@ -713,144 +606,69 @@ automation:
             - input_boolean.fan_pre_restart_state
             - input_boolean.humidifier_pre_restart_state
 
-  # --------------------------------------------------------------------------
-  # Выключение камеры, когда кто-то возвращается домой
-  # --------------------------------------------------------------------------
-  - id: "c49bb82a-3c5e-4890-b607-9ac26542471d"
-    alias: "HELPER: Выключение камеры, когда кто-то пришёл домой"
+  # ----------------------------------------------------------------------------
+  # Автоматизация: Управление камерами в зависимости от присутствия
+  # ----------------------------------------------------------------------------
+  - id: "bee019e8-c011-4283-85df-4cbbbc00e92f"
+    alias: "Камеры: Управление в зависимости от присутствия"
+    description: "Включение/выключение камер в зависимости от того, кто дома, но с учетом режима форсированного отключения."
     mode: single
     trigger:
       - platform: state
-        entity_id: group.all_residents
-        to: "home"
+        entity_id: binary_sensor.someone_is_home
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.force_camera_off
+        state: "off" # Не включаем камеры, если форсированный режим активен
+    action:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.someone_is_home
+                state: "off"
+            sequence:
+              - service: switch.turn_on
+                target:
+                  entity_id: group.cameras
+              - service: notify.master
+                data:
+                  message: "Камеры включены: Никого нет дома."
+
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.someone_is_home
+                state: "on"
+            sequence:
+              - service: switch.turn_off
+                target:
+                  entity_id: group.cameras
+              - service: notify.master
+                data:
+                  message: "Камеры выключены: Кто-то дома."
+
+  - id: "98df0b92-1c60-4e48-a065-3412a0706124"
+    alias: "Камеры: Блокировка включения при форсированном отключении"
+    description: "Если включен force_camera_off, отменяем любое включение камер."
+    mode: parallel
+    trigger:
+      - platform: state
+        entity_id:
+          - switch.chuangmi_cn_309825146_ipc019_on_p_2_1
+          - switch.chuangmi_cn_311366982_ipc019_on_p_2_1
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.force_camera_off
+        state: "on"
     action:
       - service: switch.turn_off
         target:
-          entity_id: switch.chuangmi_ipc019_37da_switch_status
-  ##############################################################################
-  #
-  #
-  # 1) Сохранение состояния стиральной машины при завершении работы HA
-  #    - Если binary_sensor.washing_machine_active == on, то включаем washing_machine_pre_restart_state.
-  #      Иначе выключаем.
-  #
-  # 2) Восстановление состояния стиральной машины при старте HA
-  #    - Если washing_machine_pre_restart_state == on, значит
-  #      стиральная машина «работала» до перезагрузки. Можно при желании
-  #      включать какую-то логику (но поскольку сам binary_sensor.washing_machine_active —
-  #      обычно «физический» датчик или приходящий с MQTT/ESPHome, мы не можем
-  #      прямо выставить ему состояние).
-  #    - Для предотвращения лишних уведомлений о «Завершении стирки», мы
-  #      вторым действием (после проверки) выключаем флаг input_boolean.washing_machine_pre_restart_state,
-  #      чтобы вернуть систему в согласованное состояние.
-  #
-  ##############################################################################
-  # --------------------------------------------------------------------------
-  # СОХРАНЕНИЕ СОСТОЯНИЯ СТИРАЛЬНОЙ МАШИНЫ ПРИ ЗАВЕРШЕНИИ РАБОТЫ HA
-  # --------------------------------------------------------------------------
-  # Если стиральная машина была «активна» при выключении, значит цикл
-  # стирки не закончился до конца. Запомним это.
-  - id: "064cbd85-8d52-40ac-98bd-98164ad1434c"
-    alias: "HELPER: Сохранение состояния стиральной машины при завершении HA"
-    mode: single
-    trigger:
-      - platform: homeassistant
-        event: shutdown
-    action:
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: binary_sensor.washing_machine_active
-                state: "on"
-            sequence:
-              - service: input_boolean.turn_on
-                target:
-                  entity_id: input_boolean.washing_machine_pre_restart_state
-        default:
-          - service: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.washing_machine_pre_restart_state
-
-  # --------------------------------------------------------------------------
-  # ВОССТАНОВЛЕНИЕ СОСТОЯНИЯ СТИРАЛЬНОЙ МАШИНЫ ПРИ СТАРТЕ HA
-  # --------------------------------------------------------------------------
-  # Если при прошлом выключении HA стиралка работала, текущий
-  # sensor.washing_machine_active может на короткий момент прийти в «off»
-  # (зависит от опроса). Избегаем ложного «завершения».
-  # Здесь вы можете при необходимости выполнить дополнительные действия,
-  # если хотите явно восстановить «машина в процессе стирки». Но обычно
-  # стиральная машина сама «сообщит» новый стейт (on/off), когда возникнет связь.
-  #
-  # В конце выключаем input_boolean.washing_machine_pre_restart_state, чтобы
-  # всё вернулось в нормальное состояние.
-  - id: "a49b7efb-5294-4361-90f2-73943aa71194"
-    alias: "HELPER: Восстановление стиральной машины при старте HA"
-    mode: single
-    trigger:
-      - platform: homeassistant
-        event: start
-    action:
-      # Здесь можно делать какую-то логику, если нужно.
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.washing_machine_pre_restart_state
-                state: "on"
-            sequence:
-              - service: system_log.write
-                data:
-                  message: "System start: стиральная машина была активна до перезагрузки."
-                  level: warning
-        default: []
-      # В любом случае гасим наш флаг.
-      - service: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.washing_machine_pre_restart_state
-  # --------------------------------------------------------------------------
-  # ЗАЩИТА ОТ ДУРАКА
-  # --------------------------------------------------------------------------
-  # Не даём включить кондиционер зимой
-  #
-  - id: "b9867c28-be9f-425e-9fee-0aea777d04c0"
-    alias: "HELPER: Защита: не включать кондиционер при активном Зимнем режиме"
-    description: >
-      Если включён input_boolean.winter_mode, при попытке включить
-      кондиционер автоматически возвращаем его в off.
-    trigger:
-      - platform: state
-        entity_id: climate.konditsioner
-        from: "off"
-        # Не указываем to:, чтобы сработать на любой режим (cool/heat/..).
-    condition:
-      - condition: state
-        entity_id: input_boolean.winter_mode
-        state: "on"
-    action:
-      - service: climate.turn_off
-        target:
-          entity_id: climate.konditsioner
-      - service: notify.telegram # или notify.mobile, если нужно
+          entity_id:
+            - switch.chuangmi_cn_309825146_ipc019_on_p_2_1
+            - switch.chuangmi_cn_311366982_ipc019_on_p_2_1
+      - service: notify.master
         data:
-          message: "Кондиционер принудительно отключён: включён Зимний режим."
-    mode: single
-
-  # ----------------------------------------------------------------------------
-  # Автоматизация для сброса уведомления после замены фильтра
-  # ----------------------------------------------------------------------------
-  # Если sensor.konditsioner_filter_remaining_life снова поднялся выше 10%,
-  # по прошествии 1 минуты, сбрасываем флаг filter_replace_notified в off.
-  # ----------------------------------------------------------------------------
-  - id: "reset_filter_replace_notified"
-    alias: "HELPER: Сброс уведомления о замене фильтра"
-    description: "Сброс флага уведомления после замены фильтра"
-    triggers:
-      - platform: numeric_state
-        entity_id: sensor.konditsioner_filter_remaining_life
-        above: 10
-        for:
-          minutes: 1
-    actions:
-      - service: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.filter_replace_notified
-    mode: single
+          message: "Попытка включения камер заблокирована (форсированное отключение)."

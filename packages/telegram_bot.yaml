@@ -1,0 +1,956 @@
+# packages/telegram_bot.yaml
+# ====================================================================
+# Пакет: Telegram Bot для Home Assistant
+# ====================================================================
+# Этот пакет реализует управление умным домом через Telegram-бота.
+# Пользователь может отправлять команды боту и получать актуальный
+# статус различных устройств и комнат.
+#
+# Функционал включает:
+# - Вывод текущего состояния помещений (температура, влажность, CO₂ и т. д.).
+# - Управление освещением, розетками, вентиляцией и другими устройствами.
+# - Контроль состояния сервера и сети (температура, пинг, скорость интернета).
+# - Возможность перезагрузки Home Assistant из Telegram.
+#
+# ====================================================================
+# Почему используем скрипты?
+# ====================================================================
+# В пакете активно используются скрипты для генерации сообщений с
+# состоянием и управления устройствами. Это позволяет:
+# - Избежать дублирования кода в автоматизациях.
+# - Упростить обслуживание: если нужно изменить формат сообщения,
+#   достаточно поправить только скрипт.
+# - Автоматически обновлять интерфейс Telegram после выполнения действий.
+#
+# Пример:
+# Вместо того чтобы в каждой автоматизации заново прописывать
+# формат сообщения, мы создаем один скрипт (например, `send_livingroom_status`),
+# а затем вызываем его во всех соответствующих автоматизациях.
+#
+# ====================================================================
+# Структура пакета:
+# ====================================================================
+# script:
+#   - Скрипты для отправки информации в Telegram.
+#
+# automation:
+#   - Обработчики команд и нажатий кнопок.
+#   - Автоматизации для переключения устройств.
+#
+# ====================================================================
+# Разделы меню Telegram:
+# ====================================================================
+# /main_menu       - Главное меню
+# /livingroom_control - Гостиная
+# /kitchen_control  - Кухня
+# /workroom_control - Рабочий кабинет
+# /bedroom_control - Спальня
+# /bathroom_control   - Ванная
+# /hallway_control - Прихожая
+# /system_control  - Система (состояние сервера и сети)
+#
+# ====================================================================
+# Специфика реализации:
+# ====================================================================
+# - Каждое действие в Telegram сопровождается удалением предыдущего
+#   сообщения, чтобы интерфейс оставался чистым и удобным.
+# - В ответах всегда есть кнопка "Обновить", чтобы получить
+#   актуальное состояние устройств.
+# - В случае управления переключаемыми устройствами (свет, розетки)
+#   после выполнения команды автоматически отправляется обновленный
+#   статус.
+#
+# ====================================================================
+# Особенности кнопки принудительной перезагрузки:
+# ====================================================================
+# - Запускает `homeassistant.restart`, полностью перезапуская HA.
+# - Перед этим отправляет предупреждение пользователю.
+# - Включена задержка в 5 секунд для безопасности.
+#
+# ====================================================================
+
+script:
+  send_main_menu:
+    alias: "Send Main Menu"
+    sequence:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ target }}"
+          parse_mode: html
+          message: |
+            <b>💻 Выбрать комнату для управления :</b>
+          inline_keyboard: >
+            {{ [
+                [ ["🏠 Гостиная", "/livingroom_control"], ["🍽 Кухня", "/kitchen_control"] ],
+                [ ["🏢 Рабочий кабинет", "/workroom_control"], ["🛏 Спальня", "/bedroom_control"] ],
+                [ ["🛁 Ванная", "/bathroom_control"], ["🚪 Коридор", "/hallway_control"] ],
+                [ ["🖥 Система", "/system_control"] ]
+              ] | tojson }}
+
+  send_livingroom_status:
+    alias: "Send Living Room Status"
+    sequence:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ target }}"
+          parse_mode: html
+          message: |
+            <b>🏠 Текущее состояние в гостиной:</b>
+            <b>🌡 Температура:</b> {{ states('sensor.livingroom_climat_sensor_temperature') }}°C
+            <b>💧 Влажность:</b> {{ states('sensor.livingroom_climat_sensor_humidity') }}%
+            <b>🌿 CO₂:</b> {{ states('sensor.co2_monitor_co2') }} ppm
+            <b>💨 PM2.5:</b> {{ states('sensor.zhimi_mb3_a5d3_pm25') }} µg/m³
+            <b>🚪 Статус дверей:</b> {% if is_state('binary_sensor.gostinaia_balkon_contact', 'on') or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
+          inline_keyboard: >
+            {{ [
+                [ ["🔴 Люстра" if is_state("light.livingroom_main_switch_left", "off") else "🟢 Люстра", "/toggle_livingroom_main_switch_left"],
+                  ["🔴 Свет над диваном" if is_state("light.livingroom_main_switch_right", "off") else "🟢 Свет над диваном", "/toggle_livingroom_main_switch_right"] ],
+                [ ["🔴 Бра" if is_state("light.livingroom_scone_dimmer", "off") else "🟢 Бра", "/toggle_livingroom_scone_dimmer"] ],
+                [ ["🔴 Угловая розетка" if is_state("switch.livingroom_socket_corner_r", "off") else "🟢 Угловая розетка", "/toggle_livingroom_socket_corner_r"],
+                  ["🔴 Левая розетка" if is_state("switch.livingroom_socket_l", "off") else "🟢 Левая розетка", "/toggle_livingroom_socket_l"],
+                  ["🔴 Правая розетка" if is_state("switch.livingroom_socket_r", "off") else "🟢 Правая розетка", "/toggle_livingroom_socket_r"] ],
+                [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/livingroom_control"] ]
+              ] | tojson }}
+
+  send_workroom_status:
+    alias: "Send Workroom Status"
+    sequence:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ target }}"
+          parse_mode: html
+          message: |
+            <b>🏢 Текущее состояние в рабочем кабинете:</b>
+            <b>🌡 Температура:</b> {{ states('sensor.cgllc_dove_f637_temperature_2') }}°C
+            <b>💧 Влажность:</b> {{ states('sensor.cgllc_dove_f637_relative_humidity_2') }}%
+            <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.masterskaia_balkon_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
+          inline_keyboard: >
+            {{ [
+                [ ["🔴 Основной свет" if is_state("light.workroom_switch", "off") else "🟢 Основной свет", "/toggle_workroom_light"],
+                  ["🔴 Подсветка" if is_state("light.working_room_led", "off") else "🟢 Подсветка", "/toggle_workroom_led"] ],
+                [ ["🔴 Розетка отпаривателя" if is_state("switch.smart_plug_in_unit_vykliuchatel", "off") else "🟢 Розетка отпаривателя", "/toggle_workroom_plug"] ],
+                [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/workroom_control"] ]
+              ] | tojson }}
+
+  send_bedroom_status:
+    alias: "Send Bedroom Status"
+    sequence:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ target }}"
+          parse_mode: html
+          message: |
+            <b>🛏 Текущее состояние в спальне:</b>
+            <b>🌡 Температура:</b> {{ states('sensor.bedroom_th_sensor_temperature') }}°C
+            <b>💧 Влажность:</b> {{ states('sensor.bedroom_th_sensor_humidity') }}%
+            <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.0x00158d00044d5d11_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
+          inline_keyboard: >
+            {{ [
+                [ ["🔴 Основной свет" if is_state("light.bedroom_switch_main", "off") else "🟢 Основной свет", "/toggle_bedroom_light"] ],
+                [ ["🔴 Танин светильник" if is_state("light.bedroom_left_switch_right", "off") else "🟢 Танин светильник", "/toggle_bedroom_scone_t"] ],
+                [ ["🔴 Андреев светильник малый" if is_state("light.bedroom_right_switch_left", "off") else "🟢 Андреев светильник малый", "/toggle_bedroom__scone_a_small"],
+                  ["🔴 Андреев светильник большой" if is_state("light.bedroom_right_switch_right", "off") else "🟢 Андреев светильник большой", "/toggle_bedroom__scone_a_big"] ],
+                [ ["🔴 Розетка Тани" if is_state("switch.0x00158d0002530bd9", "off") else "🟢 Розетка Тани", "/toggle_bedroom_plug_left"],
+                  ["🔴 Розетка Андрея" if is_state("switch.0x00158d0002530ba3", "off") else "🟢 Розетка Андрея", "/toggle_bedroom_plug_right"] ],
+                [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/bedroom_control"] ]
+              ] | tojson }}
+
+  send_bathroom_status:
+    alias: "Send Bathroom Status"
+    sequence:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ target }}"
+          parse_mode: html
+          message: |
+            <b>🛁 Текущее состояние в ванной:</b>
+            <b>🌡 Температура:</b> {{ states('sensor.bathroom_th_2_temperature') }}°C
+            <b>💧 Влажность:</b> {{ states('sensor.bathroom_th_2_humidity') }}%
+            <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.bathroom_open_door', 'on') %}Открыта{% else %}Закрыта{% endif %}
+            <b>🧺 Стиральная машина:</b> {% if is_state('binary_sensor.washing_machine_active', 'on') %}🟢 Работает{% else %}🔴 Не работает{% endif %}
+          inline_keyboard: >
+            {{ [
+                [ ["🔴 Весь свет" if is_state("light.light_bathroom", "off") else "🟢 Весь свет", "/toggle_bathroom_light"] ],
+                [ ["🔴 Вытяжка" if is_state("fan.bathroom_relay_l1", "off") else "🟢 Вытяжка", "/toggle_bathroom_fan"] ],
+                [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/bathroom_control"] ]
+              ] | tojson }}
+
+  send_kitchen_status:
+    alias: "Send Kitchen Status"
+    sequence:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ target }}"
+          parse_mode: html
+          message: |
+            <b>🛁 Текущее состояние на кухне:</b>
+            <b>Вытяжка:</b>
+            <b>🌡 Температура:</b> {{ states('sensor.kitchen_th_temperature') }}°C
+            <b>💧 Влажность:</b> {{ states('sensor.kitchen_th_humidity') }}%
+            <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
+          inline_keyboard: >
+            {{ [
+                [ ["🔴 Основной" if is_state("light.kitchen_main_light", "off") else "🟢 Основной", "/toggle_kitchen_main_light"] ],
+                [ ["🔴 Подсветка" if is_state("switch.kitchen_fartuh", "off") else "🟢 Подсветка", "/toggle_kithcen_fartuh"] ],
+                [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/kitchen_control"] ]
+              ] | tojson }}
+
+  send_hallway_status:
+    alias: "Send Hallway Status"
+    sequence:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ target }}"
+          parse_mode: html
+          message: |
+            <b>🚪 Текущее состояние в прихожей:</b>
+            <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.hallway_door_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
+          inline_keyboard: >
+            {{ [
+                [ ["🔴 Cвет" if is_state("light.hallway_switch", "off") else "🟢 Свет", "/toggle_hallway_light"] ],
+                [ ["🔴 Шлюз" if is_state("light.gateway_light_04cf8c977cdd", "off") else "🟢 Шлюз", "/toggle_hallway_gateway_light"] ],
+                [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/hallway_control"] ]
+              ] | tojson }}
+
+  send_system_status:
+    alias: "Send System Status"
+    sequence:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ target }}"
+          parse_mode: html
+          message: |
+            <b>🖥 Текущее состояние системы:</b>
+            <b>🌡 Климат около сервера:</b>
+            <b>Температура:</b> {{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C
+            <b>💧 Влажность:</b> {{ states('sensor.0xa4c13861a18df7c8_humidity') }}%
+
+            <b>🌍 Скорость сети интернет:</b>
+            <b>📡 Пинг:</b> {{ states('sensor.speedtest_ping') }} ms
+            <b>⬇️ Загрузка:</b> {{ states('sensor.speedtest_download') }} Mbps
+            <b>⬆️ Передача:</b> {{ states('sensor.speedtest_upload') }} Mbps
+          inline_keyboard: >
+            {{ [
+                [ ["🔴 Роутер" if is_state("switch.my_multi_outlet_left", "off") else "🟢 Роутер", "/toggle_router_socket"],
+                  ["🔴 МиниПК" if is_state("switch.my_multi_outlet_right", "off") else "🟢 МиниПК", "/toggle_minipc_socket"] ],
+                [ ["🔴 Питание ванной" if is_state("light.bathroom_main", "off") else "🟢 Питание ванной", "/toggle_bathroom_power"] ],
+                [ ["🔴 Режим тишины" if is_state("input_boolean.silent_mode", "off") else "🟢 Режим тишины", "/toggle_silent_mode"] ],
+                [ ["🔴 Режим Force CCTV Off" if is_state("input_boolean.force_camera_off", "off") else "🟢 Режим Force CCTV Off", "/toggle_force_cctv_mode"] ],
+                [ ["⚠️ Перезагрузить систему", "/force_reboot"] ],
+                [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/system_control"] ]
+              ] | tojson }}
+
+automation:
+  # Приветственное сообщение (при вводе команды /start)
+  - id: "telegram_bot_start"
+    alias: "Telegram Bot Start (Приветствие)"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_command
+        event_data:
+          command: "/start"
+    action:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+          parse_mode: html
+          message: "<b>Добро пожаловать в умный дом!</b>"
+      - service: script.send_main_menu
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  ##############################################################################
+  # Обработчики меню
+  ##############################################################################
+  # Главное меню (при вводе команды /main_menu)
+  - id: "telegram_bot_main_menu"
+    alias: "Telegram Bot Main Menu"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_command
+        event_data:
+          command: "/main_menu"
+    action:
+      - service: script.send_main_menu
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # Обработчик кнопки "В меню"
+  - id: "telegram_bot_menu_back"
+    alias: "Telegram Bot Menu Back"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/menu_back"
+    action:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_main_menu
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # Обработчик меню "Гостиная"
+  - id: "telegram_bot_livingroom_control"
+    alias: "Telegram Bot Living Room Menu"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/livingroom_control"
+    action:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_livingroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # Обработчик меню "Рабочий кабинет"
+  - id: "telegram_bot_workroom_control"
+    alias: "Telegram Bot Workroom Menu"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/workroom_control"
+    action:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_workroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # Обработчик меню "Спальня"
+  - id: "telegram_bot_bedroom_control"
+    alias: "Telegram Bot Bedroom Menu"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/bedroom_control"
+    action:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_bedroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # Обработчик меню "Кухня"
+  - id: "telegram_bot_kitchen_control"
+    alias: "Telegram Bot Kitchen Menu"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/kitchen_control"
+    action:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_kitchen_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+          # Обработчик меню "Ванная"
+  - id: "telegram_bot_bathroom_control"
+    alias: "Telegram Bot Bathroom Menu"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/bathroom_control"
+    action:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_bathroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+          # Обработчик меню "Прихожая"
+  - id: "telegram_bot_hallway_control"
+    alias: "Telegram Bot Hallway Menu"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/hallway_control"
+    action:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_hallway_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+          # Обработчик меню "Система"
+  - id: "telegram_bot_system_control"
+    alias: "Telegram Bot System Control"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/system_control"
+    action:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_system_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  ##############################################################################
+  # Гостиная
+  ##############################################################################
+  # 1. Переключение люстры в гостиной
+  - id: "telegram_bot_toggle_livingroom_main_switch_left"
+    alias: "Telegram Bot Toggle Livingroom Main Switch Left"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_main_switch_left"
+    action:
+      - service: light.toggle
+        entity_id: light.livingroom_main_switch_left
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_livingroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # 2. Переключение света над диваном в гостиной
+  - id: "telegram_bot_toggle_livingroom_main_switch_right"
+    alias: "Telegram Bot Toggle Livingroom Main Switch Right"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_main_switch_right"
+    action:
+      - service: light.toggle
+        entity_id: light.livingroom_main_switch_right
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_livingroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  # 3. Переключение бра в гостиной
+  - id: "telegram_bot_toggle_livingroom_scone_dimmer"
+    alias: "Telegram Bot Toggle Livingroom Main Scone"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_scone_dimmer"
+    action:
+      - service: light.toggle
+        entity_id: light.livingroom_scone_dimmer
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_livingroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  ##############################################################################
+  # Кабинет
+  # Обработчики переключения устройств в рабочем кабинете
+  ##############################################################################
+  # 1. Переключение основного света в рабочем кабинете
+  - id: "telegram_bot_toggle_workroom_light"
+    alias: "Telegram Bot Toggle Workroom Light"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_workroom_light"
+    action:
+      - service: light.toggle
+        entity_id: light.workroom_switch
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_workroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  # 2. Переключение подсветки стола в рабочем кабинете
+  - id: "telegram_bot_toggle_workroom_led"
+    alias: "Telegram Bot Toggle Workroom LED"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_workroom_led"
+    action:
+      - service: light.toggle
+        entity_id: light.working_room_led
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_workroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  # 3. Переключение розетки в рабочем кабинете
+  - id: "telegram_bot_toggle_workroom_plug"
+    alias: "Telegram Bot Toggle Workroom Plug"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_workroom_plug"
+    action:
+      - service: switch.toggle
+        entity_id: switch.smart_plug_in_unit_vykliuchatel
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_workroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  ##############################################################################
+  # Спальня
+  # Обработчики переключения устройств в спальне
+  ##############################################################################
+
+  # 1.1. Переключение основного света в спальне
+  - id: "telegram_bot_toggle_bedroom_light"
+    alias: "Telegram Bot Toggle Bedroom Light"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_light"
+    action:
+      - service: light.toggle
+        entity_id: light.bedroom_switch_main
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_bedroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  # 1.2. Переключение светильника Татьяны в спальне
+  - id: "telegram_bot_toggle_bedroom_scone_t"
+    alias: "Telegram Bot Toggle Bedroom Tatiana's Scone"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: ""/toggle_bedroom_scone_t"
+    action:
+      - service: light.toggle
+        entity_id: light.bedroom_left_switch_right
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_bedroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  # 1.3. Переключение основного света в спальне
+  - id: "telegram_bot_toggle_bedroom_scone_a_small"
+    alias: "Telegram Bot Toggle Bedroom Andrei's Scone Small"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_scone_a_small"
+    action:
+      - service: light.toggle
+        entity_id: light.bedroom_right_switch_left
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_bedroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  # 1.4. Переключение основного света в спальне
+  - id: "telegram_bot_toggle_bedroom__scone_a_big"
+    alias: "Telegram Bot Toggle Bedroom Andrei's Scone Big"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_scone_a_big"
+    action:
+      - service: light.toggle
+        entity_id: light.bedroom_right_switch_right
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_bedroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  # 2. Переключение розетки Тани в спальне
+  - id: "telegram_bot_toggle_bedroom_plug_left"
+    alias: "Telegram Bot Toggle Bedroom Plug Left"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_plug_left"
+    action:
+      - service: switch.toggle
+        entity_id: switch.0x00158d0002530bd9
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_bedroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # 3. Переключение розетки Андрея в спальне
+  - id: "telegram_bot_toggle_bedroom_plug_right"
+    alias: "Telegram Bot Toggle Bedroom Plug Right"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_plug_right"
+    action:
+      - service: switch.toggle
+        entity_id: switch.0x00158d0002530ba3
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_bedroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  ##############################################################################
+  # Кухня
+  ##############################################################################
+  # 1. Переключение основного света на кухне
+  - id: "telegram_bot_toggle_kitchen_main_light"
+    alias: "Telegram Bot Toggle Kitchen Main Light"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_kitchen_main_light"
+    action:
+      - service: light.toggle
+        entity_id: light.kitchen_main_light
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_kitchen_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # 2. Переключение подсветки (фартук) на кухне
+  - id: "telegram_bot_toggle_kitchen_fartuh"
+    alias: "Telegram Bot Toggle Kitchen Fartuh"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_kithcen_fartuh"
+    action:
+      - service: switch.toggle
+        entity_id: switch.kitchen_fartuh
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_kitchen_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  ##############################################################################
+  # Ванная
+  ##############################################################################
+  # 1. Переключение всего света в ванной
+  - id: "telegram_bot_toggle_bathroom_light"
+    alias: "Telegram Bot Toggle Bathroom Light"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bathroom_light"
+    action:
+      - service: light.toggle
+        entity_id: light.light_bathroom
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_bathroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # 2. Переключение вентиляции в ванной
+  - id: "telegram_bot_toggle_bathroom_fan"
+    alias: "Telegram Bot Toggle Bathroom Fan"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bathroom_fan"
+    action:
+      - service: fan.toggle
+        entity_id: fan.bathroom_relay_l1
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_bathroom_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  ##############################################################################
+  # Прихожая
+  ##############################################################################
+  # 1. Переключение света в прихожей
+  - id: "telegram_bot_toggle_hallway_light"
+    alias: "Telegram Bot Toggle Hallway Light"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_hallway_light"
+    action:
+      - service: light.toggle
+        entity_id: light.hallway_switch
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_hallway_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # 2. Переключение шлюза в прихожей
+  - id: "telegram_bot_toggle_hallway_gateway_light"
+    alias: "Telegram Bot Toggle Hallway Gateway Light"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_hallway_gateway_light"
+    action:
+      - service: light.toggle
+        entity_id: light.gateway_light_04cf8c977cdd
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_hallway_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+  ##############################################################################
+  # Система
+  ##############################################################################
+  # 1. Переключение розетки роутера
+  - id: "telegram_bot_toggle_router_socket"
+    alias: "Telegram Bot Toggle Router Socket"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_router_socket"
+    action:
+      - service: switch.toggle
+        entity_id: switch.my_multi_outlet_left
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_system_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # 2. Переключение розетки миниПК
+  - id: "telegram_bot_toggle_minipc_socket"
+    alias: "Telegram Bot Toggle MiniPC Socket"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_minipc_socket"
+    action:
+      - service: switch.toggle
+        entity_id: switch.my_multi_outlet_right
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_system_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # 3. Переключение питания группы в ванной
+  - id: "telegram_bot_toggle_bathroom_power"
+    alias: "Telegram Bot Toggle Bathroom Power"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bathroom_power"
+    action:
+      - service: light.toggle
+        entity_id: light.bathroom_main
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_system_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # 4. Переключение режима тишины
+  - id: "telegram_bot_toggle_silent_mode"
+    alias: "Telegram Bot Toggle Silent Mode"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_silent_mode"
+    action:
+      - service: input_boolean.toggle
+        entity_id: input_boolean.silent_mode
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_system_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # 5. Переключение режима форсированного отключения камер
+  - id: "telegram_bot_toggle_force_cctv_mode"
+    alias: "Telegram Bot Toggle Force CCTV Off Mode"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_force_cctv_mode"
+    action:
+      - service: input_boolean.toggle
+        entity_id: input_boolean.force_camera_off
+      - delay:
+          milliseconds: 200
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_system_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # 6. Принудительная перезагрузка системы
+  - id: "telegram_bot_force_reboot"
+    alias: "Telegram Bot Force Reboot"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/force_reboot"
+    action:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+          parse_mode: html
+          message: "<b>⚠️ Система будет перезагружена через 5 секунд!</b>"
+      - delay:
+          seconds: 5
+      - service: homeassistant.restart

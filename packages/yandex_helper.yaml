@@ -19,6 +19,10 @@ yandex_station:
   recognition_lang: ru-RU # Язык распознавания по умолчанию
   tts_service_name: alice_say # Сервис текста в речь от Алисы
 
+input_text:
+  yandex_station_entity:
+    name: "Yandex Station Entity"
+    initial: "media_player.yandex_station_ff98f0294437799304d0788d"
 ################################################################################
 # Скрипты в Home Assistant представляют собой последовательности действий,
 # запускаемые в ответ на определённые события или команды.
@@ -44,187 +48,167 @@ yandex_station:
 ################################################################################
 
 script:
-  # Воспроизводит через Яндекс станцию текущий уровень CO2 в доме, предоставляя
-  # пользователю важную информацию о качестве воздуха.
-
   yandex_tts_ppm_status:
+    # Воспроизводит через Яндекс станцию текущий уровень CO2 в доме, предоставляя
+    # пользователю важную информацию о качестве воздуха.
+
     alias: "Yandex_TTS_ppm_status"
     sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
       - service: media_player.play_media
         target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+          entity_id: "{{ yandex_station_entity }}"
         data:
           media_content_id: "Уровень Цэ О Два составляет {{ states('sensor.co2_monitor_co2') | round }} на миллион"
           media_content_type: "text"
     mode: single
     icon: "yandex:alisa"
 
-  # Сообщает текущую температуру в гостиной, помогая пользователю быть в курсе
-  # комфорта в доме.
-
   yandex_tts_temp_status:
+    # Сообщает текущую температуру в гостиной, помогая пользователю быть в курсе
+    # комфорта в доме.
     alias: "Yandex_TTS_temp_status"
     sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
       - service: media_player.play_media
         target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+          entity_id: "{{ yandex_station_entity }}"
         data:
           media_content_id: "Температура в гостиной {{ states('sensor.livingroom_climat_sensor_temperature') | round }} градуса"
           media_content_type: "text"
     mode: single
     icon: "yandex:alisa"
 
-  # Сообщает текущую влажность в гостиной, помогая пользователю быть в курсе
-  # комфорта в доме.
-
   yandex_tts_hum_status:
+    # Сообщает текущую влажность в гостиной, помогая пользователю быть в курсе
+    # комфорта в доме.
     alias: "Yandex_TTS_hum_status"
     sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
       - service: media_player.play_media
         target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+          entity_id: "{{ yandex_station_entity }}"
         data:
           media_content_id: "Влажность {{ states('sensor.livingroom_climat_sensor_humidity') | round }} процентов"
           media_content_type: "text"
     mode: single
     icon: "yandex:alisa"
 
-  # Активируется при высоком уровне CO2, предлагая пользователю проветрить
-  # помещение для улучшения качества воздуха.
-
-  yandex_tts_co2_alert:
-    alias: "Yandex_TTS_CO2_alert"
-    sequence:
-      - service: media_player.play_media
-        target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
-        data:
-          media_content_id: >
-            {{ ["Необходимо", "Желательно", "Нужно"] | random }} проветрить {{ ["квартиру", "помещение", "домик"] | random }}
-          media_content_type: "text"
-    mode: single
-    icon: "yandex:alisa"
-
-  # Проветривание завершено
-
-  yandex_tts_co2_normal:
-    alias: "Yandex_TTS_CO2_normal"
-    sequence:
-      - service: media_player.play_media
-        target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
-        data:
-          media_content_id: >
-            Проветривание {{ ["завершено!", "окончено!", "успешно!"] | random }} {{ ["Уровень", "Концентрация", "Показатель"] | random }} Цэ О Два {{ ["в пределах нормы", "в допустимых значениях", "в норме"] | random }}
-          media_content_type: "text"
-    mode: single
-    icon: "yandex:alisa"
-
-  # Информирует пользователя о том, какие двери в доме остались открытыми,
-  # повышая уровень безопасности и контроля за домом.
-
   yandex_tts_door_status:
     alias: "Yandex_TTS_Which_door_is_open"
     sequence:
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+
       - variables:
           door_sensors: >
             {
-              "в гостиной": is_state("binary_sensor.gostinaia_balkon_contact", "on"),
-              "в мастерской": is_state("binary_sensor.masterskaia_balkon_contact", "on"),
-              "на кухне": is_state("binary_sensor.0x00158d0003ce9922_contact", "on"),
-              "в спальне": is_state("binary_sensor.0x00158d00044d5d11_contact", "on")
+              "в гостиной": {{ is_state('binary_sensor.gostinaia_balkon_contact', 'on') }},
+              "в мастерской": {{ is_state('binary_sensor.masterskaia_balkon_contact', 'on') }},
+              "на кухне": {{ is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') }},
+              "в спальне": {{ is_state('binary_sensor.0x00158d00044d5d11_contact', 'on') }}
             }
+
+      - variables:
           open_doors: >
-            {% set open_doors = [] %}
-            {% for k, v in door_sensors.items() %}
-              {% if v %}
-                {% set open_doors = open_doors + [k] %}
-              {% endif %}
-            {% endfor %}
-            {{ open_doors }}
+            [
+              {% for door, state in door_sensors.items() %}
+                {% if state %}
+                  "{{ door }}"{% if not loop.last and door_sensors.values()|select('equalto', true)|list|length > loop.index %}, {% endif %}
+                {% endif %}
+              {% endfor %}
+            ]
+
+      - variables:
           door_message: >
-            {% set count = open_doors | length %}
-            {% if count == 0 %}
-              Все двери закрыты.
-            {% elif count == 1 %}
-              Открыта дверь {{ open_doors[0] }}.
-            {% elif count == 2 %}
-              Открыты двери {{ open_doors[0] }} и {{ open_doors[1] }}.
+            {% if open_doors | length > 0 %}
+              {% if open_doors | length == 1 %}
+                "Открыта дверь {{ open_doors[0] }}"
+              {% else %}
+                "Открыты двери {{ open_doors | join(', ') }}"
+              {% endif %}
             {% else %}
-              Открыты двери {{ open_doors[:-1] | join(", ") }} и {{ open_doors[-1] }}.
+              "Все двери закрыты"
             {% endif %}
+
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
       - service: media_player.play_media
         target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+          entity_id: "{{ yandex_station_entity }}"
         data:
           media_content_id: "{{ door_message }}"
           media_content_type: "text"
-      - service: notify.master
+
+      - action: notify.master
         data:
           message: "{{ door_message }}"
-      - service: notify.tatsiana
+
+      - action: notify.tatiana
         data:
           message: "{{ door_message }}"
     mode: single
     icon: "yandex:alisa"
 
-  # Рекомендует пользователю включить вытяжку на кухне.
-
-  yandex_tts_kitchen_fan_alert:
-    alias: "Yandex TTS Kitchen Fan Alert"
+  yandex_tts_shaking_outdoor_button:
+    # Уведомление о том, что входную кнопку пытаются снять
+    alias: "yandex_tts_button_shaked"
     sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
       - service: media_player.play_media
         target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+          entity_id: "{{ yandex_station_entity }}"
         data:
-          media_content_id: "Возможно стоит включить вытяжку на кухне."
+          media_content_id: "Опасность! Опасность! Вашу входную кнопку пытаются снять!"
           media_content_type: "text"
     mode: single
-    icon: "mdi:voice"
+    icon: "yandex:alisa"
 
-  # Напоминаем о том, что стирка окончена
-  yandex_tts_washing_machine_finished:
-    alias: "Голосовое напоминание о стирке"
+  yandex_tts_click_outdoor_button:
+    # Уведомление о том, что кто-то звонит в дверь
+    alias: "yandex_tts_door_ring"
     sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
       - service: media_player.play_media
         target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
-        data:
-          media_content_id: "Стирка завершена! Заберите белье."
-          media_content_type: "text"
-    mode: single
-
-  # Напоминаем о том, что стирка окончена
-  yandex_tts_washing_machine_reminder:
-    alias: "Голосовое напоминание о стирке"
-    sequence:
-      - service: media_player.play_media
-        target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
-        data:
-          media_content_id: "Кажется, вы забыли развесить стирку!"
-          media_content_type: "text"
-    mode: single
-
-  # Уведомление о том, что входную кнопку пытаются снять
-  yandex_shaking_outdoor_button:
-    alias: "Уведомление о том, что входную кнопку пытаются снять"
-    sequence:
-      - service: media_player.play_media
-        target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
-        data:
-          media_content_id: "Опасность! Опасность! Вашу входную кнопку пытаются снять"
-          media_content_type: "text"
-    mode: single
-
-  # Уведомление о том, что кто-то звонит в дверь
-  yandex_click_outdoor_button:
-    alias: "Уведомление о том, что нажимают на входную кнопку"
-    sequence:
-      - service: media_player.play_media
-        target:
-          entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+          entity_id: "{{ yandex_station_entity }}"
         data:
           media_content_id: >
             {{ ["Тук-Тук!", "Па-бам!", "Тук-тук-тук!", "Динь-дон!", "Кто там?", 
@@ -234,3 +218,138 @@ script:
                 "Посетитель!", "На пороге!"] | random }}
           media_content_type: "text"
     mode: single
+    icon: "yandex:alisa"
+
+  yandex_tts_co2_alert:
+    # Активируется при высоком уровне CO2, предлагая пользователю проветрить
+    # помещение для улучшения качества воздуха.
+    alias: "Yandex_TTS_CO2_alert"
+    sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
+      - service: media_player.play_media
+        target:
+          entity_id: "{{ yandex_station_entity }}"
+        data:
+          media_content_id: >
+            {{ ["Необходимо", "Желательно", "Нужно"] | random }} проветрить {{ ["квартиру", "помещение", "домик"] | random }}
+          media_content_type: "text"
+    mode: single
+    icon: "yandex:alisa"
+
+  yandex_tts_co2_normal:
+    # Проветривание завершено
+    alias: "Yandex_TTS_CO2_normal"
+    sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
+      - service: media_player.play_media
+        target:
+          entity_id: "{{ yandex_station_entity }}"
+        data:
+          media_content_id: >
+            Проветривание {{ ["завершено!", "окончено!", "успешно!"] | random }} {{ ["Уровень", "Концентрация", "Показатель"] | random }} Цэ О Два {{ ["в пределах нормы", "в допустимых значениях", "в норме"] | random }}
+          media_content_type: "text"
+    mode: single
+    icon: "yandex:alisa"
+
+  yandex_tts_kitchen_fan_alert:
+    # Рекомендует пользователю включить вытяжку на кухне.
+    alias: "Yandex_TTS_Kitchen_Fan_alert"
+    sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
+      - service: media_player.play_media
+        target:
+          entity_id: "{{ yandex_station_entity }}"
+        data:
+          media_content_id: >
+            {{ ["Возможно стоит включить вытяжку на кухне", 
+                "Рекомендую включить вытяжку"] | random }}
+          media_content_type: "text"
+    mode: single
+    icon: "yandex:alisa"
+
+  yandex_tts_washing_machine_finished:
+    # Для уведомления о том, что стирка окончена
+    alias: "yandex_tts_wash_finished"
+    sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
+      - service: media_player.play_media
+        target:
+          entity_id: "{{ yandex_station_entity }}"
+        data:
+          media_content_id: "Стирка завершена! Заберите белье."
+          media_content_type: "text"
+    mode: single
+    icon: "yandex:alisa"
+
+  yandex_tts_washing_machine_reminder:
+    # Для напоминаем о том, что стирка окончена
+    alias: "yandex_tts_wash_finished_reminder"
+    sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
+      - service: media_player.play_media
+        target:
+          entity_id: "{{ yandex_station_entity }}"
+        data:
+          media_content_id: "Кажется, вы забыли развесить стирку!"
+          media_content_type: "text"
+    mode: single
+    icon: "yandex:alisa"
+
+  yandex_tts_kondicioner_warning:
+    # Уведомление о том, что зимой не рекомендуется включать кондиционер
+    alias: "yandex_tts_kondicioner_warning"
+    sequence:
+      # Проверяем, что тихий режим выключен
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      # Используем переменную для entity_id Яндекс Станции
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      # Если условия выполнены, воспроизводим уведомление
+      - service: media_player.play_media
+        target:
+          entity_id: "{{ yandex_station_entity }}"
+        data:
+          media_content_id: >
+            {{ ["Кажется, вы забыли, что зимой не рекомендуется использовать кондиционер!", 
+                "Рекомендую забыть о кондиционере в зимний период.",
+                "Кондиционер впал в зимнюю спячку"] | random }}
+          media_content_type: "text"
+    mode: single
+    icon: "yandex:alisa"

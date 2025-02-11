@@ -7,11 +7,6 @@ frontend:
   extra_module_url:
     - /hacsfiles/ha-yandex-icons/yandex-icons.js
     - /hacsfiles/hass-hue-icons/hass-hue-icons.js
-# Ресурсы для Lovelace
-lovelace:
-  resources:
-    - url: /community_plugin/lovelace-climate-mode-entity-row/climate-mode-entity-row.js
-      type: module
 
 homeassistant:
   name: Квартира 133
@@ -29,4 +24,4 @@ recorder: !include includes/recorder.yaml
 
 # Уровень логирования - только ошибки
 logger:
-  default: error
+  default: debug

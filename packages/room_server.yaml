@@ -91,7 +91,7 @@ automation:
           - switch.my_multi_outlet_right
         to: "unavailable"
     action:
-      - service: notify.master
+      - action: notify.master
         data:
           message: >-
             ⚠️ Внимание! Розетка {{ trigger.entity_id }} недоступна.

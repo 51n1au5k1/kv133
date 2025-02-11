@@ -38,12 +38,12 @@ group:
 ##############################################################################
 sensor:
   - platform: filter
-    name: "Влажность ванной (усреднённая за 5 минут)"
+    name: "Влажность ванной (усреднённая за 1 минуту)"
     entity_id: sensor.bathroom_th_2_humidity
     unique_id: bathroom_filtered_humidity
     filters:
       - filter: time_simple_moving_average
-        window_size: "00:03"
+        window_size: "00:01"
         precision: 2
 
 ##############################################################################
@@ -127,12 +127,19 @@ binary_sensor:
         value_template: >
           {{ is_state('group.bathroom_motion_sensors', 'on') }}
 
+  - platform: template
+    sensors:
       no_activity_in_bathroom_recently:
         unique_id: no_activity_in_bathroom_recently
         friendly_name: "Недавняя активность в ванной отсутствует"
         value_template: >-
-          {{ is_state('binary_sensor.bathroom_motion_sensor', 'off')
-             and (as_timestamp(now()) - as_timestamp(states.binary_sensor.bathroom_door_sensor.last_changed) > 900) }}
+          {% set door = states.binary_sensor.bathroom_open_door %}
+          {% set motion_off = is_state('group.bathroom_motion_sensors', 'off') %}
+          {% if door is not none and door.last_changed is not none %}
+            {{ motion_off and (as_timestamp(now()) - as_timestamp(door.last_changed)) > 900 }}
+          {% else %}
+            false
+          {% endif %}
 
 ##############################################################################
 #                                 ТАЙМЕРЫ
@@ -225,11 +232,11 @@ automation:
     action:
       - service: light.toggle
         target:
-          entity_id: light.bathroom_main
+          entity_id: light.light_bathroom
       - choose:
           - conditions:
               - condition: state
-                entity_id: light.bathroom_main
+                entity_id: light.light_bathroom
                 state: "on"
             sequence:
               - service: timer.start

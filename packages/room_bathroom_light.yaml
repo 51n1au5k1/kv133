@@ -41,7 +41,6 @@ light:
     token: !secret bathroom_spot_c2_token
     model: philips.light.downlight
 
-
 ##############################################################################
 #                                   ГРУППЫ
 ##############################################################################
@@ -77,8 +76,6 @@ automation:
   - id: "5751bda3-f9c2-4173-808e-c44b12519960"
     alias: "Ванная: Снижение яркости и температуры освещения"
     mode: queued
-
-    # Триггер: включает логику при включении любого из спотов.
     trigger:
       - platform: state
         entity_id:
@@ -88,19 +85,16 @@ automation:
           - light.bathroom_spot_c1_philips
           - light.bathroom_spot_c2_philips
         to: "on"
-
-    # Условие: срабатывает только в период с 00:00 до 06:00.
     condition:
       - condition: time
         after: "00:00:00"
         before: "06:00:00"
-
-    # Действие: устанавливаем яркость 10% и цветовую температуру 333.
     action:
       - service: light.turn_on
         data:
           brightness_pct: 10
-          color_temp: 333
+          # color_temp: 333
+          color_temp_kelvin: 3000 # Заменено с mireds (333) на кельвины (~3000K)
         target:
           entity_id: "{{ trigger.entity_id }}"
 
@@ -134,4 +128,33 @@ automation:
           entity_id: "{{ trigger.entity_id }}"
         data:
           brightness_pct: 100
-          color_temp: 175
+          # color_temp: 175
+          color_temp_kelvin: 5700 # Заменено с mireds (175) на кельвины (~5700K)
+
+  - id: "0c5020c3-e674-4789-8086-38dbc07253d7"
+    alias: "Ванная: Включение реле основного света при недоступности спотов"
+    description: "Включает реле основной свет, если хотя бы один из спотов недоступен и не фаза загрузки."
+    trigger:
+      - platform: state
+        entity_id:
+          - light.bathroom_spot_r1_philips
+          - light.bathroom_spot_r2_philips
+          - light.bathroom_spot_l1_philips
+          - light.bathroom_spot_c1_philips
+          - light.bathroom_spot_c2_philips
+        to: "unavailable"
+
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: light.bathroom_main
+        state: "off"
+
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: light.bathroom_main
+
+    mode: single

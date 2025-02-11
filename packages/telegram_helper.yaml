@@ -6,7 +6,7 @@
 # различных уведомлений, обеспечивая мгновенное оповещение пользователей
 # о событиях в «умном доме». Он включает:
 #
-# 1) Настройку telegram_bot и соответствующих notify-сервисов (master / Tatsiana).
+# 1) Настройку telegram_bot и соответствующих notify-сервисов (master / Tatiana).
 # 2) Input_text для хранения списка пользователей, находящихся дома.
 #
 ################################################################################
@@ -24,27 +24,17 @@ telegram_bot:
     parse_mode: html
     allowed_chat_ids:
       - !secret chat_id_andrei
-      - !secret chat_id_tatsiana
+      - !secret chat_id_tatiana
 
 notify:
   # ----------------------------------------------------------------------------
   # Настройки сервисов уведомлений для конкретных получателей.
   # notify.master   -> отправляет сообщения в Telegram Andrei
-  # notify.Tatsiana -> отправляет сообщения в Telegram Tatiana
+  # notify.tatiana -> отправляет сообщения в Telegram Tatiana
   # ----------------------------------------------------------------------------
   - name: master
     platform: telegram
     chat_id: !secret chat_id_andrei
-  - name: Tatsiana
+  - name: tatiana
     platform: telegram
-    chat_id: !secret chat_id_tatsiana
-
-input_text:
-  # ----------------------------------------------------------------------------
-  # Текстовое поле, которое в автоматизации "Обновление списка пользователей,
-  # находящихся дома" хранит список имен тех, кто фактически находится дома.
-  # ----------------------------------------------------------------------------
-  currently_home:
-    name: "Currently Home"
-    min: 0
-    max: 255
+    chat_id: !secret chat_id_tatiana

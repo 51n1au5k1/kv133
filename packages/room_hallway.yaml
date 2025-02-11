@@ -110,13 +110,12 @@ automation:
     actions:
       - service: light.turn_on
         target:
-          entity_id: light.lumi_v3_7cdd_light
+          entity_id: light.gateway_light_04cf8c977cdd
         data:
           brightness_pct: 10
-      - delay: "00:05:00" # Время, в течение которого свет остается включенным
-      - service: light.turn_off
+      - service: timer.start
         target:
-          entity_id: light.lumi_v3_7cdd_light
+          entity_id: timer.timer_hallway
     mode: single
 
   # Запуск таймера при отсутствии движения
@@ -141,7 +140,7 @@ automation:
             entity_id: light.hallway_switch
             state: "on"
           - condition: state
-            entity_id: light.lumi_v3_7cdd_light
+            entity_id: light.gateway_light_04cf8c977cdd
             state: "on"
       - condition: not
         conditions:
@@ -193,13 +192,13 @@ automation:
         target:
           entity_id:
             - light.hallway_switch
-            - light.lumi_v3_7cdd_light
+            - light.gateway_light_04cf8c977cdd
     mode: single
 
   # Оповещения о нажатии кнопки звонка на входной двери
   # Воспроизведение звукового уведомления через Yandex Station и мигание светильников.
 
-  - id: "d03a5f5d-058f-4b9b-8977-adbc32a16640"
+  - id: "37a7b942-71ea-456e-8f9e-1718c8c34a8d"
     alias: "Уведомление. Яндекс: Звонок в дверь"
     description: >
       Алиса произносит случайную фразу и мигает светом через Xiaomi Gateway при нажатии кнопки.
@@ -210,20 +209,20 @@ automation:
         type: action
         subtype: single
     actions:
-      - service: script.yandex_click_outdoor_button # Вызов скрипта для воспроизведения звука
+      - service: script.yandex_tts_click_outdoor_button # Вызов скрипта для воспроизведения звука
       - repeat:
           count: 3
           sequence:
             - service: light.turn_on
               target:
                 entity_id:
-                  - light.lumi_v3_7cdd_light
+                  - light.gateway_light_04cf8c977cdd
                   - light.working_room_led
             - delay: "00:00:01"
             - service: light.turn_off
               target:
                 entity_id:
-                  - light.lumi_v3_7cdd_light
+                  - light.gateway_light_04cf8c977cdd
                   - light.working_room_led
             - delay: "00:00:01"
       - choose:
@@ -251,65 +250,8 @@ automation:
         type: action
         subtype: shake
     action:
-      - service: script.yandex_shaking_outdoor_button
-      - service: notify.master
+      - service: script.yandex_tts_shaking_outdoor_button
+      - action: notify.master
         data:
           message: "⚠️ Внимание! Входную кнопку пытаются снять 🛑"
-    mode: single
-
-  - id: "847c8b3f-04e4-4892-96be-48966feec167"
-    alias: "ТЕСТ! Уведомление. Видеодомофон: Звонок в дверь"
-    description: "Уведомление при нажатии кнопки видеодомофона."
-    trigger:
-      - platform: event
-        event_type: Doorbell Ring
-        event_data:
-          device_class: doorbell
-    condition: []
-    action:
-      - service: notify.master
-        data:
-          message: "⚠️ Внимание! Кто-то нажал кнопку видеодомофона! ВАРИАНТ 1"
-      - repeat:
-          count: 3
-          sequence:
-            - service: light.turn_on
-              target:
-                entity_id:
-                  - light.lumi_v3_7cdd_light
-                  - light.working_room_led
-            - delay: "00:00:01"
-            - service: light.turn_off
-              target:
-                entity_id:
-                  - light.lumi_v3_7cdd_light
-                  - light.working_room_led
-            - delay: "00:00:01"
-    mode: single
-
-  - id: "712c32d1-23ee-4a6b-89eb-4868f1891d3f"
-    alias: "ТЕСТ! Уведомление. Видеодомофон: Звонок в дверь"
-    description: "Уведомление при нажатии кнопки видеодомофона."
-    trigger:
-      - platform: event
-        event_type: madv_cn_329651133_miowlv2l_doorbell_ring_e_2_1
-    action:
-      - service: notify.master
-        data:
-          message: "⚠️ Внимание! Кто-то нажал кнопку видеодомофона! ВАРИАНТ 2"
-      - repeat:
-          count: 3
-          sequence:
-            - service: light.turn_on
-              target:
-                entity_id:
-                  - light.lumi_v3_7cdd_light
-                  - light.working_room_led
-            - delay: "00:00:01"
-            - service: light.turn_off
-              target:
-                entity_id:
-                  - light.lumi_v3_7cdd_light
-                  - light.working_room_led
-            - delay: "00:00:01"
     mode: single

@@ -18,21 +18,6 @@ input_datetime:
     has_date: true
     has_time: true
 
-recorder:
-  include:
-    entities:
-      - sensor.ficus_lyrata_soil_moisture
-      - sensor.ficus_lyrata_temperature
-      - sensor.ficus_lyrata_illuminance
-      - binary_sensor.plant_alert_ficus_lyrata_soil
-      - binary_sensor.plant_alert_ficus_lyrata_temperature
-      - binary_sensor.plant_alert_ficus_lyrata_illuminance
-      - input_datetime.last_ficus_soil_notification
-      - input_datetime.last_ficus_temperature_notification
-  exclude:
-    domains:
-      - automation
-
 binary_sensor:
   - platform: template
     sensors:
@@ -93,14 +78,14 @@ automation:
             entity_id: person.tatiana
             state: "home"
     action:
-      - service: notify.tatsiana
+      - action: notify.tatiana
         data_template: # Используем data_template вместо data
           message: "Фикус уже почти пикус...ой, поник! Подлей водички, дорогая, не жалей!"
           data:
             photo:
               file: "/config/www/images/plants_alerts/Ficus_lyrata_soil.webp"
               caption: "Фикус уже почти пикус...ой, поник! Подлей водички, дорогая, не жалей!"
-      - service: notify.master
+      - action: notify.master
         data_template: # Используем data_template вместо data
           message: "Необходимо полить Фикус: влажность почвы составляет {{ states('sensor.ficus_lyrata_soil_moisture') | round }}"
           data:
@@ -147,14 +132,14 @@ automation:
             entity_id: person.tatiana
             state: "home"
     action:
-      - service: notify.tatsiana
+      - action: notify.tatiana
         data_template: # Используем data_template вместо data
           message: "Фитозавры вымерли от холода, я не хочу повторить его судьбу!"
           data:
             photo:
               file: "/config/www/images/plants_alerts/Ficus_lyrata_cold.webp"
               caption: "Фитозавры вымерли от холода, я не хочу повторить его судьбу!"
-      - service: notify.master
+      - action: notify.master
         data_template: # Используем data_template вместо data
           message: "Фикус необходимо поставить в тёплое место, температура почвы составляет {{states('sensor.ficus_lyrata_temperature')|round}}"
           data:

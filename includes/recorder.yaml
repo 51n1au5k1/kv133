@@ -1,6 +1,5 @@
 db_url: !secret db_link
 purge_keep_days: 90
-purge_interval: 1 # ежедневная очистка старше 90 дней
 
 include:
   domains:
@@ -10,7 +9,6 @@ include:
     - binary_sensor
     - input_boolean
     - select
-  # если нужны другие домены (input_boolean, climate, и т.д.) — добавьте их сюда
 
 exclude:
   domains:
@@ -22,11 +20,15 @@ exclude:
     - automation
 
   entities:
-    # Системные сенсоры времени/даты
-    - sensor.time
-    - sensor.date
-
     # Служебные сенсоры Xiaomi, Mi Home, Zigbee2MQTT, не несущие пользы в истории
     - sensor.mi_66684496_message
     - sensor.mi_66684496_525001142665_scene_history
     - sensor.zhimi_mb3_a5d3_motor_speed
+    - sensor.co2_monitor_linkquality
+    - sensor.system_monitor_memory_usage
+    - sensor.system_monitor_processor_use
+
+  entity_globs:
+    - sensor.*_linkquality
+    - sensor.*_ble
+    - sensor.*_gateway

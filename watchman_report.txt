@@ -1,0 +1,26 @@
+-== Watchman Report ==- 
+
+-== Congratulations, all 33 actions from your config are available!
+
+-== Missing 8 entity(ies) from 174 found in your config:
++--------------------------------+---------+--------------------------------------------------------------+
+| Entity ID                      | State   | Location                                                     |
++--------------------------------+---------+--------------------------------------------------------------+
+| sensor.time                    | missing | includes/recorder.yaml:25                                    |
+| sensor.date                    | missing | includes/recorder.yaml:26                                    |
+| sensor.mi_66684496_message     | unavail | includes/recorder.yaml:29                                    |
+| sensor.mi_66684496_52500114266 | unavail | includes/recorder.yaml:30                                    |
+| 5_scene_history                |         |                                                              |
+| sensor.zhimi_mb3_a5d3_motor_sp | unavail | includes/recorder.yaml:31                                    |
+| eed                            |         |                                                              |
+| switch.zhimi_mb3_a5d3_switch_s | unavail | packages/helper.yaml:518,575                                 |
+| tatus                          |         |                                                              |
+| switch.chuangmi_ipc019_37da_sw | unavail | packages/helper.yaml:615,630                                 |
+| itch_status                    |         |                                                              |
+| switch.chuangmi_ipc019_37da_gl | unavail | packages/yandex_notifications.yaml:60                        |
+| immer_full_color               |         |                                                              |
++--------------------------------+---------+--------------------------------------------------------------+
+
+-== Report created on 05 Feb 2025 19:12:26
+-== Parsed 26 files in 5.86s., ignored 18 files 
+-== Generated in: 0.00s. Validated in: 0.00s.
