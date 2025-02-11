@@ -587,7 +587,7 @@ automation:
       - platform: event
         event_type: telegram_callback
         event_data:
-          data: ""/toggle_bedroom_scone_t"
+          data: "/toggle_bedroom_scone_t"
     action:
       - service: light.toggle
         entity_id: light.bedroom_left_switch_right
