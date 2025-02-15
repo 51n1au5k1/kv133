@@ -221,7 +221,7 @@ automation:
     alias: "Уведомление. Телеграм: Включение камеры"
     triggers:
       - platform: state
-        entity_id: group.camera_group
+        entity_id: group.cameras
         to: "on"
     conditions:
       - condition: or

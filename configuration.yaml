@@ -24,4 +24,4 @@ recorder: !include includes/recorder.yaml
 
 # Уровень логирования - только ошибки
 logger:
-  default: debug
+  default: error

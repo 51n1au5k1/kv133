@@ -93,8 +93,9 @@ automation:
       - service: light.turn_on
         data:
           brightness_pct: 10
-          # color_temp: 333
-          color_temp_kelvin: 3000 # Заменено с mireds (333) на кельвины (~3000K)
+          color_temp: 333
+          # color_temp_kelvin: 3000 # Заменено с mireds (333) на кельвины (~3000K)
+          # Заглушка для будущего, когда случится обновление 2026.2
         target:
           entity_id: "{{ trigger.entity_id }}"
 
@@ -128,8 +129,9 @@ automation:
           entity_id: "{{ trigger.entity_id }}"
         data:
           brightness_pct: 100
-          # color_temp: 175
-          color_temp_kelvin: 5700 # Заменено с mireds (175) на кельвины (~5700K)
+          color_temp: 175
+          # color_temp_kelvin: 5700 # Заменено с mireds (175) на кельвины (~5700K)
+          # Заглушка для будущего, когда случится обновление 2026.2
 
   - id: "0c5020c3-e674-4789-8086-38dbc07253d7"
     alias: "Ванная: Включение реле основного света при недоступности спотов"

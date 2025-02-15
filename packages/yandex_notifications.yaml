@@ -57,7 +57,7 @@ automation:
           entity_id: light.all_lights
       - service: switch.turn_on
         target:
-          entity_id: switch.chuangmi_ipc019_37da_glimmer_full_color
+          entity_id: group.cameras
       - choose:
           - conditions:
               - condition: state

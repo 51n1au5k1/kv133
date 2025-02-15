@@ -89,7 +89,7 @@ binary_sensor:
   - platform: template
     sensors:
       # Необходимость полива (Молочай): Активируется, когда влажность почвы
-      # опускается ниже заданного порога или превышает максимально допустимое значение.
+      # опускается ниже заданного порога.
       plant_alert_euphorbia_leuconeura_soil:
         unique_id: plant_alert_euphorbia_leuconeura_soil
         friendly_name: "Необходимость полива (Молочай)"
@@ -97,8 +97,7 @@ binary_sensor:
         value_template: >-
           {% set moisture = states('sensor.euphorbia_leuconeura_filtered_soil_moisture') | int(default=0) %}
           {% set min_threshold = states('number.euphorbia_leuconeura_min_soil_moisture') | int(default=0) %}
-          {% set max_threshold = states('number.euphorbia_leuconeura_max_soil_moisture') | int(default=0) %}
-          {{ (moisture > 0 and moisture < min_threshold) or (moisture > max_threshold) }}
+          {{ moisture > 0 and moisture < min_threshold }}
       # Необходимость согрева или охлаждения (Молочай): Сигнализирует о снижении температуры
       # почвы ниже комфортной для растения или превышении максимально допустимой температуры.
       plant_alert_euphorbia_leuconeura_temperature:
@@ -128,23 +127,39 @@ binary_sensor:
         unique_id: euphorbia_watering_needed_recently
         friendly_name: "Euphorbia Needs Watering Recently"
         value_template: >-
-          {% set last_notification = as_timestamp(states('input_datetime.last_euphorbia_soil_notification') | default(0)) %}
-          {{ is_state('binary_sensor.plant_alert_euphorbia_leuconeura_soil', 'on') and (as_timestamp(now()) - last_notification) > 10800 }}
+          {% set last_notification = states('input_datetime.last_euphorbia_soil_notification') | default('1970-01-01 00:00:00') %}
+          {% set last_notification_ts = as_timestamp(last_notification) %}
+          {{ is_state('binary_sensor.plant_alert_euphorbia_leuconeura_soil', 'on') and (as_timestamp(now()) - last_notification_ts) > 10800 }}
         delay_off:
           minutes: 1
+
+# Таймер, который сбрасывает бинарный сенсор через определенное время:
+timer:
+  euphorbia_watering_alert:
+    duration: "01:00:00"
 
 # Автоматизации
 
 automation:
-  # Уведомление о необходимости полива
+  - id: "a055cc6d-97b2-4bf2-9d7c-ab619bbed005"
+    alias: "Сброс тревоги о поливе"
+    trigger:
+      - platform: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.euphorbia_watering_alert
+    action:
+      - service: homeassistant.turn_off
+        entity_id: binary_sensor.plant_alert_euphorbia_leuconeura_soil
+
+    # Уведомление о необходимости полива
   - id: "4370eb06-5640-4c42-adde-b91046f301f4-1"
     alias: "Растение. Молочай: Уведомление о поливе"
-    description: "Отправляет уведомления о необходимости полива Молочая, если кто-то есть дома."
-    triggers:
+    trigger:
       - platform: state
         entity_id: binary_sensor.plant_alert_euphorbia_leuconeura_soil
         to: "on"
-    conditions:
+    condition:
       - condition: or
         conditions:
           - condition: state
@@ -153,34 +168,36 @@ automation:
           - condition: state
             entity_id: person.tatiana
             state: "home"
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
       - condition: template
-        value_template: >
-          {{ (as_timestamp(now()) - as_timestamp(states('input_datetime.last_euphorbia_soil_notification') | default(0))) > 10800 }}
-    actions:
+        value_template: >-
+          {% set last_notification_ts = as_timestamp(states('input_datetime.last_euphorbia_soil_notification') | default('1970-01-01 00:00:00')) %}
+          {{ (as_timestamp(now()) - last_notification_ts) > 10800 }}
+    action:
       - choose:
           - conditions:
               - condition: state
                 entity_id: person.master
                 state: "home"
             sequence:
-              - action: notify.master
-                data_template:
-                  message: "Необходимо полить Молочай: влажность почвы составляет {{ states('sensor.euphorbia_leuconeura_filtered_soil_moisture') }}%."
+              - service: notify.master
+                data:
+                  message: "Необходимо полить Молочай: влажность почвы {{ states('sensor.euphorbia_leuconeura_filtered_soil_moisture') }}%."
                   data:
                     photo:
                       file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_soil.webp"
-                      caption: "Необходимо полить Молочай: влажность почвы составляет {{ states('sensor.euphorbia_leuconeura_filtered_soil_moisture') }}%."
-        default:
-          - action: notify.tatiana
-            data_template:
-              message: "Необходимо полить Молочай: влажность почвы составляет {{ states('sensor.euphorbia_leuconeura_filtered_soil_moisture') }}%."
-              data:
-                photo:
-                  file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_soil.webp"
-                  caption: "Необходимо полить Молочай: влажность почвы составляет {{ states('sensor.euphorbia_leuconeura_filtered_soil_moisture') }}%."
+                      caption: "Необходимо полить Молочай!"
+          - conditions:
+              - condition: state
+                entity_id: person.tatiana
+                state: "home"
+            sequence:
+              - service: notify.tatiana
+                data:
+                  message: "Необходимо полить Молочай: влажность почвы {{ states('sensor.euphorbia_leuconeura_filtered_soil_moisture') }}%."
+                  data:
+                    photo:
+                      file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_soil.webp"
+                      caption: "Необходимо полить Молочай!"
       - service: input_datetime.set_datetime
         target:
           entity_id: input_datetime.last_euphorbia_soil_notification
@@ -193,7 +210,8 @@ automation:
           {% set history = states('input_text.notification_history_euphorbia') %}
           {% set new_entry = "Уведомление о поливе Молочая: " + now().strftime('%Y-%m-%d %H:%M:%S') %}
           {{ history + '\n' + new_entry if history|length < 1000 else new_entry }}
-    mode: single
+      - service: timer.start
+        entity_id: timer.euphorbia_watering_alert
 
   # Уведомление о необходимости тепла
   - id: "4370eb06-5640-4c42-adde-b91046f301f4-2"
@@ -287,18 +305,18 @@ automation:
               - action: notify.master
                 data_template:
                   message: "Молочай необходимо переместить в более освещенное место, освещенность составляет {{ states('sensor.euphorbia_leuconeura_filtered_illuminance') }} лк."
-                  data:
-                    photo:
-                      file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_dark.webp"
-                      caption: "Молочай необходимо переместить в более освещенное место, освещенность составляет {{ states('sensor.euphorbia_leuconeura_filtered_illuminance') }} лк."
+                  # data:
+                  #   photo:
+                  #     file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_dark.webp"
+                  #     caption: "Молочай необходимо переместить в более освещенное место, освещенность составляет {{ states('sensor.euphorbia_leuconeura_filtered_illuminance') }} лк."
         default:
           - action: notify.tatiana
             data_template:
               message: "Молочай необходимо переместить в более освещенное место, освещенность составляет {{ states('sensor.euphorbia_leuconeura_filtered_illuminance') }} лк."
-              data:
-                photo:
-                  file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_dark.webp"
-                  caption: "Молочай необходимо переместить в более освещенное место, освещенность составляет {{ states('sensor.euphorbia_leuconeura_filtered_illuminance') }} лк."
+              # data:
+              #   photo:
+              #     file: "/config/www/images/plants_alerts/Euphorbia_leuconeura_dark.webp"
+              #     caption: "Молочай необходимо переместить в более освещенное место, освещенность составляет {{ states('sensor.euphorbia_leuconeura_filtered_illuminance') }} лк."
       - service: input_datetime.set_datetime
         target:
           entity_id: input_datetime.last_euphorbia_illuminance_notification
