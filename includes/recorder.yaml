@@ -20,13 +20,25 @@ exclude:
     - automation
 
   entities:
-    # Служебные сенсоры Xiaomi, Mi Home, Zigbee2MQTT, не несущие пользы в истории
+    # Служебные сенсоры, не несущие пользы в истории
     - sensor.zhimi_mb3_a5d3_motor_speed
     - sensor.co2_monitor_linkquality
     - sensor.system_monitor_memory_usage
     - sensor.system_monitor_processor_use
+    - sensor.disk_pve_h_w_raid1_dev_sdb_size
+    - sensor.disk_pve_128gb_ssd_dev_sda_power_cycles
+    - sensor.disk_pve_128gb_ssd_dev_sda_power_on_hours
+    - sensor.disk_pve_128gb_ssd_dev_sda_size
+    - sensor.disk_pve_128gb_ssd_dev_sda_temperature
+    - sensor.node_pve_disk_used_percentage
+    - sensor.node_pve_memory_free
+    - binary_sensor.node_pve_updates_packages
+    - sensor.node_pve_total_updates
 
   entity_globs:
     - sensor.*_linkquality
     - sensor.*_ble
     - sensor.*_gateway
+    - sensor.*_last_boot
+    - sensor.*_memory_free
+    - sensor.*_memory_used_percentage

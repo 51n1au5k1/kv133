@@ -48,6 +48,7 @@
 # /bathroom_control   - Ванная
 # /hallway_control - Прихожая
 # /system_control  - Система (состояние сервера и сети)
+# /pve_status_refresh - Система виртуализации Proxmox Virtual Environment
 #
 # ====================================================================
 # Специфика реализации:
@@ -236,8 +237,40 @@ script:
                 [ ["🔴 Питание ванной" if is_state("light.bathroom_main", "off") else "🟢 Питание ванной", "/toggle_bathroom_power"] ],
                 [ ["🔴 Режим тишины" if is_state("input_boolean.silent_mode", "off") else "🟢 Режим тишины", "/toggle_silent_mode"] ],
                 [ ["🔴 Режим Force CCTV Off" if is_state("input_boolean.force_camera_off", "off") else "🟢 Режим Force CCTV Off", "/toggle_force_cctv_mode"] ],
+                [ ["⚠️ Система виртуализации", "/pve_status_refresh"] ],
                 [ ["⚠️ Перезагрузить систему", "/force_reboot"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/system_control"] ]
+              ] | tojson }}
+
+  send_pve_status:
+    alias: "Отправить статус PVE"
+    sequence:
+      - service: telegram_bot.send_message
+        data:
+          target: "{{ target }}"
+          parse_mode: html
+          message: |
+            <b>🖥 Статус нод и контейнеров</b>
+
+            <b>📊 Запущенные ВМ:</b> {{ states('sensor.node_pve_virtual_machines_running') }}
+            <b>📊 Запущенные контейнеры:</b> {{ states('sensor.node_pve_containers_running') }}
+
+            <b>🔥 Нагрузка CPU:</b>
+            <b>VM HAOS12:</b> {{ (states('sensor.qemu_haos12_3_100_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.qemu_haos12_3_100_cpu_used') | float | round(0)) }}%
+            <b>LXC MariaDB:</b> {{ (states('sensor.lxc_mariadb_101_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_mariadb_101_cpu_used') | float | round(0)) }}%
+            <b>LXC Jackett:</b> {{ (states('sensor.lxc_jackett_102_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_jackett_102_cpu_used') | float | round(0)) }}%
+            <b>LXC Jellyfin:</b> {{ (states('sensor.lxc_jellyfin_103_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_jellyfin_103_cpu_used') | float | round(0)) }}%
+            <b>LXC Deluge:</b> {{ (states('sensor.lxc_deluge_104_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_deluge_104_cpu_used') | float | round(0)) }}%
+
+          inline_keyboard: >
+            {{ [
+                [ ["🔄 Обновить", "/pve_status_refresh"] ],
+                [ ["🔄 Перезагрузить HAOS12", "/reboot_haos12"] ],
+                [ ["🟢 MariaDB", "/start_mariadb"], ["🔴 Остановить", "/stop_mariadb"], ["🔄 Перезагрузка", "/reboot_mariadb"] ],
+                [ ["🟢 Jackett", "/start_jackett"], ["🔴 Остановить", "/stop_jackett"], ["🔄 Перезагрузка", "/reboot_jackett"] ],
+                [ ["🟢 Jellyfin", "/start_jellyfin"], ["🔴 Остановить", "/stop_jellyfin"], ["🔄 Перезагрузка", "/reboot_jellyfin"] ],
+                [ ["🟢 Deluge", "/start_deluge"], ["🔴 Остановить", "/stop_deluge"], ["🔄 Перезагрузка", "/reboot_deluge"] ],
+                [ ["👈 В меню", "/menu_back"] ]
               ] | tojson }}
 
 automation:
@@ -259,6 +292,7 @@ automation:
       - service: script.send_main_menu
         data:
           target: "{{ trigger.event.data.chat_id }}"
+
   ##############################################################################
   # Обработчики меню
   ##############################################################################
@@ -954,3 +988,262 @@ automation:
       - delay:
           seconds: 5
       - service: homeassistant.restart
+  ##############################################################################
+  # Управление системой виртуализации Proxmox
+  ##############################################################################
+  # Обработчик команды обновления статуса PVE
+  - id: "telegram_bot_pve_status_refresh"
+    alias: "Telegram Bot PVE Status Refresh"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/pve_status_refresh"
+    action:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # Управление HAOS12 (Перезагрузка)
+  - id: "telegram_bot_reboot_haos12"
+    alias: "Telegram Bot Reboot HAOS12"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/reboot_haos12"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.qemu_haos12_3_100_reboot
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # Управление LXC MariaDB
+  - id: "telegram_bot_start_mariadb"
+    alias: "Telegram Bot Start LXC MariaDB"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/start_mariadb"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_mariadb_101_start
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_stop_mariadb"
+    alias: "Telegram Bot Stop LXC MariaDB"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/stop_mariadb"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_mariadb_101_stop
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_reboot_mariadb"
+    alias: "Telegram Bot Reboot LXC MariaDB"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/reboot_mariadb"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_mariadb_101_reboot
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # Аналогичные автоматизации для Jackett, Jellyfin, Deluge
+  - id: "telegram_bot_start_jackett"
+    alias: "Telegram Bot Start LXC Jackett"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/start_jackett"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_jackett_102_start
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_stop_jackett"
+    alias: "Telegram Bot Stop LXC Jackett"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/stop_jackett"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_jackett_102_stop
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_reboot_jackett"
+    alias: "Telegram Bot Reboot LXC Jackett"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/reboot_jackett"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_jackett_102_reboot
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  # Аналогично автоматизации для Jellyfin и Deluge
+
+  - id: "telegram_bot_start_jellyfin"
+    alias: "Telegram Bot Start LXC Jellyfin"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/start_jellyfin"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_jellyfin_103_start
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_stop_jellyfin"
+    alias: "Telegram Bot Stop LXC Jellyfin"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/stop_jellyfin"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_jellyfin_103_stop
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_reboot_jellyfin"
+    alias: "Telegram Bot Reboot LXC Jellyfin"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/reboot_jellyfin"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_jellyfin_103_reboot
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_start_deluge"
+    alias: "Telegram Bot Start LXC Deluge"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/start_deluge"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_deluge_104_start
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_stop_deluge"
+    alias: "Telegram Bot Stop LXC Deluge"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/stop_deluge"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_deluge_104_stop
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_reboot_deluge"
+    alias: "Telegram Bot Reboot LXC Deluge"
+    initial_state: true
+    trigger:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/reboot_deluge"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.lxc_deluge_104_reboot
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"

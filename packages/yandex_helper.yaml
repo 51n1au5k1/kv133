@@ -5,9 +5,9 @@
 # Яндекс устройствами через Home Assistant, позволяя расширить возможности
 # управления и взаимодействия с домашней автоматизацией. Конфигурация включает
 # в себя настройки для голосового управления, обработку погодных условий
-
+#
 # Настройки интеграции с Яндекс устройствами:
-
+#
 # Возможность вести диалоги через Яндекс станцию.
 
 conversation:
@@ -23,6 +23,7 @@ input_text:
   yandex_station_entity:
     name: "Yandex Station Entity"
     initial: "media_player.yandex_station_ff98f0294437799304d0788d"
+
 ################################################################################
 # Скрипты в Home Assistant представляют собой последовательности действий,
 # запускаемые в ответ на определённые события или команды.
@@ -118,6 +119,7 @@ script:
   yandex_tts_door_status:
     alias: "Yandex_TTS_Which_door_is_open"
     sequence:
+      # Проверяем, что тихий режим выключен
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
@@ -152,7 +154,7 @@ script:
             {% else %}
               "Все двери закрыты"
             {% endif %}
-
+      # Используем переменную для entity_id Яндекс Станции
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
       # Если условия выполнены, воспроизводим уведомление
@@ -163,13 +165,6 @@ script:
           media_content_id: "{{ door_message }}"
           media_content_type: "text"
 
-      - action: notify.master
-        data:
-          message: "{{ door_message }}"
-
-      - action: notify.tatiana
-        data:
-          message: "{{ door_message }}"
     mode: single
     icon: "yandex:alisa"
 

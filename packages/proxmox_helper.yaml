@@ -1,0 +1,58 @@
+# /packages/proxmox_helper.yaml
+# Пакет вспомогательных конфигураций для работы с Proxmox Virtual Environment (система виртуализации с открытым исходным кодом)
+
+input_number:
+  cpu_100:
+    name: CPU 100
+    min: 1
+    max: 4
+    step: 1
+    initial: 2
+  cpu_101:
+    name: CPU 101
+    min: 1
+    max: 4
+    step: 1
+    initial: 1
+  cpu_102:
+    name: CPU 102
+    min: 1
+    max: 4
+    step: 1
+    initial: 1
+  cpu_103:
+    name: CPU 103
+    min: 1
+    max: 4
+    step: 1
+    initial: 2
+  cpu_104:
+    name: CPU 104
+    min: 1
+    max: 4
+    step: 1
+    initial: 2
+
+sensor:
+  - platform: template
+    sensors:
+      qemu_haos12_3_100_cpu_used_normalized:
+        friendly_name: "CPU VM HAOS12 (нормализованная)"
+        value_template: >-
+          {{ (states('sensor.qemu_haos12_3_100_cpu_used') | float / states('input_number.cpu_100') | float) | round(2) if states('input_number.cpu_100') | float > 0 else 0 }}
+      lxc_mariadb_101_cpu_used_normalized:
+        friendly_name: "CPU LXC MariaDB (нормализованная)"
+        value_template: >-
+          {{ (states('sensor.lxc_mariadb_101_cpu_used') | float / states('input_number.cpu_101') | float) | round(2) if states('input_number.cpu_101') | float > 0 else 0 }}
+      lxc_jackett_102_cpu_used_normalized:
+        friendly_name: "CPU LXC Jackett (нормализованная)"
+        value_template: >-
+          {{ (states('sensor.lxc_jackett_102_cpu_used') | float / states('input_number.cpu_102') | float) | round(2) if states('input_number.cpu_102') | float > 0 else 0 }}
+      lxc_jellyfin_103_cpu_used_normalized:
+        friendly_name: "CPU LXC Jellyfin (нормализованная)"
+        value_template: >-
+          {{ (states('sensor.lxc_jellyfin_103_cpu_used') | float / states('input_number.cpu_103') | float) | round(2) if states('input_number.cpu_103') | float > 0 else 0 }}
+      lxc_deluge_104_cpu_used_normalized:
+        friendly_name: "CPU LXC Deluge (нормализованная)"
+        value_template: >-
+          {{ (states('sensor.lxc_deluge_104_cpu_used') | float / states('input_number.cpu_104') | float) | round(2) if states('input_number.cpu_104') | float > 0 else 0 }}
