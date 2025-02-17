@@ -1,0 +1,190 @@
+# /packages/plant_spathiphyllum.yaml
+############################################
+
+# Этот пакет конфигураций Home Assistant предназначен для мониторинга условий
+# содержания растения Спатифиллюм (spathiphyllum) и включает в себя механизмы
+# уведомлений о необходимости ухода.
+
+# Конфигурации
+# Входные Тексты и Даты
+
+input_text:
+  notification_history_spathiphyllum:
+    name: "Спатифиллюм: История уведомлений"
+
+input_datetime:
+  last_spathiphyllum_soil_notification:
+    name: "Last spathiphyllum Soil Notification Time"
+    has_date: true
+    has_time: true
+    initial: 1970-01-01 00:00:00
+  last_spathiphyllum_temperature_notification:
+    name: "Last spathiphyllum Temperature Notification Time"
+    has_date: true
+    has_time: true
+    initial: 1970-01-01 00:00:00
+
+# Сенсоры усредненных значений для устранения ложных срабатываний
+sensor:
+  - platform: filter
+    name: "spathiphyllum_filtered_temperature"
+    entity_id: sensor.spathiphyllum_temperature
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "01:00"
+        precision: 2
+  - platform: filter
+    name: "spathiphyllum_filtered_air_humidity"
+    entity_id: sensor.spathiphyllum_air_humidity
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "01:00"
+        precision: 2
+  - platform: filter
+    name: "spathiphyllum_filtered_soil_moisture"
+    entity_id: sensor.spathiphyllum_soil_moisture
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "01:00"
+        precision: 2
+
+# Бинарные датчики для мониторинга условий содержания растения
+binary_sensor:
+  - platform: template
+    sensors:
+      plant_alert_spathiphyllum_soil:
+        unique_id: plant_alert_spathiphyllum_soil
+        friendly_name: "Необходимость полива (Спатифиллюм)"
+        device_class: problem
+        value_template: >-
+          {% set moisture = states('sensor.spathiphyllum_filtered_soil_moisture') | float(default=0) %}
+          {% set min_threshold = states('number.spathiphyllum_min_soil_moisture') | float(default=0) %}
+          {{ moisture > 0 and moisture < min_threshold }}
+      plant_alert_spathiphyllum_temperature:
+        unique_id: plant_alert_spathiphyllum_temperature
+        friendly_name: "Необходимость согрева или охлаждения (Спатифиллюм)"
+        device_class: problem
+        value_template: >-
+          {% set temperature = states('sensor.spathiphyllum_filtered_temperature') | float(default=0) %}
+          {% set min_threshold = states('number.spathiphyllum_min_temperature') | float(default=0) %}
+          {% set max_threshold = states('number.spathiphyllum_max_temperature') | float(default=0) %}
+          {{ (temperature > 0 and temperature < min_threshold) or (temperature > max_threshold) }}
+      spathiphyllum_watering_needed_recently:
+        unique_id: spathiphyllum_watering_needed_recently
+        friendly_name: "Spathiphyllum Needs Watering Recently"
+        value_template: >-
+          {% set last_notification = states('input_datetime.last_spathiphyllum_soil_notification') %}
+          {% set last_notification_ts = as_timestamp(last_notification) if last_notification not in ['unknown', 'unavailable', 'none'] else 0 %}
+          {{ is_state('binary_sensor.plant_alert_spathiphyllum_soil', 'on') and (as_timestamp(now()) - last_notification_ts) > 10800 }}
+        delay_off:
+          minutes: 1
+
+# Таймер для сброса тревоги о поливе
+
+timer:
+  spathiphyllum_watering_alert:
+    duration: "01:00:00"
+
+# Скрипты для автоматизаций-уведомлений
+
+script:
+  spathiphyllum_notify:
+    description: "Отправляет уведомление о состоянии спатифиллюма."
+    fields:
+      type:
+        description: "Тип уведомления (watering/temperature)."
+        example: "watering"
+      value:
+        description: "Значение сенсора, влияющего на уведомление."
+        example: "30"
+    sequence:
+      - service: notify.master
+        data:
+          message: >-
+            {% if type == 'watering' %}
+              Необходимо полить Спатифиллюм: влажность почвы {{ value }}%.
+            {% elif type == 'temperature' %}
+              Спатифиллюм необходимо поставить в тёплое место, температура почвы {{ value }}°C.
+            {% endif %}
+      - service: notify.tatiana
+        data:
+          message: >-
+            {% if type == 'watering' %}
+              Необходимо полить Спатифиллюм: влажность почвы {{ value }}%.
+            {% elif type == 'temperature' %}
+              Спатифиллюм необходимо поставить в тёплое место, температура почвы {{ value }}°C.
+            {% endif %}
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.notification_history_spathiphyllum
+        data:
+          value: >-
+            {{ now().strftime('%Y-%m-%d %H:%M:%S') }}: 
+            {% if type == 'watering' %}
+              Уведомление о поливе. Влажность почвы: {{ value }}%.
+            {% elif type == 'temperature' %}
+              Уведомление о температуре. Температура почвы: {{ value }}°C.
+            {% endif %}
+
+# Автоматизации
+
+automation:
+  - id: "899fe2ae-f3b7-4db8-8a0c-a88b322a2c03"
+    alias: "Спатифиллюм: Сброс тревоги о поливе"
+    mode: restart
+    trigger:
+      - platform: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.spathiphyllum_watering_alert
+    action:
+      - service: homeassistant.turn_off
+        entity_id: binary_sensor.plant_alert_spathiphyllum_soil
+
+  - id: "4c025a11-ac97-455a-a895-65e54e19be34"
+    alias: "Растение. Спатифиллюм: Уведомление о поливе"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.plant_alert_spathiphyllum_soil
+        to: "on"
+    condition:
+      - condition: template
+        value_template: >-
+          {% set last_notification = states('input_datetime.last_spathiphyllum_soil_notification') %}
+          {% set last_notification_ts = as_timestamp(last_notification) if last_notification not in ['unknown', 'unavailable', 'none'] else 0 %}
+          {{ (as_timestamp(now()) - last_notification_ts) > 10800 }}
+    action:
+      - service: script.spathiphyllum_notify
+        data:
+          type: "watering"
+          value: "{{ states('sensor.spathiphyllum_filtered_soil_moisture') }}"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.last_spathiphyllum_soil_notification
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - service: timer.start
+        entity_id: timer.spathiphyllum_watering_alert
+
+  - id: "5c025a11-ac97-455a-a895-65e54e19be35"
+    alias: "Растение. Спатифиллюм: Уведомление о температуре"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.plant_alert_spathiphyllum_temperature
+        to: "on"
+    condition:
+      - condition: template
+        value_template: >-
+          {% set last_notification = states('input_datetime.last_spathiphyllum_temperature_notification') %}
+          {% set last_notification_ts = as_timestamp(last_notification) if last_notification not in ['unknown', 'unavailable', 'none'] else 0 %}
+          {{ (as_timestamp(now()) - last_notification_ts) > 10800 }}
+    action:
+      - service: script.spathiphyllum_notify
+        data:
+          type: "temperature"
+          value: "{{ states('sensor.spathiphyllum_filtered_temperature') }}"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.last_spathiphyllum_temperature_notification
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"

@@ -142,7 +142,7 @@ timer:
 
 automation:
   - id: "a055cc6d-97b2-4bf2-9d7c-ab619bbed005"
-    alias: "Сброс тревоги о поливе"
+    alias: "Молочай: Сброс тревоги о поливе"
     trigger:
       - platform: event
         event_type: timer.finished

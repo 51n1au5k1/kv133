@@ -1,9 +1,32 @@
 -== Watchman Report ==- 
 
--== Congratulations, all 46 actions from your config are available!
+-== Congratulations, all 50 actions from your config are available!
 
--== Congratulations, all 190 entities from your config are available!
+-== Missing 16 entity(ies) from 250 found in your config:
++--------------------------------+---------+--------------------------------------------------------------+
+| Entity ID                      | State   | Location                                                     |
++--------------------------------+---------+--------------------------------------------------------------+
+| sensor.node_pve_disk_used_perc | missing | includes/recorder.yaml:33                                    |
+| entage                         |         |                                                              |
+| update.terminal_ssh_update     | missing | packages/telegram_notifications.yaml:348                     |
+| button.qemu_haos12_3_100_reboo | unknown | packages/telegram_bot.yaml:1024                              |
+| t                              |         |                                                              |
+| button.lxc_mariadb_101_start   | unknown | packages/telegram_bot.yaml:1043                              |
+| button.lxc_mariadb_101_stop    | unknown | packages/telegram_bot.yaml:1061                              |
+| button.lxc_mariadb_101_reboot  | unknown | packages/telegram_bot.yaml:1079                              |
+| button.lxc_jackett_102_start   | unknown | packages/telegram_bot.yaml:1098                              |
+| button.lxc_jackett_102_stop    | unknown | packages/telegram_bot.yaml:1116                              |
+| button.lxc_jackett_102_reboot  | unknown | packages/telegram_bot.yaml:1134                              |
+| button.lxc_jellyfin_103_start  | unknown | packages/telegram_bot.yaml:1154                              |
+| button.lxc_jellyfin_103_stop   | unknown | packages/telegram_bot.yaml:1172                              |
+| button.lxc_jellyfin_103_reboot | unknown | packages/telegram_bot.yaml:1190                              |
+| button.lxc_deluge_104_start    | unknown | packages/telegram_bot.yaml:1208                              |
+| button.lxc_deluge_104_stop     | unknown | packages/telegram_bot.yaml:1226                              |
+| button.lxc_deluge_104_reboot   | unknown | packages/telegram_bot.yaml:1244                              |
+| input_text.notification_histor | unknown | packages/plant_spathiphyllum.yaml:119                        |
+| y_spathiphyllum                |         |                                                              |
++--------------------------------+---------+--------------------------------------------------------------+
 
--== Report created on 15 Feb 2025 19:43:43
--== Parsed 26 files in 17.94s., ignored 19 files 
+-== Report created on 17 Feb 2025 15:46:01
+-== Parsed 29 files in 6.04s., ignored 17 files 
 -== Generated in: 0.00s. Validated in: 0.00s.

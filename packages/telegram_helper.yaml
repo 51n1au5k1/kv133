@@ -31,10 +31,17 @@ notify:
   # Настройки сервисов уведомлений для конкретных получателей.
   # notify.master   -> отправляет сообщения в Telegram Andrei
   # notify.tatiana -> отправляет сообщения в Telegram Tatiana
+  # group_notifications -> группа для отправки для уведомлений обоим пользователям
   # ----------------------------------------------------------------------------
+
   - name: master
     platform: telegram
     chat_id: !secret chat_id_andrei
   - name: tatiana
     platform: telegram
     chat_id: !secret chat_id_tatiana
+  - platform: group
+    name: group_notifications
+    services:
+      - service: master
+      - service: tatiana
