@@ -105,7 +105,7 @@ automation:
         to: "on"
     conditions:
       - condition: numeric_state
-        entity_id: sensor.lumi_cn_132386223_v3_illumination_p_5_1
+        entity_id: sensor.illumination_04cf8c977cdd
         below: 450
     actions:
       - service: light.turn_on

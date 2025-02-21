@@ -122,8 +122,8 @@ script:
           parse_mode: html
           message: |
             <b>🏢 Текущее состояние в рабочем кабинете:</b>
-            <b>🌡 Температура:</b> {{ states('sensor.cgllc_dove_f637_temperature_2') }}°C
-            <b>💧 Влажность:</b> {{ states('sensor.cgllc_dove_f637_relative_humidity_2') }}%
+            <b>🌡 Температура:</b> {{ states('sensor.cgllc_cn_blt_3_15gd8656slo00_dove_temperature_p_2_1') }}°C
+            <b>💧 Влажность:</b> {{ states('sensor.cgllc_cn_blt_3_15gd8656slo00_dove_relative_humidity_p_2_2') }}%
             <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.masterskaia_balkon_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
           inline_keyboard: >
             {{ [

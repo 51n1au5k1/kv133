@@ -2,11 +2,49 @@
 ############################################
 
 # Этот пакет конфигураций Home Assistant предназначен для мониторинга условий
-# содержания растения Спатифиллюм (spathiphyllum) и включает в себя механизмы
-# уведомлений о необходимости ухода.
+# содержания растения Спатифиллюм (Spathiphyllum) и включает в себя механизмы
+# уведомлений о необходимости ухода. Пакет обеспечивает контроль за температурой,
+# влажностью воздуха и почвы, а также отправляет уведомления, если условия
+# выходят за допустимые пределы.
 
 # Конфигурации
 # Входные Тексты и Даты
+
+# История уведомлений Спатифиллюм: Хранит историю отправленных уведомлений о
+# состоянии растения.
+
+# Справочно по сенсорам:
+# sensor.spathiphyllum_temperature - фактическая температура
+# number.spathiphyllum_min_temperature - минимально допустимая температура
+# number.spathiphyllum_max_temperature - максимально допустимая температура
+# sensor.spathiphyllum_air_humidity - фактическая влажность воздуха
+# sensor.spathiphyllum_soil_moisture - фактическая влажность почвы
+# number.spathiphyllum_min_soil_moisture - минимально допустимая влажность почвы
+
+# Усредненные значения для устранения ложных срабатываний:
+# sensor.spathiphyllum_filtered_temperature - усредненная температура
+# sensor.spathiphyllum_filtered_air_humidity - усредненная влажность воздуха
+# sensor.spathiphyllum_filtered_soil_moisture - усредненная влажность почвы
+
+# Бинарные датчики:
+# binary_sensor.plant_alert_spathiphyllum_soil - сигнализирует о необходимости полива
+# binary_sensor.plant_alert_spathiphyllum_temperature - сигнализирует о недопустимой температуре
+# binary_sensor.spathiphyllum_watering_needed_recently - указывает на необходимость полива в последнее время
+
+# Таймер:
+# timer.spathiphyllum_watering_alert - используется для сброса тревоги о поливе
+
+# Скрипты:
+# script.spathiphyllum_notify - отправляет уведомления о состоянии растения
+
+# Автоматизации:
+# automation.spathiphyllum_watering_alert_reset - сбрасывает тревогу о поливе
+# automation.spathiphyllum_watering_notification - отправляет уведомление о необходимости полива
+# automation.spathiphyllum_temperature_notification - отправляет уведомление о недопустимой температуре
+
+# Условия и уведомления:
+# Уведомления отправляются только в том случае, если с момента последнего уведомления
+# прошло более 3 часов (10800 секунд). Это предотвращает частые повторные уведомления.
 
 input_text:
   notification_history_spathiphyllum:

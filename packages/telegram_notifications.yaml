@@ -345,8 +345,9 @@ automation:
           - update.log_viewer_update
           - update.mosquitto_broker_update
           - update.studio_code_server_update
-          - update.terminal_ssh_update
+          - update.advanced_ssh_web_terminal_update
           - update.zigbee2mqtt_update
+          - update.ps5_mqtt_update
         to: "on"
     actions:
       - action: notify.master

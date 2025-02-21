@@ -68,9 +68,9 @@ automation:
         for:
           minutes: 1
     condition:
-      - condition: state
-        entity_id: sensor.iphone_tatsiana_3_battery_state
-        state: "full"
+      # - condition: state
+      #   entity_id: sensor.iphone_tatsiana_3_battery_state
+      #   state: "full"
       - condition: time
         after: "01:00:00"
         before: "07:00:00"
