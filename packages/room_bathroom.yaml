@@ -2,23 +2,14 @@
 # /packages/room_bathroom.yaml
 ################################################################################
 #
-# Обновлённый пакет Home Assistant для управления ванной, учтены улучшения:
-# 1) Группировка датчиков движения (group.bathroom_motion_sensors), вместо
-#    ручного объединения в одном шаблонном датчике.
-# 2) Усреднение влажности с помощью filter-сенсора на 5 минут, чтобы уменьшить
-#    «дребезг» значений и избегать частых включений/выключений вентилятора.
-# 3) Добавлена задержка «продува» вентилятора после снижения влажности (2 минуты)
-#    чтобы вентилятор не выключался сразу.
+# Пакет для управления датчиками и вентиляцией ванной комнаты.
+# Здесь собраны настройки и автоматизации для контроля состояния помещения,
+# включая датчики движения, влажность и управление вентиляцией.
 #
 ################################################################################
 
 ##############################################################################
 #                              ГРУППА ДАТЧИКОВ
-##############################################################################
-#
-# Создаём группу датчиков движения в ванной (чтобы не собирать их «вручную»
-# в одном шаблоне). Если хотя бы один датчик «on», значит в ванной есть движение.
-#
 ##############################################################################
 group:
   bathroom_motion_sensors:
@@ -28,13 +19,7 @@ group:
       - binary_sensor.0x00158d0006ebbef4_occupancy
 
 ##############################################################################
-#                    СЕНСОР УСРЕДНЁННОЙ ВЛАЖНОСТИ (Filter Sensor)
-##############################################################################
-#
-# Используем новый сенсор, который получает данные из sensor.bathroom_th_2_humidity
-# и усредняет их по скользящему окну в 5 минут. Это смягчит быстрые колебания.
-#
-#
+#                        СЕНСОР УСРЕДНЁННОЙ ВЛАЖНОСТИ
 ##############################################################################
 sensor:
   - platform: filter
@@ -47,14 +32,7 @@ sensor:
         precision: 2
 
 ##############################################################################
-#                              ВХОДНЫЕ ПАРАМЕТРЫ
-##############################################################################
-#
-# Регулируемые пороги влажности. Теперь будем ссылаться на усреднённый сенсор
-# sensor.bathroom_filtered_humidity, а не на исходный
-# sensor.bathroom_th_2_humidity.
-# При желании можно оставить прежние настройки порогов.
-#
+#                             ВХОДНЫЕ ПАРАМЕТРЫ
 ##############################################################################
 input_number:
   bathroom_humidity_max_threshold:
@@ -73,17 +51,7 @@ input_number:
     unit_of_measurement: "%"
 
 ##############################################################################
-#                                 ДАТЧИКИ
-##############################################################################
-#
-# 1) bathroom_humidity_max / _min
-#    - теперь используют усреднённый сенсор
-#      sensor.bathroom_filtered_humidity
-# 2) bathroom_motions
-#    - теперь проще: is_state('group.bathroom_motion_sensors', 'on')
-# 3) bathroom_open_door, no_activity_in_bathroom_recently
-#    - остаются без изменений (при желании можно тоже вынести двери в группу).
-#
+#                                 БИНАРНЫЕ ДАТЧИКИ
 ##############################################################################
 binary_sensor:
   - platform: template
@@ -94,11 +62,11 @@ binary_sensor:
         device_class: problem
         value_template: >
           {% set humidity = states('sensor.vlazhnost_vannoi_usrednennaia_za_5_minut') %}
-          {% set threshold = states('input_number.bathroom_humidity_max_threshold') | float %}
-          {% if humidity not in ['unknown', 'unavailable'] %}
-            {{ humidity | float > threshold }}
-          {% else %}
+          {% set threshold = states('input_number.bathroom_humidity_max_threshold') | float(0) %}
+          {% if humidity in ['unknown', 'unavailable', 'none', ''] %}
             false
+          {% else %}
+            {{ (humidity | float(0)) > threshold }}
           {% endif %}
 
       bathroom_humidity_min:
@@ -107,20 +75,19 @@ binary_sensor:
         device_class: problem
         value_template: >
           {% set humidity = states('sensor.vlazhnost_vannoi_usrednennaia_za_5_minut') %}
-          {% set threshold = states('input_number.bathroom_humidity_min_threshold') | float %}
-          {% if humidity not in ['unknown', 'unavailable'] %}
-            {{ humidity | float < threshold }}
-          {% else %}
+          {% set threshold = states('input_number.bathroom_humidity_min_threshold') | float(0) %}
+          {% if humidity in ['unknown', 'unavailable', 'none', ''] %}
             false
+          {% else %}
+            {{ (humidity | float(0)) < threshold }}
           {% endif %}
 
       bathroom_open_door:
         unique_id: bathroom_open_door
         friendly_name: "Открытие дверей в ванной"
         value_template: >
-          {{ is_state('binary_sensor.bathroom_door_inside_contact', 'on') or 
+          {{ is_state('binary_sensor.bathroom_door_inside_contact', 'on') or
              is_state('binary_sensor.bathroom_door_outside_contact', 'on') }}
-
       bathroom_motions:
         unique_id: bathroom_motions
         friendly_name: "Движение в ванной"
@@ -142,180 +109,63 @@ binary_sensor:
           {% endif %}
 
 ##############################################################################
-#                                 ТАЙМЕРЫ
-##############################################################################
-#
-# 1) timer.timer_bathroom — отсчитывает 3 минуты после того, как
-#    пропало движение (или выключатель нажали вручную).
-# 2) timer.bathroom_fan_cooldown — дополнительный таймер на 2 минуты, чтобы
-#    дать вентилятору «продувку» после снижения влажности.
-#
+#                                ТАЙМЕРЫ
 ##############################################################################
 timer:
-  timer_bathroom:
-    name: "Движение отсутствует"
-    duration: "00:03:00"
-
   bathroom_fan_cooldown:
     name: "Продув вентилятора"
     duration: "00:02:00"
 
 ##############################################################################
-#                               АВТОМАТИЗАЦИИ
-##############################################################################
-#
-# 1) Включение вентилятора, когда bathroom_humidity_max → on (влажность выше
-#    порога), если сам вентилятор выключен.
-# 2) (Новая логика!) Когда влажность opускается ниже
-#    min (bathroom_humidity_min → on) —
-#    запускаем таймер bathroom_fan_cooldown вместо немедленного отключения.
-# 3) По истечении bathroom_fan_cooldown — выключаем вентилятор.
-# 4) Управление светом — неизменное: ручной выключатель, датчики движения,
-#    отсчёт таймера.
-#
+#                             АВТОМАТИЗАЦИИ
 ##############################################################################
 automation:
-  # 1) Включаем вентилятор при повышенной влажности
+  # --------------------------------------------------------------------------
+  # Включение вентилятора при повышенной влажности
+  # --------------------------------------------------------------------------
   - id: "dc1acbee-6ecd-45a4-8eae-ab69034c3117"
     alias: "Ванная: Вытяжка, включение."
-    description: "Включение вентилятора при высокой влажности (усреднённой)"
-    trigger:
+    description: "Включение вентилятора при высокой усреднённой влажности в ванной."
+    triggers:
       - platform: state
         entity_id: binary_sensor.bathroom_humidity_max
         to: "on"
-    condition:
+    conditions:
       - condition: state
         entity_id: fan.bathroom_relay_l1
         state: "off"
-    action:
+    actions:
       - service: fan.turn_on
         target:
           entity_id: fan.bathroom_relay_l1
 
-  # 2) Включаем таймер для «продува» вентилятора при нормализации влажности
+  # --------------------------------------------------------------------------
+  # Запуск таймера для продува вентилятора при снижении влажности
+  # --------------------------------------------------------------------------
   - id: "6ebb6fa8-9cd1-4ebd-839d-44d175e6c319"
     alias: "Ванная: Запуск таймера на продув по снижении влажности"
-    description: "Когда влажность упала ниже минимального порога — запустить отсчёт 2 минут, прежде чем выключить вентилятор"
-    trigger:
+    description: "При снижении влажности ниже минимального порога запускается таймер на 2 минуты перед отключением вентилятора."
+    triggers:
       - platform: state
         entity_id: binary_sensor.bathroom_humidity_min
         to: "on"
-    action:
+    actions:
       - service: timer.start
         target:
           entity_id: timer.bathroom_fan_cooldown
 
-  # 3) По истечении таймера (bathroom_fan_cooldown) — выключить вентилятор
+  # --------------------------------------------------------------------------
+  # Выключение вентилятора по истечении таймера продува
+  # --------------------------------------------------------------------------
   - id: "7a1db18b-0366-47cf-8260-6109b01447f9"
     alias: "Ванная: Выключение вентилятора по окончании продува"
-    description: "Автоматическое выключение вентилятора по таймеру (fan_cooldown)"
-    trigger:
+    description: "После истечения таймера bathroom_fan_cooldown вентилятора автоматически выключают."
+    triggers:
       - platform: event
         event_type: timer.finished
         event_data:
           entity_id: timer.bathroom_fan_cooldown
-    condition: []
-    action:
+    actions:
       - service: fan.turn_off
         target:
           entity_id: fan.bathroom_relay_l1
-
-  # 4) Управление освещением с ручного выключателя (MQTT)
-  - id: "5525cbdc-3a8d-4464-908e-795c8205b40c"
-    alias: "Ванная: Освещение, вкл/выкл с выключателя"
-    trigger:
-      - platform: device
-        domain: mqtt
-        device_id: cc6ef89720abb376a24e910e13f37902
-        type: action
-        subtype: single_left
-    action:
-      - service: light.toggle
-        target:
-          entity_id: light.light_bathroom
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: light.light_bathroom
-                state: "on"
-            sequence:
-              - service: timer.start
-                target:
-                  entity_id: timer.timer_bathroom
-
-  # 5) Включение света по движению/открытию (если нет режима уборки)
-  - id: "0007279c-13b5-402b-9aef-bf264273fa90"
-    alias: "Ванная: Освещение, вкл по движению и датчикам открытия"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.bathroom_open_door
-        to: "on"
-      - platform: state
-        entity_id: binary_sensor.bathroom_motions
-        to: "on"
-    condition:
-      - condition: state
-        entity_id: input_boolean.bathroom_cleaning_mode
-        state: "off"
-    action:
-      - service: light.turn_on
-        target:
-          entity_id: light.light_bathroom
-
-  # 6) Отмена таймера при повторном движении (если тот активен)
-  - id: "50323f55-c6dd-483a-8799-af3c57e3e363"
-    alias: "Ванная: Отмена таймера при обнаружении движения"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.bathroom_motions
-        to: "on"
-    condition:
-      - condition: state
-        entity_id: timer.timer_bathroom
-        state: "active"
-      - condition: state
-        entity_id: input_boolean.bathroom_cleaning_mode
-        state: "off"
-    action:
-      - service: timer.cancel
-        target:
-          entity_id: timer.timer_bathroom
-
-  # 7) Запуск таймера при отсутствии движения (1 минута)
-  - id: "e519fa4c-bbad-4b0d-b06c-8521b3b10131"
-    alias: "Ванная: Запуск таймера при отсутствии движения"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.bathroom_motions
-        to: "off"
-        for:
-          minutes: 1
-    condition:
-      - condition: state
-        entity_id: light.light_bathroom
-        state: "on"
-      - condition: state
-        entity_id: input_boolean.bathroom_cleaning_mode
-        state: "off"
-    action:
-      - service: timer.start
-        target:
-          entity_id: timer.timer_bathroom
-
-  # 8) Выключение света по истечении таймера
-  - id: "b30b7ad8-6563-4279-a78f-1a113f9cb252"
-    alias: "Ванная: Освещение, выключение по таймеру"
-    description: "Автоматически выключает свет по истечении установленного времени бездействия, не срабатывает в режиме уборки."
-    trigger:
-      - platform: event
-        event_type: timer.finished
-        event_data:
-          entity_id: timer.timer_bathroom
-    condition:
-      - condition: state
-        entity_id: input_boolean.bathroom_cleaning_mode
-        state: "off"
-    action:
-      - service: light.turn_off
-        target:
-          entity_id: light.light_bathroom

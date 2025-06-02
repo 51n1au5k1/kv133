@@ -14,7 +14,7 @@ automation:
     alias: "Уведомление. Яндекс: Приветствие"
     description: "Отключение камеры, включение света в прихожей и доклад о климате"
     triggers:
-      - trigger: event
+      - platform: event
         event_type: yandex_speaker
         event_data:
           value: "С возвращением, дорогой мне человек! Я скучала без тебя!"
@@ -45,7 +45,7 @@ automation:
     alias: "Уведомление. Яндекс: Прощание"
     description: "Выключает весь свет в доме, включает камеру в полноцветном режиме и произносит прощальное сообщение через Яндекс колонку."
     triggers:
-      - trigger: event
+      - platform: event
         event_type: yandex_speaker
         event_data:
           value: "Я буду скучать! Возвращайся быстрее"
@@ -67,14 +67,14 @@ automation:
               - action: notify.master
                 data:
                   message: "Свет в квартире выключен! Приятной дороги!"
-          - conditions:
-              - condition: state
-                entity_id: person.tatiana
-                state: "home"
-            sequence:
-              - action: notify.tatiana
-                data:
-                  message: "Свет в квартире выключен! Приятной дороги!"
+          # - conditions:
+          #     - condition: state
+          #       entity_id: person.tatiana
+          #       state: "home"
+          #   sequence:
+          #     - action: notify.tatiana
+          #       data:
+          #         message: "Свет в квартире выключен! Приятной дороги!"
     mode: single
 
   # Уведомление. Яндекс: Температура ниже установленного уровня
@@ -82,7 +82,7 @@ automation:
     alias: "Уведомление. Яндекс: Температура ниже установленного уровня"
     description: ""
     triggers:
-      - trigger: state
+      - platform: state
         entity_id: binary_sensor.temperature_below_20
         to: "on"
         for:

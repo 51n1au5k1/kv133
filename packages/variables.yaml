@@ -45,6 +45,13 @@ input_number:
     unit_of_measurement: "%"
     initial: 60 # Начальное значение; можно подкорректировать
 
+  pressure_correction_value:
+    name: "Поправка давления (мм рт.ст.)"
+    min: 0
+    max: 20
+    step: 0.5
+    unit_of_measurement: "мм рт.ст."
+    initial: 6 # Начальное значение
 ##############################################################################
 #                             TEMPLATE SENSORS
 ##############################################################################
@@ -191,73 +198,23 @@ sensor:
             неопределенные погодные условия
           {% endif %}
 
-      # ================================================================
-      # 4) Перевод состояний и направлений ветра для Яндекс Погоды
-      # ================================================================
-      yandex_weather4notion_wind:
-        friendly_name: "Направление ветра (Яндекс)"
+  # ================================================================
+  # Корректировка атмосферного давления (компенсация высоты)
+  # ================================================================
+  - platform: template
+    sensors:
+      livingroom_corrected_pressure:
+        unique_id: "livingroom_corrected_pressure"
+        friendly_name: "Скорректированное атмосферное давление"
+        unit_of_measurement: "мм рт.ст."
+        icon_template: "mdi:gauge"
         value_template: >-
-          {% set bearing = states('sensor.yandex_weather_wind_bearing') | int %}
-          {% if bearing == 0 %}
-            отсутствует (штиль)
-          {% elif bearing == 45 %}
-            северо-восточный
-          {% elif bearing == 90 %}
-            восточный
-          {% elif bearing == 135 %}
-            юго-восточный
-          {% elif bearing == 180 %}
-            южный
-          {% elif bearing == 225 %}
-            юго-западный
-          {% elif bearing == 270 %}
-            западный
-          {% elif bearing == 315 %}
-            северо-западный
+          {% set raw_pressure = states('sensor.livingroom_climat_sensor_pressure') | float(default=0) %}
+          {% set correction = states('input_number.pressure_correction_value') | float(default=6) %}
+          {% if raw_pressure > 0 %}
+            {{ (raw_pressure + correction) | round(1) }}
           {% else %}
-            северный
+            {{ 0 }}
           {% endif %}
-
-      yandex_weather4notion_conditions:
-        friendly_name: "Погодные условия (Яндекс, рус.)"
-        value_template: >-
-          {% set condition = states('sensor.yandex_weather_condition_yandex_2') %}
-          {% if condition == 'clear' %}
-            ясно
-          {% elif condition == 'partly-cloudy' %}
-            малооблачно
-          {% elif condition == 'cloudy' %}
-            облачно с прояснениями
-          {% elif condition == 'overcast' %}
-            пасмурно
-          {% elif condition == 'drizzle' %}
-            морось
-          {% elif condition == 'light-rain' %}
-            небольшой дождь
-          {% elif condition == 'rain' %}
-            дождь
-          {% elif condition == 'moderate-rain' %}
-            умеренно-сильный дождь
-          {% elif condition == 'heavy-rain' %}
-            сильный дождь
-          {% elif condition == 'continuous-heavy-rain' %}
-            длительный сильный дождь
-          {% elif condition == 'showers' %}
-            ливень
-          {% elif condition == 'wet-snow' %}
-            дождь со снегом
-          {% elif condition == 'light-snow' %}
-            небольшой снег
-          {% elif condition == 'snow' %}
-            снег
-          {% elif condition == 'snow-showers' %}
-            снегопад
-          {% elif condition == 'hail' %}
-            град
-          {% elif condition == 'thunderstorm' %}
-            гроза
-          {% elif condition == 'thunderstorm-with-rain' %}
-            дождь с грозой
-          {% else %}
-            гроза с градом
-          {% endif %}
+        availability_template: >-
+          {{ states('sensor.livingroom_climat_sensor_pressure') not in ['unknown', 'unavailable'] }}

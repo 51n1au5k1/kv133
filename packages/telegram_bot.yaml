@@ -261,6 +261,7 @@ script:
             <b>LXC Jackett:</b> {{ (states('sensor.lxc_jackett_102_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_jackett_102_cpu_used') | float | round(0)) }}%
             <b>LXC Jellyfin:</b> {{ (states('sensor.lxc_jellyfin_103_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_jellyfin_103_cpu_used') | float | round(0)) }}%
             <b>LXC Deluge:</b> {{ (states('sensor.lxc_deluge_104_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_deluge_104_cpu_used') | float | round(0)) }}%
+            <b>LXC TorrServer:</b> {{ (states('sensor.lxc_debian_105_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_debian_105_cpu_used') | float | round(0)) }}%
 
           inline_keyboard: >
             {{ [
@@ -270,20 +271,23 @@ script:
                 [ ["🟢 Jackett", "/start_jackett"], ["🔴 Остановить", "/stop_jackett"], ["🔄 Перезагрузка", "/reboot_jackett"] ],
                 [ ["🟢 Jellyfin", "/start_jellyfin"], ["🔴 Остановить", "/stop_jellyfin"], ["🔄 Перезагрузка", "/reboot_jellyfin"] ],
                 [ ["🟢 Deluge", "/start_deluge"], ["🔴 Остановить", "/stop_deluge"], ["🔄 Перезагрузка", "/reboot_deluge"] ],
+                [ ["🟢 TorrServer", "/start_torrserver"], ["🔴 Остановить", "/stop_torrserver"], ["🔄 Перезагрузка", "/reboot_torrserver"] ],
                 [ ["👈 В меню", "/menu_back"] ]
               ] | tojson }}
-
+##############################################################################
+#                             АВТОМАТИЗАЦИИ
+##############################################################################
 automation:
   # Приветственное сообщение (при вводе команды /start)
   - id: "telegram_bot_start"
     alias: "Telegram Bot Start (Приветствие)"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_command
         event_data:
           command: "/start"
-    action:
+    actions:
       - service: telegram_bot.send_message
         data:
           target: "{{ trigger.event.data.chat_id }}"
@@ -300,12 +304,12 @@ automation:
   - id: "telegram_bot_main_menu"
     alias: "Telegram Bot Main Menu"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_command
         event_data:
           command: "/main_menu"
-    action:
+    actions:
       - service: script.send_main_menu
         data:
           target: "{{ trigger.event.data.chat_id }}"
@@ -314,12 +318,12 @@ automation:
   - id: "telegram_bot_menu_back"
     alias: "Telegram Bot Menu Back"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/menu_back"
-    action:
+    actions:
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -332,12 +336,12 @@ automation:
   - id: "telegram_bot_livingroom_control"
     alias: "Telegram Bot Living Room Menu"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/livingroom_control"
-    action:
+    actions:
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -350,12 +354,12 @@ automation:
   - id: "telegram_bot_workroom_control"
     alias: "Telegram Bot Workroom Menu"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/workroom_control"
-    action:
+    actions:
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -368,12 +372,12 @@ automation:
   - id: "telegram_bot_bedroom_control"
     alias: "Telegram Bot Bedroom Menu"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/bedroom_control"
-    action:
+    actions:
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -386,12 +390,12 @@ automation:
   - id: "telegram_bot_kitchen_control"
     alias: "Telegram Bot Kitchen Menu"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/kitchen_control"
-    action:
+    actions:
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -404,12 +408,12 @@ automation:
   - id: "telegram_bot_bathroom_control"
     alias: "Telegram Bot Bathroom Menu"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/bathroom_control"
-    action:
+    actions:
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -422,12 +426,12 @@ automation:
   - id: "telegram_bot_hallway_control"
     alias: "Telegram Bot Hallway Menu"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/hallway_control"
-    action:
+    actions:
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -440,12 +444,12 @@ automation:
   - id: "telegram_bot_system_control"
     alias: "Telegram Bot System Control"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/system_control"
-    action:
+    actions:
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -460,12 +464,12 @@ automation:
   - id: "telegram_bot_toggle_livingroom_main_switch_left"
     alias: "Telegram Bot Toggle Livingroom Main Switch Left"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_main_switch_left"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.livingroom_main_switch_left
       - delay:
@@ -482,12 +486,12 @@ automation:
   - id: "telegram_bot_toggle_livingroom_main_switch_right"
     alias: "Telegram Bot Toggle Livingroom Main Switch Right"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_main_switch_right"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.livingroom_main_switch_right
       - delay:
@@ -503,12 +507,12 @@ automation:
   - id: "telegram_bot_toggle_livingroom_scone_dimmer"
     alias: "Telegram Bot Toggle Livingroom Main Scone"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_scone_dimmer"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.livingroom_scone_dimmer
       - delay:
@@ -528,12 +532,12 @@ automation:
   - id: "telegram_bot_toggle_workroom_light"
     alias: "Telegram Bot Toggle Workroom Light"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_workroom_light"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.workroom_switch
       - delay:
@@ -549,12 +553,12 @@ automation:
   - id: "telegram_bot_toggle_workroom_led"
     alias: "Telegram Bot Toggle Workroom LED"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_workroom_led"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.working_room_led
       - delay:
@@ -570,12 +574,12 @@ automation:
   - id: "telegram_bot_toggle_workroom_plug"
     alias: "Telegram Bot Toggle Workroom Plug"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_workroom_plug"
-    action:
+    actions:
       - service: switch.toggle
         entity_id: switch.smart_plug_in_unit_vykliuchatel
       - delay:
@@ -596,12 +600,12 @@ automation:
   - id: "telegram_bot_toggle_bedroom_light"
     alias: "Telegram Bot Toggle Bedroom Light"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_light"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.bedroom_switch_main
       - delay:
@@ -617,12 +621,12 @@ automation:
   - id: "telegram_bot_toggle_bedroom_scone_t"
     alias: "Telegram Bot Toggle Bedroom Tatiana's Scone"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_scone_t"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.bedroom_left_switch_right
       - delay:
@@ -638,12 +642,12 @@ automation:
   - id: "telegram_bot_toggle_bedroom_scone_a_small"
     alias: "Telegram Bot Toggle Bedroom Andrei's Scone Small"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_scone_a_small"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.bedroom_right_switch_left
       - delay:
@@ -659,12 +663,12 @@ automation:
   - id: "telegram_bot_toggle_bedroom__scone_a_big"
     alias: "Telegram Bot Toggle Bedroom Andrei's Scone Big"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_scone_a_big"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.bedroom_right_switch_right
       - delay:
@@ -680,12 +684,12 @@ automation:
   - id: "telegram_bot_toggle_bedroom_plug_left"
     alias: "Telegram Bot Toggle Bedroom Plug Left"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_plug_left"
-    action:
+    actions:
       - service: switch.toggle
         entity_id: switch.0x00158d0002530bd9
       - delay:
@@ -702,12 +706,12 @@ automation:
   - id: "telegram_bot_toggle_bedroom_plug_right"
     alias: "Telegram Bot Toggle Bedroom Plug Right"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_plug_right"
-    action:
+    actions:
       - service: switch.toggle
         entity_id: switch.0x00158d0002530ba3
       - delay:
@@ -726,12 +730,12 @@ automation:
   - id: "telegram_bot_toggle_kitchen_main_light"
     alias: "Telegram Bot Toggle Kitchen Main Light"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_kitchen_main_light"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.kitchen_main_light
       - delay:
@@ -748,12 +752,12 @@ automation:
   - id: "telegram_bot_toggle_kitchen_fartuh"
     alias: "Telegram Bot Toggle Kitchen Fartuh"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_kithcen_fartuh"
-    action:
+    actions:
       - service: switch.toggle
         entity_id: switch.kitchen_fartuh
       - delay:
@@ -772,12 +776,12 @@ automation:
   - id: "telegram_bot_toggle_bathroom_light"
     alias: "Telegram Bot Toggle Bathroom Light"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bathroom_light"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.light_bathroom
       - delay:
@@ -794,12 +798,12 @@ automation:
   - id: "telegram_bot_toggle_bathroom_fan"
     alias: "Telegram Bot Toggle Bathroom Fan"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bathroom_fan"
-    action:
+    actions:
       - service: fan.toggle
         entity_id: fan.bathroom_relay_l1
       - delay:
@@ -818,12 +822,12 @@ automation:
   - id: "telegram_bot_toggle_hallway_light"
     alias: "Telegram Bot Toggle Hallway Light"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_hallway_light"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.hallway_switch
       - delay:
@@ -840,12 +844,12 @@ automation:
   - id: "telegram_bot_toggle_hallway_gateway_light"
     alias: "Telegram Bot Toggle Hallway Gateway Light"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_hallway_gateway_light"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.gateway_light_04cf8c977cdd
       - delay:
@@ -864,12 +868,12 @@ automation:
   - id: "telegram_bot_toggle_router_socket"
     alias: "Telegram Bot Toggle Router Socket"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_router_socket"
-    action:
+    actions:
       - service: switch.toggle
         entity_id: switch.my_multi_outlet_left
       - delay:
@@ -886,12 +890,12 @@ automation:
   - id: "telegram_bot_toggle_minipc_socket"
     alias: "Telegram Bot Toggle MiniPC Socket"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_minipc_socket"
-    action:
+    actions:
       - service: switch.toggle
         entity_id: switch.my_multi_outlet_right
       - delay:
@@ -908,12 +912,12 @@ automation:
   - id: "telegram_bot_toggle_bathroom_power"
     alias: "Telegram Bot Toggle Bathroom Power"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bathroom_power"
-    action:
+    actions:
       - service: light.toggle
         entity_id: light.bathroom_main
       - delay:
@@ -930,12 +934,12 @@ automation:
   - id: "telegram_bot_toggle_silent_mode"
     alias: "Telegram Bot Toggle Silent Mode"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_silent_mode"
-    action:
+    actions:
       - service: input_boolean.toggle
         entity_id: input_boolean.silent_mode
       - delay:
@@ -952,12 +956,12 @@ automation:
   - id: "telegram_bot_toggle_force_cctv_mode"
     alias: "Telegram Bot Toggle Force CCTV Off Mode"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_force_cctv_mode"
-    action:
+    actions:
       - service: input_boolean.toggle
         entity_id: input_boolean.force_camera_off
       - delay:
@@ -974,12 +978,12 @@ automation:
   - id: "telegram_bot_force_reboot"
     alias: "Telegram Bot Force Reboot"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/force_reboot"
-    action:
+    actions:
       - service: telegram_bot.send_message
         data:
           target: "{{ trigger.event.data.chat_id }}"
@@ -995,12 +999,12 @@ automation:
   - id: "telegram_bot_pve_status_refresh"
     alias: "Telegram Bot PVE Status Refresh"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/pve_status_refresh"
-    action:
+    actions:
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -1013,12 +1017,12 @@ automation:
   - id: "telegram_bot_reboot_haos12"
     alias: "Telegram Bot Reboot HAOS12"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_haos12"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.qemu_haos12_3_100_reboot
@@ -1032,12 +1036,12 @@ automation:
   - id: "telegram_bot_start_mariadb"
     alias: "Telegram Bot Start LXC MariaDB"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/start_mariadb"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_mariadb_101_start
@@ -1050,12 +1054,12 @@ automation:
   - id: "telegram_bot_stop_mariadb"
     alias: "Telegram Bot Stop LXC MariaDB"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/stop_mariadb"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_mariadb_101_stop
@@ -1068,12 +1072,12 @@ automation:
   - id: "telegram_bot_reboot_mariadb"
     alias: "Telegram Bot Reboot LXC MariaDB"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_mariadb"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_mariadb_101_reboot
@@ -1087,12 +1091,12 @@ automation:
   - id: "telegram_bot_start_jackett"
     alias: "Telegram Bot Start LXC Jackett"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/start_jackett"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_jackett_102_start
@@ -1105,12 +1109,12 @@ automation:
   - id: "telegram_bot_stop_jackett"
     alias: "Telegram Bot Stop LXC Jackett"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/stop_jackett"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_jackett_102_stop
@@ -1123,12 +1127,12 @@ automation:
   - id: "telegram_bot_reboot_jackett"
     alias: "Telegram Bot Reboot LXC Jackett"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_jackett"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_jackett_102_reboot
@@ -1143,12 +1147,12 @@ automation:
   - id: "telegram_bot_start_jellyfin"
     alias: "Telegram Bot Start LXC Jellyfin"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/start_jellyfin"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_jellyfin_103_start
@@ -1161,12 +1165,12 @@ automation:
   - id: "telegram_bot_stop_jellyfin"
     alias: "Telegram Bot Stop LXC Jellyfin"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/stop_jellyfin"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_jellyfin_103_stop
@@ -1179,12 +1183,12 @@ automation:
   - id: "telegram_bot_reboot_jellyfin"
     alias: "Telegram Bot Reboot LXC Jellyfin"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_jellyfin"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_jellyfin_103_reboot
@@ -1197,12 +1201,12 @@ automation:
   - id: "telegram_bot_start_deluge"
     alias: "Telegram Bot Start LXC Deluge"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/start_deluge"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_deluge_104_start
@@ -1215,12 +1219,12 @@ automation:
   - id: "telegram_bot_stop_deluge"
     alias: "Telegram Bot Stop LXC Deluge"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/stop_deluge"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_deluge_104_stop
@@ -1233,15 +1237,69 @@ automation:
   - id: "telegram_bot_reboot_deluge"
     alias: "Telegram Bot Reboot LXC Deluge"
     initial_state: true
-    trigger:
+    triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_deluge"
-    action:
+    actions:
       - service: button.press
         target:
           entity_id: button.lxc_deluge_104_reboot
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_start_torrserver"
+    alias: "Telegram Bot Start LXC TorrServer"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/start_torrserver"
+    actions:
+      - service: button.press
+        target:
+          entity_id: button.lxc_debian_105_start
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_stop_torrserver"
+    alias: "Telegram Bot Stop LXC TorrServer"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/stop_torrserver"
+    actions:
+      - service: button.press
+        target:
+          entity_id: button.lxc_debian_105_stop
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_reboot_torrserver"
+    alias: "Telegram Bot Reboot LXC TorrServer"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/reboot_torrserver"
+    actions:
+      - service: button.press
+        target:
+          entity_id: button.lxc_debian_105_reboot
       - delay:
           seconds: 5
       - service: script.send_pve_status

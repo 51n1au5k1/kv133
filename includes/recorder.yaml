@@ -1,14 +1,68 @@
-db_url: !secret db_link
+# Настройки ъранения инфы в БД
+db_url: !secret db_link # Формат: mysql://user:pass@IP/db_name?charset=utf8mb4
+db_max_retries: 20 # Увеличено для MariaDB
+db_retry_wait: 5 # Увеличено для MariaDB
+auto_purge: false
 purge_keep_days: 90
+auto_repack: false # Для MariaDB лучше управлять вручную
+commit_interval: 30 # Снижает нагрузку на диск
 
 include:
   domains:
     - light
     - switch
-    - sensor
     - binary_sensor
     - input_boolean
     - select
+    - climate
+    - timer
+  entity_globs:
+    - sensor.temperature_*
+    - sensor.humidity_*
+    - binary_sensor.*_contact
+    - binary_sensor.*_occupancy
+    - automation.*
+  entities:
+    # Климатические
+    - sensor.livingroom_corrected_pressure
+    - sensor.livingroom_average_temperature
+    - sensor.livingroom_average_humidity
+    - sensor.bedroom_th_sensor_temperature
+    - sensor.bedroom_th_sensor_humidity
+    - sensor.cgllc_cn_blt_3_15gd8656slo00_dove_temperature_p_2_1
+    - sensor.cgllc_cn_blt_3_15gd8656slo00_dove_relative_humidity_p_2_2
+    - sensor.bathroom_th_2_temperature
+    - sensor.bathroom_th_2_humidity
+    - sensor.vlazhnost_vannoi_usrednennaia_za_5_minut
+    - sensor.uroven_co2_sglazhennyi
+    - sensor.co2_monitor_co2
+    - sensor.0xa4c13861a18df7c8_temperature
+    - sensor.0xa4c13861a18df7c8_humidity
+    # Системные
+    - sensor.maria_db_size
+    - sensor.node_pve_cpu_used
+    - sensor.qemu_haos12_3_100_cpu_used_normalized
+    - sensor.lxc_mariadb_101_cpu_used_normalized
+    - sensor.lxc_jackett_102_cpu_used_normalized
+    - sensor.lxc_jellyfin_103_cpu_used_normalized
+    - sensor.lxc_deluge_104_cpu_used_normalized
+    - sensor.lxc_debian_105_cpu_used_normalized
+    - sensor.node_pve_memory_used
+    - sensor.qemu_haos12_3_100_memory_used
+    - sensor.lxc_mariadb_101_memory_used
+    - sensor.lxc_jackett_102_memory_used
+    - sensor.lxc_jellyfin_103_memory_used
+    - sensor.lxc_deluge_104_memory_used
+    - sensor.lxc_debian_105_memory_used
+    - sensor.qemu_haos12_3_100_last_boot
+    # Медиа
+    - media_player.televizor_v_gostinoi
+    - media_player.televizor_v_gostinoi_2
+    - media_player.yandex_station_ff98f0294437799304d0788d
+    - sensor.vremia_igry_na_ps5_segodnia_2
+    # Погода
+    # - sensor.open_meteo_temperature
+    - weather.yandex_weather
 
 exclude:
   domains:
@@ -16,29 +70,17 @@ exclude:
     - camera
     - button
     - script
-    - media_player
-    - automation
-
-  entities:
-    # Служебные сенсоры, не несущие пользы в истории
-    - sensor.zhimi_mb3_a5d3_motor_speed
-    - sensor.co2_monitor_linkquality
-    - sensor.system_monitor_memory_usage
-    - sensor.system_monitor_processor_use
-    - sensor.disk_pve_h_w_raid1_dev_sdb_size
-    - sensor.disk_pve_128gb_ssd_dev_sda_power_cycles
-    - sensor.disk_pve_128gb_ssd_dev_sda_power_on_hours
-    - sensor.disk_pve_128gb_ssd_dev_sda_size
-    - sensor.disk_pve_128gb_ssd_dev_sda_temperature
-    - sensor.node_pve_disk_used_percentage
-    - sensor.node_pve_memory_free
-    - binary_sensor.node_pve_updates_packages
-    - sensor.node_pve_total_updates
-
+    - vacuum
   entity_globs:
     - sensor.*_linkquality
-    - sensor.*_ble
-    - sensor.*_gateway
-    - sensor.*_last_boot
-    - sensor.*_memory_free
-    - sensor.*_memory_used_percentage
+    - sensor.*_power_*
+    - binary_sensor.*_battery_low
+    - sensor.*_battery
+    - sensor.system_monitor_*
+    - sensor.node_pve_*
+  entities:
+    - sensor.uptime
+    - binary_sensor.backups_stale
+
+  # Ссылка на сервер MariaDB в секретах по шаблону:
+  # db_link: mysql://user:pass@IP/homeassistant?charset=utf8mb4&ssl=true

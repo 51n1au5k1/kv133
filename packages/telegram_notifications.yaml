@@ -5,6 +5,10 @@
 # Этот пакет Home Assistant реализует интеграцию с Telegram для отправки
 # различных уведомлений, обеспечивая мгновенное оповещение пользователей
 # о событиях в «умном доме». Он включает:
+#
+# Скрипты:
+#    • Формирование и отправка ежедневного прогноза погоды
+#
 # Автоматизации, отправляющие сообщения при:
 #    • Запуске/выключении Home Assistant.
 #    • Открытии входной двери в отсутствие владельца.
@@ -21,6 +25,135 @@
 #
 ################################################################################
 
+##############################################################################
+#                                  СКРИПТЫ
+##############################################################################
+script:
+  # ----------------------------------------------------------------------------
+  # Формирование и отправка прогноза погоды
+  # ----------------------------------------------------------------------------
+  # Этот скрипт собирает данные о текущей погоде и прогнозе на день,
+  # форматирует их с соответствующими эмодзи и отправляет пользователям.
+  # Используется сервисами: Open-meteo API и weather.kvartira_133
+  # ----------------------------------------------------------------------------
+  telegram_send_weather_forecast:
+    description: "Формирует и отправляет прогноз погоды указанному получателю"
+    fields:
+      recipient:
+        description: "Получатель (notify.master или notify.tatiana)"
+        example: "notify.master"
+        required: true
+    sequence:
+      # Подготовка заголовка
+      - variables:
+          today_date: "{{ now().strftime('%d.%m.%Y') }}"
+          title: "<b>Прогноз погоды на <u>{{ today_date }}</u></b>"
+
+          # Текущие погодные условия
+          current_condition: "{{ states('sensor.open_meteo_opisanie_na_russkom') }}"
+          current_temperature: "{{ state_attr('weather.kvartira_133', 'temperature') }}"
+          current_wind: "{{ states('sensor.open_meteo_weather4notion_wind') }}"
+          current_wind_speed: "{{ state_attr('weather.kvartira_133', 'wind_speed') }}"
+          precipitation_unit: "{{ state_attr('weather.kvartira_133', 'precipitation_unit') }}"
+          pressure: "{{ state_attr('sensor.livingroom_corrected_pressure', 'pressure') | default(735, true) | round(2) }}"
+
+          # Иконка для текущего состояния погоды
+          weather_icon: >-
+            {% if current_condition == 'ясно' %}☀️
+            {% elif current_condition == 'малооблачно' %}⛅
+            {% elif current_condition == 'облачно с прояснениями' %}☁️
+            {% elif current_condition == 'пасмурно' %}🌥
+            {% elif current_condition == 'туман' %}🌫
+            {% elif current_condition == 'морось' %}🌦
+            {% elif current_condition == 'дождливо' %}🌧
+            {% elif current_condition == 'небольшой дождь' %}🌦
+            {% elif current_condition == 'дождь' %}🌧
+            {% elif current_condition == 'ливень' %}⛈
+            {% elif current_condition == 'снег' %}❄️
+            {% elif current_condition == 'сильный снег' %}🌨
+            {% elif current_condition == 'дождь со снегом' %}🌧❄️
+            {% elif current_condition == 'гроза' %}⚡
+            {% else %}🌈{% endif %}
+
+      # Отправка сообщения с прогнозом
+      - service: "{{ recipient }}"
+        data:
+          title: "{{ title }}"
+          message: >-
+            {{ weather_icon }} <b>Сейчас:</b> {{ current_condition }}
+
+            🌡 <b>Температура:</b> {{ current_temperature }}°C
+            🌬 <b>Ветер:</b> {{ current_wind }}, {{ current_wind_speed }} м/с
+
+            {% if precipitation_unit == 'mm' %}
+            🌧 <b>Осадки:</b> {{ state_attr('weather.kvartira_133', 'precipitation') | default(0, true) }} мм
+            {% else %}
+            ☀ <b>Осадки:</b> Не ожидаются
+            {% endif %}
+
+            <b>📅 Прогноз на сегодня:</b>
+
+            {% for forecast in state_attr('weather.kvartira_133', 'forecast') | default([], true) %}
+              {% set forecast_date = forecast.datetime | as_datetime %}
+              {% if forecast_date.date() == now().date() %}
+                {% set condition = forecast.condition %}
+                {% set icon = '☀️' if condition == 'sunny' else 
+                              '⛅' if condition == 'partlycloudy' else 
+                              '☁️' if condition == 'cloudy' else 
+                              '🌥' if condition == 'overcast' else 
+                              '🌫' if condition == 'fog' else 
+                              '🌦' if condition == 'drizzle' or condition == 'light-rain' else 
+                              '🌧' if condition == 'rainy' or condition == 'rain' else 
+                              '⛈' if condition == 'pouring' else 
+                              '❄️' if condition == 'snowy' else 
+                              '🌨' if condition == 'snowy-heavy' else 
+                              '🌧❄️' if condition == 'sleet' else 
+                              '⚡' if condition == 'lightning' else 
+                              '🌈' %}
+                
+                {% set condition_ru = 'ясно' if condition == 'sunny' else 
+                                      'малооблачно' if condition == 'partlycloudy' else 
+                                      'облачно с прояснениями' if condition == 'cloudy' else 
+                                      'пасмурно' if condition == 'overcast' else 
+                                      'туман' if condition == 'fog' else 
+                                      'морось' if condition == 'drizzle' else 
+                                      'дождливо' if condition == 'rainy' else 
+                                      'небольшой дождь' if condition == 'light-rain' else 
+                                      'дождь' if condition == 'rain' else 
+                                      'ливень' if condition == 'pouring' else 
+                                      'снег' if condition == 'snowy' else 
+                                      'сильный снег' if condition == 'snowy-heavy' else 
+                                      'дождь со снегом' if condition == 'sleet' else 
+                                      'гроза' if condition == 'lightning' else 
+                                      'неопределенные погодные условия' %}
+                
+                <b>{{ forecast_date | as_local | as_timestamp | timestamp_custom('%H:%M') }}</b> {{ icon }}
+                ▸ {{ condition_ru }}
+                ▸ Температура: {{ forecast.temperature }}°C
+                ▸ Ветер: {{ forecast.wind_bearing | float | default(0) | int }}° 
+                  ({{ '⬆️ северный' if forecast.wind_bearing < 22.5 or forecast.wind_bearing >= 337.5 else 
+                      '↗️ северо-восточный' if forecast.wind_bearing < 67.5 else 
+                      '➡️ восточный' if forecast.wind_bearing < 112.5 else 
+                      '↘️ юго-восточный' if forecast.wind_bearing < 157.5 else 
+                      '⬇️ южный' if forecast.wind_bearing < 202.5 else 
+                      '↙️ юго-западный' if forecast.wind_bearing < 247.5 else 
+                      '⬅️ западный' if forecast.wind_bearing < 292.5 else 
+                      '↖️ северо-западный' }}), 
+                  {{ forecast.wind_speed }} м/с
+                ▸ {% if 'precipitation' in forecast and forecast.precipitation | float > 0 %}
+                  🌧 {{ forecast.precipitation }} мм
+                {% else %}
+                  ☀ Без осадков
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            <b>Атмосферное давление:</b> {{ pressure }} мм рт.ст.
+            (<i>{{ '⬆️ выше нормы' if pressure > 740 else '⬇️ ниже нормы' if pressure < 738 else '🟢 нормальное' }}</i>)
+
+##############################################################################
+#                             АВТОМАТИЗАЦИИ
+##############################################################################
 automation:
   # ----------------------------------------------------------------------------
   # Уведомление: Прогноз погоды
@@ -28,124 +161,24 @@ automation:
   # Отправляет в Telegram ежедневный прогноз погоды.
   # Триггер установлен на 07:45:00 (каждое утро).
   # Отправляется по отдельности Андрею (notify.master) и Татьяне (notify.tatiana).
-  # Включает текущую погоду и прогноз на весь день.
+  # Включает текущую погоду и прогноз на весь день от Open-meteo.
   # ----------------------------------------------------------------------------
   - id: "ac0837cf-9ecb-413b-96fb-89552934212d"
     alias: "Уведомление. Телеграм: Прогноз погоды"
     description: "Отправляет прогноз погоды на сегодня в Телеграм каждое утро."
-    trigger:
+    triggers:
       - platform: time
         at: "07:45:00"
-    action:
-      - action: notify.master
+    actions:
+      # Отправка прогноза Андрею
+      - service: script.telegram_send_weather_forecast
         data:
-          title: "<b>Прогноз погоды на <u>{{ now().strftime('%d.%m.%Y') }}</u></b>"
-          message: >-
-            {% set condition = states('sensor.open_meteo_opisanie_na_russkom') %}
-            {% if condition == 'ясно' %}☀️{% elif condition == 'малооблачно' %}⛅
-            {% elif condition == 'облачно с прояснениями' %}☁️{% elif condition == 'пасмурно' %}🌥
-            {% elif condition == 'туман' %}🌫{% elif condition == 'морось' %}🌦
-            {% elif condition == 'дождливо' %}🌧{% elif condition == 'небольшой дождь' %}🌦
-            {% elif condition == 'дождь' %}🌧{% elif condition == 'ливень' %}⛈
-            {% elif condition == 'снег' %}❄️{% elif condition == 'сильный снег' %}🌨
-            {% elif condition == 'дождь со снегом' %}🌧❄️{% elif condition == 'гроза' %}⚡
-            {% else %}🌈{% endif %} <b>Сейчас:</b> {{ condition }}
+          recipient: notify.master
 
-            🌡 <b>Температура:</b> {{ state_attr('weather.kvartira_133', 'temperature') }}°C
-            🌬 <b>Ветер:</b> {{ states('sensor.open_meteo_weather4notion_wind') }}, {{ state_attr('weather.kvartira_133', 'wind_speed') }} м/с
-
-            {% if state_attr('weather.kvartira_133', 'precipitation_unit') == 'mm' %}
-            🌧 <b>Осадки:</b> Ожидаются
-            {% else %}
-            ☀ <b>Осадки:</b> Не ожидаются
-            {% endif %}
-
-            <b>📅 Прогноз на сегодня:</b>
-
-            {% for forecast in state_attr('weather.yandex_weather', 'forecast') | default([]) %}
-              {%- set forecast_date_str = forecast.datetime | string -%}
-              {%- set forecast_date = forecast_date_str | as_datetime -%}
-              {%- if forecast_date.date() == now().date() -%}
-                {%- set icon = state_attr('weather.yandex_weather', 'forecast_icons')[loop.index0] 
-                  | replace('ovc', '☁️') 
-                  | replace('skc', '☀️') 
-                  | replace('bkn', '⛅') 
-                  | replace('pc', '🌤') 
-                  | replace('-ra', '🌧') 
-                  | replace('-sn', '❄️') 
-                  | replace('ts', '⛈') 
-                  | replace('_ra_sn', '🌧❄️') -%}
-                  
-                <b>{{ forecast_date | as_local | as_timestamp | timestamp_custom('%H:%M') }}</b> {{ icon }}
-                ▸ {{ states('sensor.yandex_weather4notion_conditions') }}
-                ▸ Температура: {{ forecast.temperature }}°C
-                ▸ Ветер: {{ states('sensor.yandex_weather4notion_wind') }}
-                ▸ {% if 'precipitation' in forecast and forecast.precipitation | float > 0 -%}
-                  🌧 {{ forecast.precipitation }} мм ({{ forecast.precipitation_probability }}%)
-                  {%- else -%}
-                  ☀ Без осадков
-                  {%- endif %}
-
-              {%- endif %}
-            {% endfor %}
-
-            <b>Атмосферное давление:</b> {{ state_attr('weather.yandex_weather', 'pressure') | round(2) }} мм рт.ст.
-            (<i>{{ '⬆️ выше нормы' if state_attr('weather.yandex_weather', 'pressure') > 740 else '⬇️ ниже нормы' if state_attr('weather.yandex_weather', 'pressure') < 738 else '🟢 нормальное' }}</i>)
-      - action: notify.tatiana
-        data:
-          title: "<b>Прогноз погоды на <u>{{ now().strftime('%d.%m.%Y') }}</u></b>"
-          message: >-
-            {% set condition = states('sensor.open_meteo_opisanie_na_russkom') %}
-            {% if condition == 'ясно' %}☀️{% elif condition == 'малооблачно' %}⛅
-            {% elif condition == 'облачно с прояснениями' %}☁️{% elif condition == 'пасмурно' %}🌥
-            {% elif condition == 'туман' %}🌫{% elif condition == 'морось' %}🌦
-            {% elif condition == 'дождливо' %}🌧{% elif condition == 'небольшой дождь' %}🌦
-            {% elif condition == 'дождь' %}🌧{% elif condition == 'ливень' %}⛈
-            {% elif condition == 'снег' %}❄️{% elif condition == 'сильный снег' %}🌨
-            {% elif condition == 'дождь со снегом' %}🌧❄️{% elif condition == 'гроза' %}⚡
-            {% else %}🌈{% endif %} <b>Сейчас:</b> {{ condition }}
-
-            🌡 <b>Температура:</b> {{ state_attr('weather.kvartira_133', 'temperature') }}°C
-            🌬 <b>Ветер:</b> {{ states('sensor.open_meteo_weather4notion_wind') }}, {{ state_attr('weather.kvartira_133', 'wind_speed') }} м/с
-
-            {% if state_attr('weather.kvartira_133', 'precipitation_unit') == 'mm' %}
-            🌧 <b>Осадки:</b> Ожидаются
-            {% else %}
-            ☀ <b>Осадки:</b> Не ожидаются
-            {% endif %}
-
-            <b>📅 Прогноз на сегодня:</b>
-
-            {% for forecast in state_attr('weather.yandex_weather', 'forecast') | default([]) %}
-              {%- set forecast_date_str = forecast.datetime | string -%}
-              {%- set forecast_date = forecast_date_str | as_datetime -%}
-              {%- if forecast_date.date() == now().date() -%}
-                {%- set icon = state_attr('weather.yandex_weather', 'forecast_icons')[loop.index0] 
-                  | replace('ovc', '☁️') 
-                  | replace('skc', '☀️') 
-                  | replace('bkn', '⛅') 
-                  | replace('pc', '🌤') 
-                  | replace('-ra', '🌧') 
-                  | replace('-sn', '❄️') 
-                  | replace('ts', '⛈') 
-                  | replace('_ra_sn', '🌧❄️') -%}
-                  
-                <b>{{ forecast_date | as_local | as_timestamp | timestamp_custom('%H:%M') }}</b> {{ icon }}
-                ▸ {{ states('sensor.yandex_weather4notion_conditions') }}
-                ▸ Температура: {{ forecast.temperature }}°C
-                ▸ Ветер: {{ states('sensor.yandex_weather4notion_wind') }}
-                ▸ {% if 'precipitation' in forecast and forecast.precipitation | float > 0 -%}
-                  🌧 {{ forecast.precipitation }} мм ({{ forecast.precipitation_probability }}%)
-                  {%- else -%}
-                  ☀ Без осадков
-                  {%- endif %}
-
-              {%- endif %}
-            {% endfor %}
-
-            <b>Атмосферное давление:</b> {{ state_attr('weather.yandex_weather', 'pressure') | round(2) }} мм рт.ст.
-            (<i>{{ '⬆️ выше нормы' if state_attr('weather.yandex_weather', 'pressure') > 740 else '⬇️ ниже нормы' if state_attr('weather.yandex_weather', 'pressure') < 738 else '🟢 нормальное' }}</i>)
-
+      # # Отправка прогноза Татьяне
+      # - service: script.telegram_send_weather_forecast
+      #   data:
+      #     recipient: notify.tatiana
     mode: single
 
   # ----------------------------------------------------------------------------
@@ -159,7 +192,7 @@ automation:
     alias: "Уведомление. Телеграм: Открытие входной двери"
     description: "Отправляет уведомление об открытии двери, если master не дома и режим уборки выключен."
     triggers:
-      - trigger: device
+      - platform: device
         device_id: abd3e40b49cfbe61411bac5d87bf000f
         entity_id: binary_sensor.hallway_door_contact
         domain: binary_sensor
@@ -174,7 +207,7 @@ automation:
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
     actions:
-      - action: notify.master
+      - service: notify.master
         data:
           message: "⚠️ <b>Открытие входной двери!</b> 🔓"
     mode: single
@@ -188,7 +221,7 @@ automation:
   - id: "eaddf6dd-762d-487e-9bf2-ba018f10b742"
     alias: "Уведомление. Телеграм: Уведомление о звонке в дверь"
     triggers:
-      - trigger: device
+      - platform: device
         domain: mqtt
         device_id: d2c3001cdc59660c456de45aec09da91
         type: action
@@ -203,7 +236,7 @@ automation:
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
     actions:
-      - action: notify.master
+      - service: notify.master
         data:
           message: "⚠️ <b>Кто-то звонит в дверь</b>"
     mode: single
@@ -213,8 +246,8 @@ automation:
   # ----------------------------------------------------------------------------
   # Данная автоматизация уведомляет об активации камеры (switch.chuangmi_ipc019_37da_switch_status).
   # Условия:
-  #   - Пн–Пт: 09:00:00 – 23:59:59
-  #   - Сб–Вс: 00:00:00 – 23:59:59 (т.е. выходные когда угодно).
+  #   - Пн--Пт: 09:00:00 -- 23:59:59
+  #   - Сб--Вс: 00:00:00 -- 23:59:59 (т.е. выходные когда угодно).
   # Выбираем вариант уведомления случайным образом (messages | random).
   # ----------------------------------------------------------------------------
   - id: "417016e0-21fa-4ec3-a057-35deaa7a93f2"
@@ -247,7 +280,7 @@ automation:
             - condition: template
               value_template: "{{ now().weekday() in [5, 6] }}"
           sequence:
-            - action: notify.master
+            - service: notify.master
               data:
                 message: >
                   {% set messages = [
@@ -268,10 +301,10 @@ automation:
     alias: "Уведомление. Телеграм: Сервер запущен"
     description: "Уведомление о запуске сервера"
     triggers:
-      - trigger: homeassistant
+      - platform: homeassistant
         event: start
     actions:
-      - action: notify.master
+      - service: notify.master
         data:
           message: >
             {{ ["Home assistant started!", "Home assistant is running now!", "Home assistant has begun!", "HA has started!"] | random }}
@@ -291,10 +324,10 @@ automation:
     alias: "Уведомление. Телеграм: Сервер отключён"
     description: "Уведомление о выключении сервера"
     triggers:
-      - trigger: homeassistant
+      - platform: homeassistant
         event: shutdown
     actions:
-      - action: notify.master
+      - service: notify.master
         data:
           message: >
             {{ ['Home Assistant shutdown', 'Shutdown of Home Assistant', 'HA has been shut down'] | random }}
@@ -319,7 +352,7 @@ automation:
       input:
         threshold: 15
         actions:
-          - action: notify.master
+          - service: notify.master
             metadata: {}
             data:
               message: '"Необходима замена элемента питания: {{sensors}}"'
@@ -332,10 +365,10 @@ automation:
   # версию. Также прилагается release_summary, если доступно в атрибутах.
   # ----------------------------------------------------------------------------
   - id: "4c5c8e57-be5b-4380-88a1-4ecc730c19da"
-    alias: "Уведомление. Телеграм: Возможно обновления компоненты системы"
+    alias: "Уведомление. Телеграм: Возможно обновления компонента системы"
     description: "Уведомление о возможности обновления компонента системы"
     triggers:
-      - trigger: state
+      - platform: state
         entity_id:
           - update.file_editor_update
           - update.home_assistant_core_update
@@ -350,7 +383,7 @@ automation:
           - update.ps5_mqtt_update
         to: "on"
     actions:
-      - action: notify.master
+      - service: notify.master
         data_template:
           message: >
             {% set entity = trigger.to_state %}
@@ -362,6 +395,7 @@ automation:
             {% else %}
               Ошибка: Данные обновления недоступны.
             {% endif %}
+
   # ----------------------------------------------------------------------------
   # Уведомление: Низкий заряд батареи массажёра
   # ----------------------------------------------------------------------------
@@ -391,14 +425,14 @@ automation:
   - id: "daa17acf-7c8a-4a8e-9fd0-4f2c5348c814"
     alias: "Уведомление. Телеграм: Проблемы с жесткими дисками Proxmox"
     description: "Уведомление о проблемах с жесткими дисками Proxmox."
-    trigger:
+    triggers:
       - platform: state
         entity_id: binary_sensor.disk_pve_h_w_raid1_dev_sdb_health
         to: "on"
       - platform: state
         entity_id: binary_sensor.disk_pve_128gb_ssd_dev_sda_health
         to: "on"
-    action:
+    actions:
       - service: notify.master
         data:
           message: >-
@@ -416,11 +450,11 @@ automation:
   - id: "4751a90b-0134-4906-84f0-e5b1a7cb02c2"
     alias: "Уведомление. Телеграм: Высокая загрузка диска Proxmox"
     description: "Уведомление, если диск Proxmox использован более чем на 90%."
-    trigger:
+    triggers:
       - platform: numeric_state
         entity_id: sensor.node_pve_disk_used_percentage
         above: 90
-    action:
+    actions:
       - service: notify.master
         data:
           message: >-
@@ -434,11 +468,11 @@ automation:
   - id: "ab5c1bd2-8756-4736-9909-52766bf989bd"
     alias: "Уведомление. Телеграм: Доступны обновления для Proxmox"
     description: "Сообщает о наличии доступных обновлений для системы виртуализации."
-    trigger:
+    triggers:
       - platform: state
         entity_id: binary_sensor.node_pve_updates_packages
         to: "on"
-    action:
+    actions:
       - service: notify.master
         data:
           message: >-

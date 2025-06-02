@@ -1,0 +1,214 @@
+################################################################################
+# /packages/plants_common.yaml
+################################################################################
+#
+# Общий пакет для мониторинга всех растений
+# Содержит скрипты, сенсоры и автоматизации, которые могут использоваться
+# для любого растения в системе
+#
+################################################################################
+
+##############################################################################
+#                                  СКРИПТЫ
+##############################################################################
+script:
+  plant_notify:
+    description: "Отправляет уведомление о состоянии растения"
+    fields:
+      plant_name:
+        description: "Название растения"
+        example: "Фикус лировидный"
+      plant_name_latin:
+        description: "Латинское название растения для определения изображения"
+        example: "ficus_lyrata"
+      notification_type:
+        description: "Тип уведомления (watering/temperature/illuminance)"
+        example: "watering"
+      value:
+        description: "Значение сенсора"
+        example: "30"
+      unit:
+        description: "Единица измерения"
+        example: "%"
+    sequence:
+      - choose:
+          # Уведомление о поливе
+          - conditions:
+              - condition: template
+                value_template: "{{ notification_type == 'watering' }}"
+            sequence:
+              - service: notify.master
+                data:
+                  message: "Необходимо полить {{ plant_name }}: влажность почвы {{ value }}{{ unit }}."
+                  data:
+                    photo:
+                      file: "/config/www/images/plants_alerts/{{ plant_name_latin }}_soil.webp"
+                      caption: "Необходимо полить {{ plant_name }}!"
+          # Уведомление о температуре
+          - conditions:
+              - condition: template
+                value_template: "{{ notification_type == 'temperature' }}"
+            sequence:
+              - service: notify.master
+                data:
+                  message: "{{ plant_name }} необходимо поставить в тёплое место, температура почвы {{ value }}{{ unit }}."
+                  data:
+                    photo:
+                      file: "/config/www/images/plants_alerts/{{ plant_name_latin }}_cold.webp"
+                      caption: "{{ plant_name }} необходимо поставить в тёплое место!"
+          # Уведомление об освещенности
+          - conditions:
+              - condition: template
+                value_template: "{{ notification_type == 'illuminance' }}"
+            sequence:
+              - service: notify.master
+                data:
+                  message: "{{ plant_name }} необходимо переместить в более освещенное место, освещенность {{ value }}{{ unit }}."
+                  data:
+                    photo:
+                      file: "/config/www/images/plants_alerts/{{ plant_name_latin }}_light.webp"
+                      caption: "{{ plant_name }} нуждается в лучшем освещении!"
+      # Запись в историю уведомлений с ограничением длины
+      - service: input_text.set_value
+        data:
+          entity_id: "input_text.notification_history_{{ plant_name_latin }}"
+          value: >-
+            {% set history = states('input_text.notification_history_' ~ plant_name_latin) %}
+            {% set lines = history.splitlines() %}
+            {% set new_entry = "Уведомление о " ~ 
+              ("поливе" if notification_type == "watering" else
+               "температуре" if notification_type == "temperature" else
+               "освещенности") ~ 
+              " (" ~ plant_name ~ "): " ~ now().strftime('%Y-%m-%d %H:%M:%S') %}
+            {% if lines | length < 5 %}
+              {{ history + '\n' + new_entry }}
+            {% else %}
+              {{ (lines[-4:] | join('\n')) + '\n' + new_entry }}
+            {% endif %}
+
+  plant_check_conditions:
+    description: "Проверяет условия ухода за растением и отправляет уведомления при необходимости"
+    fields:
+      plant_name:
+        description: "Название растения"
+        example: "Фикус лировидный"
+      plant_name_latin:
+        description: "Латинское название растения (используется для имен сущностей)"
+        example: "ficus_lyrata"
+    sequence:
+      # Определение переменных
+      - variables:
+          soil_entity: "binary_sensor.plant_alert_{{ plant_name_latin }}_soil"
+          temperature_entity: "binary_sensor.plant_alert_{{ plant_name_latin }}_temperature"
+          illuminance_entity: "binary_sensor.plant_alert_{{ plant_name_latin }}_illuminance"
+          soil_sensor: "sensor.{{ plant_name_latin }}_filtered_soil_moisture"
+          temperature_sensor: "sensor.{{ plant_name_latin }}_filtered_temperature"
+          illuminance_sensor: "sensor.{{ plant_name_latin }}_filtered_illuminance"
+          soil_notification: "input_datetime.last_{{ plant_name_latin }}_soil_notification"
+          temperature_notification: "input_datetime.last_{{ plant_name_latin }}_temperature_notification"
+          illuminance_notification: "input_datetime.last_{{ plant_name_latin }}_illuminance_notification"
+
+      # Проверка необходимости полива
+      - if:
+          condition: template
+          value_template: "{{ is_state(soil_entity, 'on') }}"
+        then:
+          - service: script.plant_notify
+            data:
+              plant_name: "{{ plant_name }}"
+              plant_name_latin: "{{ plant_name_latin }}"
+              notification_type: "watering"
+              value: "{{ states(soil_sensor) }}"
+              unit: "%"
+          - service: input_datetime.set_datetime
+            data:
+              entity_id: "{{ soil_notification }}"
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+      # Проверка температуры
+      - if:
+          condition: template
+          value_template: "{{ is_state(temperature_entity, 'on') }}"
+        then:
+          - service: script.plant_notify
+            data:
+              plant_name: "{{ plant_name }}"
+              plant_name_latin: "{{ plant_name_latin }}"
+              notification_type: "temperature"
+              value: "{{ states(temperature_sensor) }}"
+              unit: "°C"
+          - service: input_datetime.set_datetime
+            data:
+              entity_id: "{{ temperature_notification }}"
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+      # Проверка освещенности (если поддерживается для данного растения)
+      - if:
+          condition: template
+          value_template: >-
+            {{ is_state(illuminance_entity, 'on') and 
+              states(illuminance_sensor) not in ['unknown', 'unavailable', 'none'] }}
+        then:
+          - service: script.plant_notify
+            data:
+              plant_name: "{{ plant_name }}"
+              plant_name_latin: "{{ plant_name_latin }}"
+              notification_type: "illuminance"
+              value: "{{ states(illuminance_sensor) }}"
+              unit: "лк"
+          - service: input_datetime.set_datetime
+            data:
+              entity_id: "{{ illuminance_notification }}"
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  check_all_plants:
+    description: "Проверяет состояние всех растений и отправляет уведомления при необходимости"
+    sequence:
+      # Определение переменных
+      - variables:
+          ficus_soil_alert: "binary_sensor.plant_alert_ficus_lyrata_soil"
+          ficus_soil_notification: "input_datetime.last_ficus_lyrata_soil_notification"
+          euphorbia_soil_alert: "binary_sensor.plant_alert_euphorbia_leuconeura_soil"
+          euphorbia_soil_notification: "input_datetime.last_euphorbia_leuconeura_soil_notification"
+
+      # Проверка Фикуса лировидного
+      - if:
+          condition: template
+          value_template: >-
+            {% set last_notification = states(ficus_soil_notification) %}
+            {% set last_notification_ts = as_timestamp(last_notification) if last_notification not in ['unknown', 'unavailable', 'none'] else 0 %}
+            {{ is_state(ficus_soil_alert, 'on') and (as_timestamp(now()) - last_notification_ts) > 10800 }}
+        then:
+          - service: script.plant_check_conditions
+            data:
+              plant_name: "Фикус лировидный"
+              plant_name_latin: "ficus_lyrata"
+
+      # Проверка Молочая
+      - if:
+          condition: template
+          value_template: >-
+            {% set last_notification = states(euphorbia_soil_notification) %}
+            {% set last_notification_ts = as_timestamp(last_notification) if last_notification not in ['unknown', 'unavailable', 'none'] else 0 %}
+            {{ is_state(euphorbia_soil_alert, 'on') and (as_timestamp(now()) - last_notification_ts) > 10800 }}
+        then:
+          - service: script.plant_check_conditions
+            data:
+              plant_name: "Молочай"
+              plant_name_latin: "euphorbia_leuconeura"
+
+##############################################################################
+#                             АВТОМАТИЗАЦИИ
+##############################################################################
+automation:
+  # Отправка отложенных уведомлений при возвращении домой
+  - id: "plant-send-pending-notifications"
+    alias: "Растения: Отправка отложенных уведомлений при возвращении домой"
+    description: "Отправляет уведомления о состоянии растений, если уведомления накопились за время отсутствия"
+    triggers:
+      - platform: state
+        entity_id: person.master
+        to: "home"
+    actions:
+      - delay: "00:01:00" # Даем время на обновление других сенсоров после прихода домой
+      - service: script.check_all_plants

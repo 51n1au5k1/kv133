@@ -24,7 +24,7 @@ telegram_bot:
     parse_mode: html
     allowed_chat_ids:
       - !secret chat_id_andrei
-      - !secret chat_id_tatiana
+#      - !secret chat_id_tatiana
 
 notify:
   # ----------------------------------------------------------------------------
@@ -37,11 +37,11 @@ notify:
   - name: master
     platform: telegram
     chat_id: !secret chat_id_andrei
-  - name: tatiana
-    platform: telegram
-    chat_id: !secret chat_id_tatiana
+  # - name: tatiana
+  #   platform: telegram
+  #   chat_id: !secret chat_id_tatiana
   - platform: group
     name: group_notifications
     services:
       - service: master
-      - service: tatiana
+#      - service: tatiana

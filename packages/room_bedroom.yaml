@@ -28,6 +28,9 @@ input_boolean:
     initial: false
     icon: mdi:bell-ring
 
+##############################################################################
+#                             АВТОМАТИЗАЦИИ
+##############################################################################
 automation:
   # ------------------------------------------------------------------------
   # ЭКОНОМИЯ ЭНЕРГИИ: ОТКЛЮЧЕНИЕ РОЗЕТКИ ПРИ ЗАРЯДКЕ НОЧЬЮ
@@ -37,48 +40,48 @@ automation:
     description: >
       Отключение розетки для зарядки Google Pixel 8 PRO, чтобы предотвратить
       перезарядку и перегрев устройства ночью.
-    trigger:
+    triggers:
       - platform: numeric_state
         entity_id: sensor.pixel_8_pro_battery_level
         above: 99
         for:
           minutes: 1
-    condition:
+    conditions:
       - condition: state
         entity_id: sensor.pixel_8_pro_battery_state
         state: "charging"
       - condition: time
         after: "01:00:00"
         before: "07:00:00"
-    action:
+    actions:
       - service: switch.turn_off
         target:
           entity_id: switch.0x00158d0002530ba3
     mode: single
 
-  - id: "3b13588c-5421-42a5-951b-a4d04d878041"
-    alias: "Спальня: Отключение розетки при зарядке телефона Татьяны ночью"
-    description: >
-      Отключение розетки для зарядки iPhone, чтобы предотвратить
-      перезарядку и перегрев устройства ночью.
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.iphone_tatsiana_3_battery_level
-        above: 99
-        for:
-          minutes: 1
-    condition:
-      # - condition: state
-      #   entity_id: sensor.iphone_tatsiana_3_battery_state
-      #   state: "full"
-      - condition: time
-        after: "01:00:00"
-        before: "07:00:00"
-    action:
-      - service: switch.turn_off
-        target:
-          entity_id: switch.0x00158d0002530bd9
-    mode: single
+  # - id: "3b13588c-5421-42a5-951b-a4d04d878041"
+  #   alias: "Спальня: Отключение розетки при зарядке телефона Татьяны ночью"
+  #   description: >
+  #     Отключение розетки для зарядки iPhone, чтобы предотвратить
+  #     перезарядку и перегрев устройства ночью.
+  #   triggers:
+  #     - platform: numeric_state
+  #       entity_id: sensor.iphone_tatsiana_3_battery_level
+  #       above: 99
+  #       for:
+  #         minutes: 1
+  #   conditions:
+  #     # - condition: state
+  #     #   entity_id: sensor.iphone_tatsiana_3_battery_state
+  #     #   state: "full"
+  #     - condition: time
+  #       after: "01:00:00"
+  #       before: "07:00:00"
+  #   actions:
+  #     - service: switch.turn_off
+  #       target:
+  #         entity_id: switch.0x00158d0002530bd9
+  #   mode: single
 
   # ----------------------------------------------------------------------------
   # Уведомление: Температура в спальне ниже 20° при открытой двери/окне
@@ -87,18 +90,18 @@ automation:
     alias: "Уведомление о низкой температуре в спальне (усреднённое значение)"
     description: >
       Уведомление, если температура в спальне ниже 20° и открыта дверь/окно.
-    trigger:
+    triggers:
       - platform: numeric_state
         entity_id: sensor.temperatura_v_spalne_sglazhennaia
         below: 20
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
         entity_id: binary_sensor.0x00158d00044d5d11_contact
         state: "on"
-    action:
+    actions:
       - variables:
           telegram_message: "Температура в спальне ниже 20°. Динозавры любят тепло! Закройте балкон в спальне."
       - choose:
@@ -108,20 +111,9 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - action: notify.master
+              - service: notify.master
                 data:
                   message: "{{ telegram_message }}"
-          # Условие: Если tatiana дома, отправляем уведомление ей
-          - conditions:
-              - condition: state
-                entity_id: person.tatiana
-                state: "home"
-            sequence:
-              - action: notify.tatiana
-                data:
-                  message: "{{ telegram_message }}"
-
-      # Устанавливаем флаг, чтобы уведомление не отправлялось повторно
       - service: input_boolean.turn_on
         target:
           entity_id: input_boolean.bedroom_th_notice
@@ -131,11 +123,11 @@ automation:
   # ----------------------------------------------------------------------------
   - id: "fdf3d865-6bdb-4c9b-9acd-fa7f7dc432d6"
     alias: "HELPER: Сброс уведомлений о температуре в спальне"
-    trigger:
+    triggers:
       - platform: state
         entity_id: input_boolean.bedroom_th_notice
         to: "on"
-    action:
+    actions:
       - delay: >
           00:{{ states('input_number.low_th_notification_reset_period') | int }}:00
       - service: input_boolean.turn_off

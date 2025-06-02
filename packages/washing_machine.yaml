@@ -18,16 +18,15 @@ input_boolean:
     name: "Стиральная машина работает"
     initial: off
     icon: mdi:washing-machine
+
   # --------------------------------------------------------------------------
   # Washing Machine Pre-State When Door Opened
-  # --------------------------------------------------------------------------
-  # Это позволит «запомнить», что машина была включена и шёл цикл стирки
-  # до перезагрузки (или, например, что стирка уже была завершена).
   # --------------------------------------------------------------------------
   washing_machine_pre_restart_state:
     name: "Washing Machine Pre-Restart State"
     initial: off
     icon: mdi:washing-machine
+
 binary_sensor:
   - platform: template
     sensors:
@@ -44,10 +43,11 @@ binary_sensor:
         delay_on:
           minutes: 2
         # Активна, если потребляет менее 5 Вт в течение 2 минут подряд
-
+##############################################################################
+#                             АВТОМАТИЗАЦИИ
+##############################################################################
 automation:
   ##############################################################################
-  #
   #
   # 1) Сохранение состояния стиральной машины при завершении работы HA
   #    - Если binary_sensor.washing_machine_active == on, то включаем washing_machine_pre_restart_state.
@@ -56,7 +56,7 @@ automation:
   # 2) Восстановление состояния стиральной машины при старте HA
   #    - Если washing_machine_pre_restart_state == on, значит
   #      стиральная машина «работала» до перезагрузки. Можно при желании
-  #      включать какую-то логику (но поскольку сам binary_sensor.washing_machine_active —
+  #      включать какую-то логику (но поскольку сам binary_sensor.washing_machine_active --
   #      обычно «физический» датчик или приходящий с MQTT/ESPHome, мы не можем
   #      прямо выставить ему состояние).
   #    - Для предотвращения лишних уведомлений о «Завершении стирки», мы
@@ -72,10 +72,10 @@ automation:
   - id: "064cbd85-8d52-40ac-98bd-98164ad1434c"
     alias: "HELPER: Сохранение состояния стиральной машины при завершении HA"
     mode: single
-    trigger:
+    triggers:
       - platform: homeassistant
         event: shutdown
-    action:
+    actions:
       - choose:
           - conditions:
               - condition: state
@@ -105,11 +105,10 @@ automation:
   - id: "a49b7efb-5294-4361-90f2-73943aa71194"
     alias: "HELPER: Восстановление стиральной машины при старте HA"
     mode: single
-    trigger:
+    triggers:
       - platform: homeassistant
         event: start
-    action:
-      # Здесь можно делать какую-то логику, если нужно.
+    actions:
       - choose:
           - conditions:
               - condition: state
@@ -121,7 +120,6 @@ automation:
                   message: "System start: стиральная машина была активна до перезагрузки."
                   level: warning
         default: []
-      # В любом случае гасим наш флаг.
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.washing_machine_pre_restart_state
@@ -134,12 +132,11 @@ automation:
     description: >
       При перезапуске HA сбрасываем флаг washing_machine_running в Off.
       (binary_sensor.washing_machine_finished автоматически «сам определится».)
-    trigger:
+    triggers:
       - platform: homeassistant
         event: start
-    action:
+    actions:
       - service: input_boolean.turn_off
-        data: {}
         target:
           entity_id: input_boolean.washing_machine_running
 
@@ -154,13 +151,12 @@ automation:
     description: >
       Когда машина начинает работать (мощность > 5), ставим
       input_boolean.washing_machine_running=on.
-    trigger:
+    triggers:
       - platform: numeric_state
         entity_id: sensor.bathroom_washing_machine_power
         above: 5
-    action:
+    actions:
       - service: input_boolean.turn_on
-        data: {}
         target:
           entity_id: input_boolean.washing_machine_running
 
@@ -176,19 +172,18 @@ automation:
     description: >
       Если мощность < 5 на 5 минут подряд, считаем что стирка окончена.
       Отключаем washing_machine_running.
-    trigger:
+    triggers:
       - platform: numeric_state
         entity_id: sensor.bathroom_washing_machine_power
         below: 5
         for:
           minutes: 5
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.washing_machine_running
         state: "on"
-    action:
+    actions:
       - service: input_boolean.turn_off
-        data: {}
         target:
           entity_id: input_boolean.washing_machine_running
 
@@ -207,11 +202,11 @@ automation:
     description: >
       При завершении стирки (binary_sensor.washing_machine_finished=on), 
       отправляем уведомление в Телеграм и говорим на Яндекс-колонке.
-    trigger:
+    triggers:
       - platform: state
         entity_id: binary_sensor.washing_machine_finished
         to: "on"
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
@@ -221,8 +216,7 @@ automation:
       - condition: state
         entity_id: input_boolean.washing_machine_running
         state: "off"
-    action:
-      # Озвучка через Яндекс-колонку (скрипт вы уже используете)
+    actions:
       - service: script.yandex_tts_washing_machine_finished
     mode: single
 
@@ -240,13 +234,13 @@ automation:
       если нет движения в ванной (binary_sensor.bathroom_motions=off)
       и дверь не открыта (bathroom_open_door=off),
       озвучиваем дружеское напоминание через скрипт.
-    trigger:
+    triggers:
       - platform: state
         entity_id: binary_sensor.washing_machine_finished
         to: "on"
         for:
           minutes: 15
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
@@ -259,61 +253,51 @@ automation:
       - condition: state
         entity_id: binary_sensor.bathroom_open_door
         state: "off"
-    action:
+    actions:
       - service: script.yandex_tts_washing_machine_reminder
     mode: single
 
   # ----------------------------------------------------------------------------
-  # Уведомление: Завершение стирки
+  # Уведомление: Завершение стирки (Телеграм)
   # ----------------------------------------------------------------------------
-  # Триггер — бинарный датчик (binary_sensor.washing_machine_finished).
-  # Состояние "on" в течение 5 минут и при этом sensor.washing_machine_active
-  # == off, плюс проверка по времени штамповому, чтобы избежать ложных
-  # срабатываний. Если условия выполняются, отправляется уведомление
-  # пользователю (master), что стирка окончена.
-  # ----------------------------------------------------------------------------
-  # --------------------------------------------------------------------------
-  # УВЕДОМЛЕНИЕ О ЗАВЕРШЕНИИ СТИРКИ (не срабатывает во время старта)
-  # --------------------------------------------------------------------------
-  #      Уведомление о завершении стирки (модифицировано)
-  #    - Добавили condition: system_startup_phase == off (чтобы при старте не срабатывало).
-  #    - Ещё одна condition: washing_machine_pre_restart_state == off, чтобы если
-  #      машина «якобы» была завершена прямо при перезагрузке — не выдать уведомление
-  #      повторно на старте.
+  # Триггер -- binary_sensor.washing_machine_finished в состоянии "on" в течение 5 минут,
+  # при этом проверяем, что:
+  #   1) Не фаза загрузки (system_startup_phase = off)
+  #   2) washing_machine_pre_restart_state = off (чтобы не срабатывать повторно после перезагрузки)
+  #   3) binary_sensor.washing_machine_active = off
+  #   4) С тех пор, как активность стиралки стала "on", прошло не менее 14 минут.
   # ----------------------------------------------------------------------------
   - id: "ba69e825-6c4e-4451-bb6f-cbbb224b1631"
     alias: "Уведомление. Телеграм: Завершении стирки"
-    trigger:
+    triggers:
       - platform: state
         entity_id: binary_sensor.washing_machine_finished
         to: "on"
         for:
-          minutes: 5 # ждем 5 минут после того, как BINARY_SENSOR перешел в on
-    condition:
+          minutes: 5
+    conditions:
       # a) Не срабатывать в фазе загрузки
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
 
-      # b) Дополнительно проверяем, что машина не была «уже завершена» до перезагрузки
+      # b) Проверяем, что машина не была «уже завершена» до перезагрузки
       - condition: state
         entity_id: input_boolean.washing_machine_pre_restart_state
         state: "off"
 
-      # c) Проверка: сама машина уже не активна
-      #    Здесь меняем sensor.washing_machine_active → binary_sensor.washing_machine_active
+      # c) Сама машина уже не активна
       - condition: state
         entity_id: binary_sensor.washing_machine_active
         state: "off"
 
       # d) Проверка, что стиралка была «on» не менее 14 минут назад
-      #    Аналогично, меняем states.sensor.washing_machine_active → states.binary_sensor.washing_machine_active
       - condition: template
-        value_template: >
-          {{ is_state('binary_sensor.washing_machine_active','on') and
-            (as_timestamp(now()) -
-              as_timestamp(states.binary_sensor.washing_machine_active.last_changed)) >= 840 }}
-    action:
-      - action: notify.master
+        value_template: >-
+          {% set last_on = states.binary_sensor.washing_machine_active.last_changed %}
+          {{ last_on is not none and (as_timestamp(now()) - as_timestamp(last_on)) >= 840 }}
+    actions:
+      - service: notify.master
         data:
           message: "🏠 Стирка закончена! 🧼"
+    mode: single
