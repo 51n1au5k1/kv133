@@ -1,6 +1,7 @@
 /.HA_VERSION
 /.cloud
 /.storage
+/blueprints
 /custom_components
 /deps
 /home-assistant.log
@@ -29,4 +30,6 @@
 /packages/_room_hallway.yaml_
 /packages/_plant_ficus_lyrata.yaml_
 /packages/_plant_euphorbia_leuconeura.yaml_
+/packages/del
+/packages/new
 /ps5-mqtt
