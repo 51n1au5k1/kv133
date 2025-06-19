@@ -1,4 +1,5 @@
 # Home Assistant Конфигурация  
+[English version](README.en.md)
   
 ## Введение  
   
