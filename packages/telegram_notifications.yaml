@@ -40,7 +40,7 @@ script:
     description: "Формирует и отправляет прогноз погоды указанному получателю"
     fields:
       recipient:
-        description: "Получатель (notify.master или notify.tatiana)"
+        description: "Получатель (notify.master)"
         example: "notify.master"
         required: true
     sequence:
@@ -175,10 +175,6 @@ automation:
         data:
           recipient: notify.master
 
-      # # Отправка прогноза Татьяне
-      # - service: script.telegram_send_weather_forecast
-      #   data:
-      #     recipient: notify.tatiana
     mode: single
 
   # ----------------------------------------------------------------------------

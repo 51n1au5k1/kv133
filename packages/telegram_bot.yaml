@@ -148,11 +148,11 @@ script:
           inline_keyboard: >
             {{ [
                 [ ["🔴 Основной свет" if is_state("light.bedroom_switch_main", "off") else "🟢 Основной свет", "/toggle_bedroom_light"] ],
-                [ ["🔴 Танин светильник" if is_state("light.bedroom_left_switch_right", "off") else "🟢 Танин светильник", "/toggle_bedroom_scone_t"] ],
-                [ ["🔴 Андреев светильник малый" if is_state("light.bedroom_right_switch_left", "off") else "🟢 Андреев светильник малый", "/toggle_bedroom__scone_a_small"],
-                  ["🔴 Андреев светильник большой" if is_state("light.bedroom_right_switch_right", "off") else "🟢 Андреев светильник большой", "/toggle_bedroom__scone_a_big"] ],
-                [ ["🔴 Розетка Тани" if is_state("switch.0x00158d0002530bd9", "off") else "🟢 Розетка Тани", "/toggle_bedroom_plug_left"],
-                  ["🔴 Розетка Андрея" if is_state("switch.0x00158d0002530ba3", "off") else "🟢 Розетка Андрея", "/toggle_bedroom_plug_right"] ],
+                [ ["🔴 Светильник Слева" if is_state("light.bedroom_left_switch_right", "off") else "🟢 Светильник Слевак", "/toggle_bedroom_scone_t"] ],
+                [ ["🔴 Светильник Справа малый" if is_state("light.bedroom_right_switch_left", "off") else "🟢 Светильник Справа малый", "/toggle_bedroom__scone_a_small"],
+                  ["🔴 Светильник Справа большой" if is_state("light.bedroom_right_switch_right", "off") else "🟢 Светильник Справа большой", "/toggle_bedroom__scone_a_big"] ],
+                [ ["🔴 Розетка Слева" if is_state("switch.0x00158d0002530bd9", "off") else "🟢 Розетка Слева", "/toggle_bedroom_plug_left"],
+                  ["🔴 Розетка Справа" if is_state("switch.0x00158d0002530ba3", "off") else "🟢 Розетка Справа", "/toggle_bedroom_plug_right"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/bedroom_control"] ]
               ] | tojson }}
 
@@ -262,6 +262,7 @@ script:
             <b>LXC Jellyfin:</b> {{ (states('sensor.lxc_jellyfin_103_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_jellyfin_103_cpu_used') | float | round(0)) }}%
             <b>LXC Deluge:</b> {{ (states('sensor.lxc_deluge_104_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_deluge_104_cpu_used') | float | round(0)) }}%
             <b>LXC TorrServer:</b> {{ (states('sensor.lxc_debian_105_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_debian_105_cpu_used') | float | round(0)) }}%
+            <b>LXC Lyrian Music Server:</b> {{ (states('sensor.lxc_lyrionmusicserver_106_cpu_used_normalized') | float | round(0)) }}% | {{ (states('sensor.lxc_lyrionmusicserver_106_cpu_used') | float | round(0)) }}%
 
           inline_keyboard: >
             {{ [
@@ -272,6 +273,7 @@ script:
                 [ ["🟢 Jellyfin", "/start_jellyfin"], ["🔴 Остановить", "/stop_jellyfin"], ["🔄 Перезагрузка", "/reboot_jellyfin"] ],
                 [ ["🟢 Deluge", "/start_deluge"], ["🔴 Остановить", "/stop_deluge"], ["🔄 Перезагрузка", "/reboot_deluge"] ],
                 [ ["🟢 TorrServer", "/start_torrserver"], ["🔴 Остановить", "/stop_torrserver"], ["🔄 Перезагрузка", "/reboot_torrserver"] ],
+                [ ["🟢 LyrianMusicServer", "/start_lyrianserver"], ["🔴 Остановить", "/stop_lyrianserver"], ["🔄 Перезагрузка", "/reboot_lyrianserver"] ],
                 [ ["👈 В меню", "/menu_back"] ]
               ] | tojson }}
 ##############################################################################
@@ -1300,6 +1302,60 @@ automation:
       - service: button.press
         target:
           entity_id: button.lxc_debian_105_reboot
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_start_lyrianserver"
+    alias: "Telegram Bot Start LXC Lyrian Music Server"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/start_lyrianserver"
+    actions:
+      - service: button.press
+        target:
+          entity_id: button.lxc_lyrionmusicserver_106_start
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_stop_lyrianserver"
+    alias: "Telegram Bot Stop LXC Lyrian Music Server"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/stop_lyrianserver"
+    actions:
+      - service: button.press
+        target:
+          entity_id: button.lxc_lyrionmusicserver_106_stop
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
+        data:
+          target: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_reboot_lyrianserver"
+    alias: "Telegram Bot Reboot LXC Lyrian Music Server"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/reboot_lyrianserver"
+    actions:
+      - service: button.press
+        target:
+          entity_id: button.lxc_lyrionmusicserver_106_reboot
       - delay:
           seconds: 5
       - service: script.send_pve_status

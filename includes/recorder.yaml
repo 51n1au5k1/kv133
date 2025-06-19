@@ -47,6 +47,7 @@ include:
     - sensor.lxc_jellyfin_103_cpu_used_normalized
     - sensor.lxc_deluge_104_cpu_used_normalized
     - sensor.lxc_debian_105_cpu_used_normalized
+    - sensor.lxc_lyrionmusicserver_106_cpu_used_normalized
     - sensor.node_pve_memory_used
     - sensor.qemu_haos12_3_100_memory_used
     - sensor.lxc_mariadb_101_memory_used
@@ -54,15 +55,28 @@ include:
     - sensor.lxc_jellyfin_103_memory_used
     - sensor.lxc_deluge_104_memory_used
     - sensor.lxc_debian_105_memory_used
+    - sensor.lxc_lyrionmusicserver_106_memory_used
     - sensor.qemu_haos12_3_100_last_boot
+    - sensor.storage_pve_raid_home_server_disk_free
+    - sensor.storage_pve_raid_home_server_disk_used_percentage
+    - sensor.disk_pve_128gb_ssd_temperature
+    - sensor.node_pve_memory_used_percentage
+    - sensor.node_pve_swap_used_percentage
+    - sensor.node_pve_disk_used_percentage
+    - sensor.speedtest_download
+    - sensor.speedtest_upload
+    - sensor.speedtest_ping
     # Медиа
     - media_player.televizor_v_gostinoi
     - media_player.televizor_v_gostinoi_2
     - media_player.yandex_station_ff98f0294437799304d0788d
+    - media_player.home_theater
+    - media_player.home_theater_2
     - sensor.vremia_igry_na_ps5_segodnia_2
     # Погода
-    # - sensor.open_meteo_temperature
     - weather.yandex_weather
+    - sensor.yandex_weather_condition_yandex_2
+    - weather.kvartira_133
 
 exclude:
   domains:

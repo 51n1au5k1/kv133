@@ -59,30 +59,6 @@ automation:
           entity_id: switch.0x00158d0002530ba3
     mode: single
 
-  # - id: "3b13588c-5421-42a5-951b-a4d04d878041"
-  #   alias: "Спальня: Отключение розетки при зарядке телефона Татьяны ночью"
-  #   description: >
-  #     Отключение розетки для зарядки iPhone, чтобы предотвратить
-  #     перезарядку и перегрев устройства ночью.
-  #   triggers:
-  #     - platform: numeric_state
-  #       entity_id: sensor.iphone_tatsiana_3_battery_level
-  #       above: 99
-  #       for:
-  #         minutes: 1
-  #   conditions:
-  #     # - condition: state
-  #     #   entity_id: sensor.iphone_tatsiana_3_battery_state
-  #     #   state: "full"
-  #     - condition: time
-  #       after: "01:00:00"
-  #       before: "07:00:00"
-  #   actions:
-  #     - service: switch.turn_off
-  #       target:
-  #         entity_id: switch.0x00158d0002530bd9
-  #   mode: single
-
   # ----------------------------------------------------------------------------
   # Уведомление: Температура в спальне ниже 20° при открытой двери/окне
   # ----------------------------------------------------------------------------

@@ -57,6 +57,13 @@ input_number:
     step: 1
     initial: 1
 
+  cpu_106:
+    name: "CPU 106"
+    min: 1
+    max: 4
+    step: 1
+    initial: 1
+
 ##############################################################################
 #                                 СЕНСОРЫ
 ##############################################################################
@@ -108,6 +115,13 @@ sensor:
           {% set cpus = states('input_number.cpu_105') | float(0) %}
           {{ (raw / cpus) | round(2) if cpus > 0 else 0 }}
 
+      lxc_lyrionmusicserver_106_cpu_used_normalized:
+        friendly_name: "CPU LXC Lyrion Music Server (нормализованная)"
+        value_template: >-
+          {% set raw = states('sensor.lxc_lyrionmusicserver_106_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_106') | float(0) %}
+          {{ (raw / cpus) | round(2) if cpus > 0 else 0 }}
+
 # Описание функционала:
 # - input_number.cpu_<ID> задаёт число процессоров для каждой VM/LXC.
 # - Для каждого ресурса существует свой шаблонный сенсор, который:
@@ -124,4 +138,5 @@ sensor:
 #   sensor.lxc_jellyfin_103_cpu_used
 #   sensor.lxc_deluge_104_cpu_used
 #   sensor.lxc_debian_105_cpu_used
+#   sensor.lxc_lyrionmusicserver_106_cpu_used
 # были настроены и возвращали числовые значения нагрузки CPU.

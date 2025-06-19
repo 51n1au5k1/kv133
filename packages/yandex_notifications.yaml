@@ -67,14 +67,6 @@ automation:
               - action: notify.master
                 data:
                   message: "Свет в квартире выключен! Приятной дороги!"
-          # - conditions:
-          #     - condition: state
-          #       entity_id: person.tatiana
-          #       state: "home"
-          #   sequence:
-          #     - action: notify.tatiana
-          #       data:
-          #         message: "Свет в квартире выключен! Приятной дороги!"
     mode: single
 
   # Уведомление. Яндекс: Температура ниже установленного уровня

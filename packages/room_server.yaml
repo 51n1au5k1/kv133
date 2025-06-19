@@ -110,7 +110,7 @@ automation:
   # ----------------------------------------------------------------------------
   # Автоматизация, которая управляет вентилятором серверной (fan.server_fan)
   # на основе показаний датчика температуры (sensor.0xa4c13861a18df7c8_temperature).
-  # Вентилятор включается при превышении 30°C и выключается при снижении ниже 31°C,
+  # Вентилятор включается при превышении 30°C и выключается при снижении ниже 28°C,
   # что предотвращает частые переключения (гистерезис).
   #
   - id: "server_room_fan_control"
@@ -126,7 +126,7 @@ automation:
           minutes: 2
       - platform: numeric_state
         entity_id: sensor.0xa4c13861a18df7c8_temperature
-        below: 31
+        below: 28
         for:
           minutes: 30
     conditions: []
@@ -141,7 +141,7 @@ automation:
                   entity_id: fan.server_fan
           - conditions:
               - condition: template
-                value_template: "{{ trigger.to_state.state | float < 31 }}"
+                value_template: "{{ trigger.to_state.state | float < 28 }}"
             sequence:
               - service: fan.turn_off
                 target:
