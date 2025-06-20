@@ -1,4 +1,4 @@
-# Настройки ъранения инфы в БД
+# Настройки хранения инфы в БД
 db_url: !secret db_link # Формат: mysql://user:pass@IP/db_name?charset=utf8mb4
 db_max_retries: 20 # Увеличено для MariaDB
 db_retry_wait: 5 # Увеличено для MariaDB
@@ -7,7 +7,9 @@ purge_keep_days: 90
 auto_repack: false # Для MariaDB лучше управлять вручную
 commit_interval: 30 # Снижает нагрузку на диск
 
+# --- Сначала определяем, что мы хотим хранить в целом ---
 include:
+  # Включаем целые домены сущностей
   domains:
     - light
     - switch
@@ -16,38 +18,28 @@ include:
     - select
     - climate
     - timer
+    - weather
+    - media_player
+    - automation
+
+  # Включаем группы сущностей по маске имени
   entity_globs:
     - sensor.temperature_*
     - sensor.humidity_*
+    - sensor.*_battery*
+    - sensor.*_pressure
+    - sensor.*_co2
+    - sensor.*_pm25
     - binary_sensor.*_contact
     - binary_sensor.*_occupancy
-    - automation.*
+    - sensor.cpu_*_normalized
+    - sensor.cpu_*_host_percent
+
+  # Включаем отдельные сущности, которые не попали в правила выше
   entities:
-    # Климатические
-    - sensor.livingroom_corrected_pressure
-    - sensor.livingroom_average_temperature
-    - sensor.livingroom_average_humidity
-    - sensor.bedroom_th_sensor_temperature
-    - sensor.bedroom_th_sensor_humidity
-    - sensor.cgllc_cn_blt_3_15gd8656slo00_dove_temperature_p_2_1
-    - sensor.cgllc_cn_blt_3_15gd8656slo00_dove_relative_humidity_p_2_2
-    - sensor.bathroom_th_2_temperature
-    - sensor.bathroom_th_2_humidity
-    - sensor.vlazhnost_vannoi_usrednennaia_za_5_minut
-    - sensor.uroven_co2_sglazhennyi
-    - sensor.co2_monitor_co2
-    - sensor.0xa4c13861a18df7c8_temperature
-    - sensor.0xa4c13861a18df7c8_humidity
-    # Системные
+    # Системные и специфические сенсоры
     - sensor.maria_db_size
     - sensor.node_pve_cpu_used
-    - sensor.qemu_haos12_3_100_cpu_used_normalized
-    - sensor.lxc_mariadb_101_cpu_used_normalized
-    - sensor.lxc_jackett_102_cpu_used_normalized
-    - sensor.lxc_jellyfin_103_cpu_used_normalized
-    - sensor.lxc_deluge_104_cpu_used_normalized
-    - sensor.lxc_debian_105_cpu_used_normalized
-    - sensor.lxc_lyrionmusicserver_106_cpu_used_normalized
     - sensor.node_pve_memory_used
     - sensor.qemu_haos12_3_100_memory_used
     - sensor.lxc_mariadb_101_memory_used
@@ -66,35 +58,28 @@ include:
     - sensor.speedtest_download
     - sensor.speedtest_upload
     - sensor.speedtest_ping
-    # Медиа
-    - media_player.televizor_v_gostinoi
-    - media_player.televizor_v_gostinoi_2
-    - media_player.yandex_station_ff98f0294437799304d0788d
-    - media_player.home_theater
-    - media_player.home_theater_2
     - sensor.vremia_igry_na_ps5_segodnia_2
-    # Погода
-    - weather.yandex_weather
-    - sensor.yandex_weather_condition_yandex_2
-    - weather.kvartira_133
 
+# --- Теперь определяем, что мы ТОЧНО НЕ хотим хранить ---
 exclude:
+  # Исключаем "шумные" домены
   domains:
     - update
     - camera
     - button
     - script
     - vacuum
+
+  # Исключаем "шумные" группы сущностей
   entity_globs:
-    - sensor.*_linkquality
-    - sensor.*_power_*
-    - binary_sensor.*_battery_low
-    - sensor.*_battery
-    - sensor.system_monitor_*
-    - sensor.node_pve_*
+    - sensor.*_linkquality # Отличное исключение, обновляется очень часто
+    - sensor.*_power_* # Обычно тоже очень "шумные"
+    - binary_sensor.*_battery_low # Дублирует информацию sensor.*_battery < порога
+
+  # Исключаем отдельные "шумные" сущности
   entities:
-    - sensor.uptime
-    - binary_sensor.backups_stale
+    - binary_sensor.backups_stale # Если он не важен для истории
+
 
   # Ссылка на сервер MariaDB в секретах по шаблону:
   # db_link: mysql://user:pass@IP/homeassistant?charset=utf8mb4&ssl=true
