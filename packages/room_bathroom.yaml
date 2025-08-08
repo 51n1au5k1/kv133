@@ -25,11 +25,22 @@ sensor:
   - platform: filter
     name: "Влажность ванной (усреднённая за 1 минуту)"
     entity_id: sensor.bathroom_th_2_humidity
-    unique_id: bathroom_filtered_humidity
     filters:
       - filter: time_simple_moving_average
         window_size: "00:01"
         precision: 2
+
+# Алиас с фиксированным entity_id и unique_id, чтобы везде ссылаться стабильно
+template:
+  - sensor:
+      - name: "bathroom_filtered_humidity" # даст entity_id: sensor.bathroom_filtered_humidity
+        unique_id: bathroom_filtered_humidity_alias
+        state: "{{ states('sensor.vlazhnost_vannoi_usrednennaia_za_1_minutu') }}"
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        availability: "{{ states('sensor.vlazhnost_vannoi_usrednennaia_za_1_minutu') not in ['unknown','unavailable',''] }}"
+        icon: mdi:water-percent
 
 ##############################################################################
 #                             ВХОДНЫЕ ПАРАМЕТРЫ
@@ -61,12 +72,12 @@ binary_sensor:
         friendly_name: "Влажность в ванной выше порога"
         device_class: problem
         value_template: >
-          {% set humidity = states('sensor.vlazhnost_vannoi_usrednennaia_za_5_minut') %}
+          {% set humidity_s = states('sensor.bathroom_filtered_humidity') %}
           {% set threshold = states('input_number.bathroom_humidity_max_threshold') | float(0) %}
-          {% if humidity in ['unknown', 'unavailable', 'none', ''] %}
+          {% if humidity_s in ['unknown', 'unavailable', 'none', ''] %}
             false
           {% else %}
-            {{ (humidity | float(0)) > threshold }}
+            {{ (humidity_s | float(0)) > threshold }}
           {% endif %}
 
       bathroom_humidity_min:
@@ -74,12 +85,12 @@ binary_sensor:
         friendly_name: "Влажность в ванной ниже порога"
         device_class: problem
         value_template: >
-          {% set humidity = states('sensor.vlazhnost_vannoi_usrednennaia_za_5_minut') %}
+          {% set humidity_s = states('sensor.bathroom_filtered_humidity') %}
           {% set threshold = states('input_number.bathroom_humidity_min_threshold') | float(0) %}
-          {% if humidity in ['unknown', 'unavailable', 'none', ''] %}
+          {% if humidity_s in ['unknown', 'unavailable', 'none', ''] %}
             false
           {% else %}
-            {{ (humidity | float(0)) < threshold }}
+            {{ (humidity_s | float(0)) < threshold }}
           {% endif %}
 
       bathroom_open_door:
@@ -88,6 +99,7 @@ binary_sensor:
         value_template: >
           {{ is_state('binary_sensor.bathroom_door_inside_contact', 'on') or
              is_state('binary_sensor.bathroom_door_outside_contact', 'on') }}
+
       bathroom_motions:
         unique_id: bathroom_motions
         friendly_name: "Движение в ванной"
@@ -120,52 +132,49 @@ timer:
 #                             АВТОМАТИЗАЦИИ
 ##############################################################################
 automation:
-  # --------------------------------------------------------------------------
   # Включение вентилятора при повышенной влажности
-  # --------------------------------------------------------------------------
   - id: "dc1acbee-6ecd-45a4-8eae-ab69034c3117"
     alias: "Ванная: Вытяжка, включение."
     description: "Включение вентилятора при высокой усреднённой влажности в ванной."
-    triggers:
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.bathroom_humidity_max
         to: "on"
-    conditions:
+    condition:
       - condition: state
         entity_id: fan.bathroom_relay_l1
         state: "off"
-    actions:
+    action:
       - service: fan.turn_on
         target:
           entity_id: fan.bathroom_relay_l1
 
-  # --------------------------------------------------------------------------
   # Запуск таймера для продува вентилятора при снижении влажности
-  # --------------------------------------------------------------------------
   - id: "6ebb6fa8-9cd1-4ebd-839d-44d175e6c319"
     alias: "Ванная: Запуск таймера на продув по снижении влажности"
     description: "При снижении влажности ниже минимального порога запускается таймер на 2 минуты перед отключением вентилятора."
-    triggers:
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.bathroom_humidity_min
         to: "on"
-    actions:
+    action:
       - service: timer.start
         target:
           entity_id: timer.bathroom_fan_cooldown
 
-  # --------------------------------------------------------------------------
   # Выключение вентилятора по истечении таймера продува
-  # --------------------------------------------------------------------------
   - id: "7a1db18b-0366-47cf-8260-6109b01447f9"
     alias: "Ванная: Выключение вентилятора по окончании продува"
     description: "После истечения таймера bathroom_fan_cooldown вентилятора автоматически выключают."
-    triggers:
+    mode: single
+    trigger:
       - platform: event
         event_type: timer.finished
         event_data:
           entity_id: timer.bathroom_fan_cooldown
-    actions:
+    action:
       - service: fan.turn_off
         target:
           entity_id: fan.bathroom_relay_l1

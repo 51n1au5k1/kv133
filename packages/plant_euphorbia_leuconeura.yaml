@@ -74,63 +74,80 @@ binary_sensor:
         unique_id: plant_alert_euphorbia_leuconeura_soil
         friendly_name: "Необходимость полива (Молочай)"
         device_class: problem
+        availability_template: >-
+          {{ states('sensor.euphorbia_leuconeura_filtered_soil_moisture') not in ['unknown','unavailable',''] and
+             states('number.euphorbia_leuconeura_min_soil_moisture') not in ['unknown','unavailable',''] }}
         value_template: >-
-          {% set moisture = states('sensor.euphorbia_leuconeura_filtered_soil_moisture') | int(default=0) %}
-          {% set min_threshold = states('number.euphorbia_leuconeura_min_soil_moisture') | int(default=0) %}
+          {% set moisture = states('sensor.euphorbia_leuconeura_filtered_soil_moisture') | float(0) %}
+          {% set min_threshold = states('number.euphorbia_leuconeura_min_soil_moisture') | float(0) %}
           {{ moisture > 0 and moisture < min_threshold }}
       plant_alert_euphorbia_leuconeura_temperature:
         unique_id: plant_alert_euphorbia_leuconeura_temperature
         friendly_name: "Необходимость согрева или охлаждения (Молочай)"
         device_class: problem
+        availability_template: >-
+          {{ states('sensor.euphorbia_leuconeura_filtered_temperature') not in ['unknown','unavailable',''] and
+             states('number.euphorbia_leuconeura_min_temperature') not in ['unknown','unavailable',''] and
+             states('number.euphorbia_leuconeura_max_temperature') not in ['unknown','unavailable',''] }}
         value_template: >-
-          {% set temperature = states('sensor.euphorbia_leuconeura_filtered_temperature') | int(default=0) %}
-          {% set min_threshold = states('number.euphorbia_leuconeura_min_temperature') | int(default=0) %}
-          {% set max_threshold = states('number.euphorbia_leuconeura_max_temperature') | int(default=0) %}
+          {% set temperature = states('sensor.euphorbia_leuconeura_filtered_temperature') | float(0) %}
+          {% set min_threshold = states('number.euphorbia_leuconeura_min_temperature') | float(0) %}
+          {% set max_threshold = states('number.euphorbia_leuconeura_max_temperature') | float(0) %}
           {{ (temperature > 0 and temperature < min_threshold) or (temperature > max_threshold) }}
       plant_alert_euphorbia_leuconeura_illuminance:
         unique_id: plant_alert_euphorbia_leuconeura_illuminance
         friendly_name: "Необходимость коррекции освещенности (Молочай)"
         device_class: problem
+        availability_template: >-
+          {{ states('sensor.euphorbia_leuconeura_filtered_illuminance') not in ['unknown','unavailable',''] and
+             states('number.euphorbia_leuconeura_max_illuminance') not in ['unknown','unavailable',''] }}
         value_template: >-
-          {% set illuminance = states('sensor.euphorbia_leuconeura_filtered_illuminance') | int(default=0) %}
-          {% set max_threshold = states('number.euphorbia_leuconeura_max_illuminance') | int(default=0) %}
+          {% set illuminance = states('sensor.euphorbia_leuconeura_filtered_illuminance') | float(0) %}
+          {% set max_threshold = states('number.euphorbia_leuconeura_max_illuminance') | float(0) %}
           {{ illuminance > 0 and illuminance > max_threshold }}
-#          {{ (illuminance > 0 and illuminance < min_threshold) or (illuminance > max_threshold) }}
-#            - если надо, чтобы на мало света тоже реагировало
+        # Если нужно реагировать и на недостаток света:
+        # {{ (illuminance > 0 and illuminance < min_threshold) or (illuminance > max_threshold) }}
+
 ##############################################################################
 #                              АВТОМАТИЗАЦИИ
 ##############################################################################
 automation:
-  # Уведомление при необходимости полива (когда человек дома)
+  # Полив (домой + кулдаун)
   - id: "4370eb06-5640-4c42-adde-b91046f301f4-1"
     alias: "Растение. Молочай: Уведомление о поливе"
-    triggers:
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.plant_alert_euphorbia_leuconeura_soil
         to: "on"
-    conditions:
+    condition:
       - condition: state
         entity_id: person.master
         state: "home"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
       - condition: template
         value_template: >-
-          {% set last_notification = states('input_datetime.last_euphorbia_leuconeura_soil_notification') %}
-          {% set last_notification_ts = as_timestamp(last_notification) if last_notification not in ['unknown', 'unavailable', 'none'] else 0 %}
-          {{ (as_timestamp(now()) - last_notification_ts) > 10800 }}
-    actions:
+          {% set last = states('input_datetime.last_euphorbia_leuconeura_soil_notification') %}
+          {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
+          {% set cooldown = (states('input_number.plants_notification_cooldown_hours') | float(3) * 3600) | int %}
+          {{ (now().timestamp() - last_ts) > cooldown }}
+    action:
       - service: script.plant_check_conditions
         data:
           plant_name: "Молочай"
           plant_name_latin: "euphorbia_leuconeura"
 
-  # Уведомление при недопустимой температуре (когда человек дома)
+  # Температура (домой + кулдаун)
   - id: "4370eb06-5640-4c42-adde-b91046f301f4-2"
     alias: "Растение. Молочай: Уведомление о температуре"
-    triggers:
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.plant_alert_euphorbia_leuconeura_temperature
         to: "on"
-    conditions:
+    condition:
       - condition: state
         entity_id: person.master
         state: "home"
@@ -139,23 +156,25 @@ automation:
         state: "off"
       - condition: template
         value_template: >-
-          {% set last_notification = states('input_datetime.last_euphorbia_leuconeura_temperature_notification') %}
-          {% set last_notification_ts = as_timestamp(last_notification) if last_notification not in ['unknown', 'unavailable', 'none'] else 0 %}
-          {{ (as_timestamp(now()) - last_notification_ts) > 10800 }}
-    actions:
+          {% set last = states('input_datetime.last_euphorbia_leuconeura_temperature_notification') %}
+          {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
+          {% set cooldown = (states('input_number.plants_notification_cooldown_hours') | float(3) * 3600) | int %}
+          {{ (now().timestamp() - last_ts) > cooldown }}
+    action:
       - service: script.plant_check_conditions
         data:
           plant_name: "Молочай"
           plant_name_latin: "euphorbia_leuconeura"
 
-  # Уведомление при недопустимой освещенности (когда человек дома)
+  # Освещённость (домой + кулдаун)
   - id: "4370eb06-5640-4c42-adde-b91046f301f4-3"
     alias: "Растение. Молочай: Уведомление об освещенности"
-    triggers:
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.plant_alert_euphorbia_leuconeura_illuminance
         to: "on"
-    conditions:
+    condition:
       - condition: state
         entity_id: person.master
         state: "home"
@@ -164,22 +183,24 @@ automation:
         state: "off"
       - condition: template
         value_template: >-
-          {% set last_notification = states('input_datetime.last_euphorbia_leuconeura_illuminance_notification') %}
-          {% set last_notification_ts = as_timestamp(last_notification) if last_notification not in ['unknown', 'unavailable', 'none'] else 0 %}
-          {{ (as_timestamp(now()) - last_notification_ts) > 10800 }}
-    actions:
+          {% set last = states('input_datetime.last_euphorbia_leuconeura_illuminance_notification') %}
+          {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
+          {% set cooldown = (states('input_number.plants_notification_cooldown_hours') | float(3) * 3600) | int %}
+          {{ (now().timestamp() - last_ts) > cooldown }}
+    action:
       - service: script.plant_check_conditions
         data:
           plant_name: "Молочай"
           plant_name_latin: "euphorbia_leuconeura"
 
-  # Регулярная проверка состояния растения (каждые 6 часов)
+  # Периодическая проверка (каждые 6 часов)
   - id: "plant-euphorbia-periodic-check"
     alias: "Растение. Молочай: Периодическая проверка"
-    triggers:
+    mode: single
+    trigger:
       - platform: time_pattern
         hours: "/6"
-    actions:
+    action:
       - service: script.plant_check_conditions
         data:
           plant_name: "Молочай"

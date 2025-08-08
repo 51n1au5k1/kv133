@@ -28,54 +28,81 @@
 ##############################################################################
 #                                  СКРИПТЫ
 ##############################################################################
+
+# ----------------------------------------------------------------------------
+# Формирование и отправка прогноза погоды
+# ----------------------------------------------------------------------------
+
 script:
-  # ----------------------------------------------------------------------------
-  # Формирование и отправка прогноза погоды
-  # ----------------------------------------------------------------------------
-  # Этот скрипт собирает данные о текущей погоде и прогнозе на день,
-  # форматирует их с соответствующими эмодзи и отправляет пользователям.
-  # Используется сервисами: Open-meteo API и weather.kvartira_133
-  # ----------------------------------------------------------------------------
   telegram_send_weather_forecast:
     description: "Формирует и отправляет прогноз погоды указанному получателю"
     fields:
       recipient:
-        description: "Получатель (notify.master)"
+        description: "Получатель (например, notify.master)"
         example: "notify.master"
         required: true
     sequence:
-      # Подготовка заголовка
+      # Сначала получаем прогноз через сервис
+      - service: weather.get_forecasts
+        data:
+          type: hourly # или daily, в зависимости от того, что вам нужно
+        target:
+          entity_id: weather.kvartira_133
+        response_variable: weather_forecast
+
       - variables:
           today_date: "{{ now().strftime('%d.%m.%Y') }}"
           title: "<b>Прогноз погоды на <u>{{ today_date }}</u></b>"
 
           # Текущие погодные условия
-          current_condition: "{{ states('sensor.open_meteo_opisanie_na_russkom') }}"
-          current_temperature: "{{ state_attr('weather.kvartira_133', 'temperature') }}"
-          current_wind: "{{ states('sensor.open_meteo_weather4notion_wind') }}"
-          current_wind_speed: "{{ state_attr('weather.kvartira_133', 'wind_speed') }}"
-          precipitation_unit: "{{ state_attr('weather.kvartira_133', 'precipitation_unit') }}"
-          pressure: "{{ state_attr('sensor.livingroom_corrected_pressure', 'pressure') | default(735, true) | round(2) }}"
+          current_condition: "{{ states('sensor.open_meteo_opisanie_na_russkom') | default(states('weather.kvartira_133')) }}"
+          current_temperature: "{{ state_attr('weather.kvartira_133', 'temperature') | default('N/A') }}"
+          current_wind_bearing: "{{ state_attr('weather.kvartira_133', 'wind_bearing') | default(0) }}"
+          current_wind_speed: "{{ state_attr('weather.kvartira_133', 'wind_speed') | default('N/A') }}"
+          current_pressure_mmhg: "{{ state_attr('weather.kvartira_133', 'pressure') | default(0) }}"
 
-          # Иконка для текущего состояния погоды
+          # Преобразуем направление ветра в текст
+          wind_direction: >-
+            {% set bearing = current_wind_bearing | int %}
+            {% if bearing >= 337.5 or bearing < 22.5 %}северный
+            {% elif bearing >= 22.5 and bearing < 67.5 %}северо-восточный
+            {% elif bearing >= 67.5 and bearing < 112.5 %}восточный
+            {% elif bearing >= 112.5 and bearing < 157.5 %}юго-восточный
+            {% elif bearing >= 157.5 and bearing < 202.5 %}южный
+            {% elif bearing >= 202.5 and bearing < 247.5 %}юго-западный
+            {% elif bearing >= 247.5 and bearing < 292.5 %}западный
+            {% elif bearing >= 292.5 and bearing < 337.5 %}северо-западный
+            {% else %}неизвестно{% endif %}
+
+          # Берём скорректированное давление из сенсора или из weather entity
+          current_pressure: >-
+            {% set sensor_pressure = states('sensor.livingroom_corrected_pressure') | float(0) %}
+            {% if sensor_pressure > 0 %}
+              {{ sensor_pressure | round(1) }}
+            {% elif current_pressure_mmhg > 0 %}
+              {{ current_pressure_mmhg | round(1) }}
+            {% else %}
+              735
+            {% endif %}
+
+          # Выбор иконки для текущего состояния
           weather_icon: >-
-            {% if current_condition == 'ясно' %}☀️
-            {% elif current_condition == 'малооблачно' %}⛅
-            {% elif current_condition == 'облачно с прояснениями' %}☁️
-            {% elif current_condition == 'пасмурно' %}🌥
-            {% elif current_condition == 'туман' %}🌫
-            {% elif current_condition == 'морось' %}🌦
-            {% elif current_condition == 'дождливо' %}🌧
-            {% elif current_condition == 'небольшой дождь' %}🌦
-            {% elif current_condition == 'дождь' %}🌧
-            {% elif current_condition == 'ливень' %}⛈
-            {% elif current_condition == 'снег' %}❄️
-            {% elif current_condition == 'сильный снег' %}🌨
-            {% elif current_condition == 'дождь со снегом' %}🌧❄️
-            {% elif current_condition == 'гроза' %}⚡
+            {% set cond = states('weather.kvartira_133') %}
+            {% if cond == 'sunny' or current_condition == 'ясно' %}☀️
+            {% elif cond == 'partlycloudy' or current_condition == 'малооблачно' %}⛅
+            {% elif cond == 'cloudy' or current_condition in ['облачно с прояснениями', 'облачно'] %}☁️
+            {% elif cond == 'overcast' or current_condition == 'пасмурно' %}🌥
+            {% elif cond == 'fog' or current_condition == 'туман' %}🌫
+            {% elif cond in ['drizzle','light-rain'] or current_condition in ['морось', 'небольшой дождь'] %}🌦
+            {% elif cond in ['rainy','rain'] or current_condition == 'дождливо' %}🌧
+            {% elif cond == 'pouring' or current_condition == 'ливень' %}⛈
+            {% elif cond == 'snowy' or current_condition == 'снег' %}❄️
+            {% elif cond == 'snowy-heavy' or current_condition == 'сильный снег' %}🌨
+            {% elif cond == 'sleet' or current_condition == 'дождь со снегом' %}🌧❄️
+            {% elif cond == 'lightning' or current_condition == 'гроза' %}⚡
             {% else %}🌈{% endif %}
 
-      # Отправка сообщения с прогнозом
+      # Отправляем сообщение
       - service: "{{ recipient }}"
         data:
           title: "{{ title }}"
@@ -83,73 +110,34 @@ script:
             {{ weather_icon }} <b>Сейчас:</b> {{ current_condition }}
 
             🌡 <b>Температура:</b> {{ current_temperature }}°C
-            🌬 <b>Ветер:</b> {{ current_wind }}, {{ current_wind_speed }} м/с
-
-            {% if precipitation_unit == 'mm' %}
-            🌧 <b>Осадки:</b> {{ state_attr('weather.kvartira_133', 'precipitation') | default(0, true) }} мм
-            {% else %}
-            ☀ <b>Осадки:</b> Не ожидаются
-            {% endif %}
+            🌬 <b>Ветер:</b> {{ wind_direction }}, {{ current_wind_speed }} м/с
 
             <b>📅 Прогноз на сегодня:</b>
+            {%- if weather_forecast is defined and weather_forecast['weather.kvartira_133'] is defined and weather_forecast['weather.kvartira_133']['forecast'] is defined %}
+            {%- set forecasts = weather_forecast['weather.kvartira_133']['forecast'] %}
+            {%- set today_items = namespace(found=false) %}
+            {%- for forecast in forecasts[:8] %}
+            {%- if forecast.datetime is defined %}
+            {%- set forecast_dt = forecast.datetime | as_datetime | as_local %}
+            {%- if forecast_dt is not none and forecast_dt.date() == now().date() and forecast_dt > now() %}
+            {%- set today_items.found = true %}
+            {%- set cond = forecast.condition | default('unknown') %}
+            {%- set icon = '☀️' if cond == 'sunny' else '⛅' if cond == 'partlycloudy' else '☁️' if cond == 'cloudy' else '🌥' if cond == 'overcast' else '🌫' if cond == 'fog' else '🌦' if cond in ['drizzle','light-rain'] else '🌧' if cond in ['rainy','rain'] else '⛈' if cond == 'pouring' else '❄️' if cond == 'snowy' else '🌨' if cond == 'snowy-heavy' else '🌧❄️' if cond == 'sleet' else '⚡' if cond == 'lightning' else '🌈' %}
+            • <b>{{ forecast_dt.strftime('%H:%M') }}</b> {{ icon }} {{ forecast.temperature | round(1) }}°C
+            {%- set precip = forecast.precipitation | float(0) if forecast.precipitation is defined else 0 -%}
+            {%- if precip > 0 %}, осадки: {{ precip }} мм{% endif -%}
+            {%- endif -%}
+            {%- endif -%}
+            {%- endfor %}
+            {%- if not today_items.found %}
+            ℹ️ Прогноз на оставшуюся часть дня недоступен
+            {%- endif -%}
+            {%- else %}
+            ⚠️ Прогноз недоступен (проверьте интеграцию погоды)
+            {%- endif %}
 
-            {% for forecast in state_attr('weather.kvartira_133', 'forecast') | default([], true) %}
-              {% set forecast_date = forecast.datetime | as_datetime %}
-              {% if forecast_date.date() == now().date() %}
-                {% set condition = forecast.condition %}
-                {% set icon = '☀️' if condition == 'sunny' else 
-                              '⛅' if condition == 'partlycloudy' else 
-                              '☁️' if condition == 'cloudy' else 
-                              '🌥' if condition == 'overcast' else 
-                              '🌫' if condition == 'fog' else 
-                              '🌦' if condition == 'drizzle' or condition == 'light-rain' else 
-                              '🌧' if condition == 'rainy' or condition == 'rain' else 
-                              '⛈' if condition == 'pouring' else 
-                              '❄️' if condition == 'snowy' else 
-                              '🌨' if condition == 'snowy-heavy' else 
-                              '🌧❄️' if condition == 'sleet' else 
-                              '⚡' if condition == 'lightning' else 
-                              '🌈' %}
-                
-                {% set condition_ru = 'ясно' if condition == 'sunny' else 
-                                      'малооблачно' if condition == 'partlycloudy' else 
-                                      'облачно с прояснениями' if condition == 'cloudy' else 
-                                      'пасмурно' if condition == 'overcast' else 
-                                      'туман' if condition == 'fog' else 
-                                      'морось' if condition == 'drizzle' else 
-                                      'дождливо' if condition == 'rainy' else 
-                                      'небольшой дождь' if condition == 'light-rain' else 
-                                      'дождь' if condition == 'rain' else 
-                                      'ливень' if condition == 'pouring' else 
-                                      'снег' if condition == 'snowy' else 
-                                      'сильный снег' if condition == 'snowy-heavy' else 
-                                      'дождь со снегом' if condition == 'sleet' else 
-                                      'гроза' if condition == 'lightning' else 
-                                      'неопределенные погодные условия' %}
-                
-                <b>{{ forecast_date | as_local | as_timestamp | timestamp_custom('%H:%M') }}</b> {{ icon }}
-                ▸ {{ condition_ru }}
-                ▸ Температура: {{ forecast.temperature }}°C
-                ▸ Ветер: {{ forecast.wind_bearing | float | default(0) | int }}° 
-                  ({{ '⬆️ северный' if forecast.wind_bearing < 22.5 or forecast.wind_bearing >= 337.5 else 
-                      '↗️ северо-восточный' if forecast.wind_bearing < 67.5 else 
-                      '➡️ восточный' if forecast.wind_bearing < 112.5 else 
-                      '↘️ юго-восточный' if forecast.wind_bearing < 157.5 else 
-                      '⬇️ южный' if forecast.wind_bearing < 202.5 else 
-                      '↙️ юго-западный' if forecast.wind_bearing < 247.5 else 
-                      '⬅️ западный' if forecast.wind_bearing < 292.5 else 
-                      '↖️ северо-западный' }}), 
-                  {{ forecast.wind_speed }} м/с
-                ▸ {% if 'precipitation' in forecast and forecast.precipitation | float > 0 %}
-                  🌧 {{ forecast.precipitation }} мм
-                {% else %}
-                  ☀ Без осадков
-                {% endif %}
-              {% endif %}
-            {% endfor %}
-
-            <b>Атмосферное давление:</b> {{ pressure }} мм рт.ст.
-            (<i>{{ '⬆️ выше нормы' if pressure > 740 else '⬇️ ниже нормы' if pressure < 738 else '🟢 нормальное' }}</i>)
+            <b>💨 Атмосферное давление:</b> {{ current_pressure }} мм рт. ст.
+            (<i>{% if current_pressure > 740 %}⬆️ выше нормы{% elif current_pressure < 738 %}⬇️ ниже нормы{% else %}🟢 нормальное{% endif %}</i>)
 
 ##############################################################################
 #                             АВТОМАТИЗАЦИИ
@@ -160,21 +148,20 @@ automation:
   # ----------------------------------------------------------------------------
   # Отправляет в Telegram ежедневный прогноз погоды.
   # Триггер установлен на 07:45:00 (каждое утро).
-  # Отправляется по отдельности Андрею (notify.master) и Татьяне (notify.tatiana).
+  # Отправляется по отдельности Андрею (notify.master).
   # Включает текущую погоду и прогноз на весь день от Open-meteo.
   # ----------------------------------------------------------------------------
   - id: "ac0837cf-9ecb-413b-96fb-89552934212d"
     alias: "Уведомление. Телеграм: Прогноз погоды"
     description: "Отправляет прогноз погоды на сегодня в Телеграм каждое утро."
-    triggers:
+    trigger:
       - platform: time
         at: "07:45:00"
-    actions:
+    action:
       # Отправка прогноза Андрею
       - service: script.telegram_send_weather_forecast
         data:
           recipient: notify.master
-
     mode: single
 
   # ----------------------------------------------------------------------------
@@ -187,13 +174,13 @@ automation:
   - id: "1f7e3ae4-268e-4afa-a7e6-d395821f244b"
     alias: "Уведомление. Телеграм: Открытие входной двери"
     description: "Отправляет уведомление об открытии двери, если master не дома и режим уборки выключен."
-    triggers:
+    trigger:
       - platform: device
         device_id: abd3e40b49cfbe61411bac5d87bf000f
         entity_id: binary_sensor.hallway_door_contact
         domain: binary_sensor
         type: opened
-    conditions:
+    condition:
       # Проверяем, что master не дома
       - condition: state
         entity_id: person.master
@@ -202,7 +189,7 @@ automation:
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-    actions:
+    action:
       - service: notify.master
         data:
           message: "⚠️ <b>Открытие входной двери!</b> 🔓"
@@ -216,13 +203,13 @@ automation:
   # ----------------------------------------------------------------------------
   - id: "eaddf6dd-762d-487e-9bf2-ba018f10b742"
     alias: "Уведомление. Телеграм: Уведомление о звонке в дверь"
-    triggers:
+    trigger:
       - platform: device
         domain: mqtt
         device_id: d2c3001cdc59660c456de45aec09da91
         type: action
         subtype: single
-    conditions:
+    condition:
       # Проверяем, что master не дома
       - condition: state
         entity_id: person.master
@@ -231,7 +218,7 @@ automation:
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-    actions:
+    action:
       - service: notify.master
         data:
           message: "⚠️ <b>Кто-то звонит в дверь</b>"
@@ -248,11 +235,11 @@ automation:
   # ----------------------------------------------------------------------------
   - id: "417016e0-21fa-4ec3-a057-35deaa7a93f2"
     alias: "Уведомление. Телеграм: Включение камеры"
-    triggers:
+    trigger:
       - platform: state
         entity_id: group.cameras
         to: "on"
-    conditions:
+    condition:
       - condition: or
         conditions:
           - condition: time
@@ -270,21 +257,16 @@ automation:
               - sun
             after: "00:00:00"
             before: "23:59:59"
-    actions:
-      - choose:
-          conditions:
-            - condition: template
-              value_template: "{{ now().weekday() in [5, 6] }}"
-          sequence:
-            - service: notify.master
-              data:
-                message: >
-                  {% set messages = [
-                    "⚠️ Внимание! Камеры включены! 🎥",
-                    "⚠️ Внимание! Камеры активированы! 🎥",
-                    "⚠️ Внимание! Камеры работают! 🎥"
-                  ] %}
-                  {{ messages | random }}
+    action:
+      - service: notify.master
+        data:
+          message: >
+            {% set messages = [
+              "⚠️ Внимание! Камеры включены! 🎥",
+              "⚠️ Внимание! Камеры активированы! 🎥",
+              "⚠️ Внимание! Камеры работают! 🎥"
+            ] %}
+            {{ messages | random }}
     mode: single
 
   # ----------------------------------------------------------------------------
@@ -296,10 +278,10 @@ automation:
   - id: "686a3440-7629-4b55-b508-593caf3679af"
     alias: "Уведомление. Телеграм: Сервер запущен"
     description: "Уведомление о запуске сервера"
-    triggers:
+    trigger:
       - platform: homeassistant
         event: start
-    actions:
+    action:
       - service: notify.master
         data:
           message: >
@@ -319,10 +301,10 @@ automation:
   - id: "c8dc47aa-90f0-4522-b71e-4e99bbfe6c76"
     alias: "Уведомление. Телеграм: Сервер отключён"
     description: "Уведомление о выключении сервера"
-    triggers:
+    trigger:
       - platform: homeassistant
         event: shutdown
-    actions:
+    action:
       - service: notify.master
         data:
           message: >
@@ -334,26 +316,6 @@ automation:
     mode: single
 
   # ----------------------------------------------------------------------------
-  # Уведомление: Необходимо заменить элемент питания (через Blueprint)
-  # ----------------------------------------------------------------------------
-  # Воспользуемся готовым блупринтом (sbyx/low-battery-level-detection-notification).
-  # Порог установлен на 15%. При срабатывании отправляется уведомление в notify.master,
-  # упоминая конкретные сенсоры, у которых батарея упала ниже заданного порога.
-  # ----------------------------------------------------------------------------
-  - id: "04c57ac3-56ec-49aa-a30a-4b3bd973eb60"
-    alias: "Уведомление. Телеграм: Необходимо заменить элемент питания"
-    description: "Уведомление о необходимости замены элемента питания"
-    use_blueprint:
-      path: sbyx/low-battery-level-detection-notification-for-all-battery-sensors.yaml
-      input:
-        threshold: 15
-        actions:
-          - service: notify.master
-            metadata: {}
-            data:
-              message: '"Необходима замена элемента питания: {{sensors}}"'
-
-  # ----------------------------------------------------------------------------
   # Уведомление: Доступно обновление компонента/плагина
   # ----------------------------------------------------------------------------
   # Срабатывает, когда любой из перечисленных update.*_update переходит в состояние 'on'.
@@ -363,7 +325,7 @@ automation:
   - id: "4c5c8e57-be5b-4380-88a1-4ecc730c19da"
     alias: "Уведомление. Телеграм: Возможно обновления компонента системы"
     description: "Уведомление о возможности обновления компонента системы"
-    triggers:
+    trigger:
       - platform: state
         entity_id:
           - update.file_editor_update
@@ -378,9 +340,9 @@ automation:
           - update.zigbee2mqtt_update
           - update.ps5_mqtt_update
         to: "on"
-    actions:
+    action:
       - service: notify.master
-        data_template:
+        data:
           message: >
             {% set entity = trigger.to_state %}
             {% if entity %}
@@ -391,6 +353,7 @@ automation:
             {% else %}
               Ошибка: Данные обновления недоступны.
             {% endif %}
+    mode: single
 
   # ----------------------------------------------------------------------------
   # Уведомление: Низкий заряд батареи массажёра
@@ -400,16 +363,16 @@ automation:
   # ----------------------------------------------------------------------------
   - id: "ab45665b-4995-448d-b180-c0e1d77184e9"
     alias: "Уведомление. Телеграм: Низкий заряд батареи массажёра"
-    triggers:
+    trigger:
       - platform: numeric_state
         entity_id: sensor.soocare_cn_1083009681_m14_battery_level_p_3_1
         below: 30
-    conditions:
+    condition:
       # Проверяем, что не фаза загрузки
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
+    action:
       - service: notify.master
         data:
           message: "⚠️ <b>Массажёр нуждается в зарядке!</b>"
@@ -421,14 +384,14 @@ automation:
   - id: "daa17acf-7c8a-4a8e-9fd0-4f2c5348c814"
     alias: "Уведомление. Телеграм: Проблемы с жесткими дисками Proxmox"
     description: "Уведомление о проблемах с жесткими дисками Proxmox."
-    triggers:
+    trigger:
       - platform: state
         entity_id: binary_sensor.disk_pve_h_w_raid1_dev_sdb_health
         to: "on"
       - platform: state
         entity_id: binary_sensor.disk_pve_128gb_ssd_dev_sda_health
         to: "on"
-    actions:
+    action:
       - service: notify.master
         data:
           message: >-
@@ -446,11 +409,11 @@ automation:
   - id: "4751a90b-0134-4906-84f0-e5b1a7cb02c2"
     alias: "Уведомление. Телеграм: Высокая загрузка диска Proxmox"
     description: "Уведомление, если диск Proxmox использован более чем на 90%."
-    triggers:
+    trigger:
       - platform: numeric_state
         entity_id: sensor.node_pve_disk_used_percentage
         above: 90
-    actions:
+    action:
       - service: notify.master
         data:
           message: >-
@@ -464,15 +427,15 @@ automation:
   - id: "ab5c1bd2-8756-4736-9909-52766bf989bd"
     alias: "Уведомление. Телеграм: Доступны обновления для Proxmox"
     description: "Сообщает о наличии доступных обновлений для системы виртуализации."
-    triggers:
+    trigger:
       - platform: state
         entity_id: binary_sensor.node_pve_updates_packages
         to: "on"
-    actions:
+    action:
       - service: notify.master
         data:
           message: >-
             🔄 <b>Доступны обновления для Proxmox!</b>
-            Количество доступных обновлений: {{ states('sensor.node_pve_total_updates') }}.
+            Количество доступных обновлений: {{ states('sensor.node_pve_total_updates') | default(0) }}.
             Проверьте систему и обновите при необходимости.
     mode: single

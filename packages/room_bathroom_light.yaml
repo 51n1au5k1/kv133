@@ -55,7 +55,6 @@ group:
       - light.bathroom_spot_c1_philips
       - light.bathroom_spot_c2_philips
       - light.bathroom_relay_l2
-
   bathroom_spots:
     name: "Точечные светильники ванной"
     entities:
@@ -64,7 +63,6 @@ group:
       - light.bathroom_spot_l1_philips
       - light.bathroom_spot_c1_philips
       - light.bathroom_spot_c2_philips
-
   bathroom_night_lights:
     name: "Ночное освещение ванной"
     entities:
@@ -81,12 +79,23 @@ binary_sensor:
         value_template: "{{ now().hour >= 22 or now().hour < 6 }}"
 
 ##############################################################################
+#                          НАСТРОЙКА ДЛИТЕЛЬНОСТИ ТАЙМЕРА
+##############################################################################
+input_number:
+  bathroom_timer_duration:
+    name: "Таймер ванной (мин)"
+    min: 0.5
+    max: 10
+    step: 0.5
+    initial: 3
+
+##############################################################################
 #                                ТАЙМЕРЫ
 ##############################################################################
 timer:
   timer_bathroom:
     name: "Движение отсутствует"
-    duration: "00:03:00"
+    duration: "00:03:00" # Базовое значение; при старте задаём динамически
 
 ##############################################################################
 #                                СКРИПТЫ
@@ -95,7 +104,6 @@ script:
   bathroom_toggle_night_mode:
     alias: "Переключение ночного режима в ванной"
     sequence:
-      # Проверяем, включен ли хотя бы один светильник из ночной группы
       - if:
           condition: or
           conditions:
@@ -106,7 +114,6 @@ script:
               entity_id: light.bathroom_relay_l2
               state: "on"
         then:
-          # Если включен - выключаем все
           - service: light.turn_off
             target:
               entity_id: group.bathroom_all_lights
@@ -119,22 +126,21 @@ script:
           - service: timer.start
             target:
               entity_id: timer.timer_bathroom
+            data:
+              duration: "{{ (states('input_number.bathroom_timer_duration') | float * 60) | int }}"
 
   bathroom_toggle_day_mode:
     alias: "Переключение дневного режима в ванной"
     sequence:
-      # Проверяем, включен ли хотя бы один светильник
       - if:
           condition: state
           entity_id: group.bathroom_all_lights
           state: "on"
         then:
-          # Если включен - выключаем все
           - service: light.turn_off
             target:
               entity_id: group.bathroom_all_lights
         else:
-          # Иначе включаем все светильники
           - service: light.turn_on
             target:
               entity_id: light.bathroom_relay_l2
@@ -146,6 +152,8 @@ script:
           - service: timer.start
             target:
               entity_id: timer.timer_bathroom
+            data:
+              duration: "{{ (states('input_number.bathroom_timer_duration') | float * 60) | int }}"
 
   bathroom_turn_on_night_mode:
     alias: "Включение ночного освещения в ванной"
@@ -172,19 +180,18 @@ script:
 #                              АВТОМАТИЗАЦИИ
 ##############################################################################
 automation:
-  # ----------------------------------------------------------------------------
-  # Управление освещением: ручное переключение и запуск таймера
-  # ----------------------------------------------------------------------------
+  # Вкл/выкл света кнопкой
   - id: "5525cbdc-3a8d-4464-908e-795c8205b40c"
     alias: "Ванная: Освещение, вкл/выкл с выключателя"
-    description: "Автоматизация для управления светом в ванной через MQTT-выключатель."
-    triggers:
+    description: "Управление светом через MQTT-выключатель."
+    mode: restart
+    trigger:
       - platform: device
         domain: mqtt
         device_id: cc6ef89720abb376a24e910e13f37902
         type: action
         subtype: single_left
-    actions:
+    action:
       - if:
           condition: state
           entity_id: binary_sensor.is_night_mode
@@ -198,24 +205,35 @@ automation:
             target:
               entity_id: script.bathroom_toggle_day_mode
 
-  # ----------------------------------------------------------------------------
-  # Включение света по движению/открытию двери (с учетом времени суток)
-  # ----------------------------------------------------------------------------
+  # Включение света по движению/двери
   - id: "0007279c-13b5-402b-9aef-bf264273fa90"
     alias: "Ванная: Освещение, вкл по движению и датчикам открытия"
-    description: "При срабатывании датчиков движения или открытии дверей в ванной, включается свет в зависимости от времени суток."
-    triggers:
+    description: "Включает свет в зависимости от времени суток."
+    mode: restart
+    trigger:
       - platform: state
         entity_id: binary_sensor.bathroom_open_door
+        from: "off"
         to: "on"
+        for:
+          seconds: 1
       - platform: state
         entity_id: binary_sensor.bathroom_motions
+        from: "off"
         to: "on"
-    conditions:
+        for:
+          seconds: 1
+    condition:
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-    actions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.bathroom_lights_startup_protection
+        state: "off"
+    action:
       - if:
           condition: state
           entity_id: binary_sensor.is_night_mode
@@ -229,79 +247,77 @@ automation:
             target:
               entity_id: script.bathroom_turn_on_day_mode
 
-  # ----------------------------------------------------------------------------
-  # Отмена таймера при обнаружении движения
-  # ----------------------------------------------------------------------------
+  # Отмена таймера при движении
   - id: "50323f55-c6dd-483a-8799-af3c57e3e363"
     alias: "Ванная: Отмена таймера при обнаружении движения"
-    description: "Если в ванной вновь обнаруживается движение во время работы таймера, таймер отменяется."
-    triggers:
+    description: "Отменяет таймер, если снова появилось движение."
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.bathroom_motions
         to: "on"
-    conditions:
+    condition:
       - condition: state
         entity_id: timer.timer_bathroom
         state: "active"
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-    actions:
+    action:
       - service: timer.cancel
         target:
           entity_id: timer.timer_bathroom
 
-  # ----------------------------------------------------------------------------
-  # Запуск таймера при отсутствии движения (1 минута)
-  # ----------------------------------------------------------------------------
+  # Запуск таймера при отсутствии движения
   - id: "e519fa4c-bbad-4b0d-b06c-8521b3b10131"
     alias: "Ванная: Запуск таймера при отсутствии движения"
-    description: "Если движение в ванной отсутствует в течение 1 минуты, запускается таймер для автоматического выключения света."
-    triggers:
+    description: "Если движения нет 1 минуту, запускает таймер авто-выключения."
+    mode: restart
+    trigger:
       - platform: state
         entity_id: binary_sensor.bathroom_motions
         to: "off"
         for:
           minutes: 1
-    conditions:
+    condition:
       - condition: state
         entity_id: group.bathroom_all_lights
         state: "on"
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-    actions:
+    action:
       - service: timer.start
         target:
           entity_id: timer.timer_bathroom
+        data:
+          duration: "{{ (states('input_number.bathroom_timer_duration') | float * 60) | int }}"
 
-  # ----------------------------------------------------------------------------
-  # Выключение света по истечении таймера отсутствия движения
-  # ----------------------------------------------------------------------------
+  # Выключение света по таймеру
   - id: "b30b7ad8-6563-4279-a78f-1a113f9cb252"
     alias: "Ванная: Освещение, выключение по таймеру"
-    description: "Эта автоматизация автоматически выключает свет в ванной по истечении таймера."
-    triggers:
+    description: "Выключает свет по истечении таймера."
+    mode: single
+    trigger:
       - platform: event
         event_type: timer.finished
         event_data:
           entity_id: timer.timer_bathroom
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-    actions:
+    action:
       - service: light.turn_off
         target:
           entity_id: group.bathroom_all_lights
 
-  # ------------------------------------------------------------------------
-  # Включение реле основного света при недоступности спотов
-  # ------------------------------------------------------------------------
+  # Реле основного света при недоступности спотов
   - id: "0c5020c3-e674-4789-8086-38dbc07253d7"
     alias: "Ванная: Включение реле основного света при недоступности спотов"
-    description: "Включает реле основного света (light.bathroom_main), если один или несколько спотов недоступны."
-    triggers:
+    description: "Включает резервный свет, если >=2 спотов 'unavailable'."
+    mode: single
+    trigger:
       - platform: state
         entity_id:
           - light.bathroom_spot_r1_philips
@@ -310,15 +326,72 @@ automation:
           - light.bathroom_spot_c1_philips
           - light.bathroom_spot_c2_philips
         to: "unavailable"
-    conditions:
+        for:
+          seconds: 30
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
+        entity_id: input_boolean.bathroom_lights_startup_protection
+        state: "off"
+      - condition: state
         entity_id: light.bathroom_main
         state: "off"
-    actions:
+      - condition: template
+        value_template: >
+          {% set unavailable_count = 
+            [states.light.bathroom_spot_r1_philips,
+             states.light.bathroom_spot_r2_philips,
+             states.light.bathroom_spot_l1_philips,
+             states.light.bathroom_spot_c1_philips,
+             states.light.bathroom_spot_c2_philips]
+             | selectattr('state', 'eq', 'unavailable')
+             | list | length %}
+          {{ unavailable_count >= 2 }}
+    action:
       - service: light.turn_on
         target:
           entity_id: light.bathroom_main
+      - service: notify.master
+        data:
+          message: "⚠️ Включено резервное освещение в ванной. Недоступны споты."
+
+  # Выключение света после перезагрузки
+  - id: "14a6f0ef-8217-4fc6-8dca-067875b950a7"
+    alias: "Ванная: Выключение света после перезагрузки"
+    description: "Выключает свет после старта, если нет движения."
     mode: single
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay:
+          seconds: 30
+      - condition: state
+        entity_id: binary_sensor.bathroom_motions
+        state: "off"
+        for:
+          minutes: 1
+      - service: light.turn_off
+        target:
+          entity_id:
+            - group.bathroom_all_lights
+            - light.bathroom_main
+
+  # Таймер защиты при запуске
+  - id: "048bc34f-9e6d-475c-84ed-0af54dedeed9"
+    alias: "Ванная: Таймер защиты при запуске"
+    mode: single
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.bathroom_lights_startup_protection
+      - delay:
+          minutes: 5
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.bathroom_lights_startup_protection

@@ -13,19 +13,20 @@ automation:
   - id: "2f26dfda-2840-424a-a840-8c4acda8eaf6"
     alias: "Уведомление. Яндекс: Приветствие"
     description: "Отключение камеры, включение света в прихожей и доклад о климате"
-    triggers:
+    mode: single
+    trigger:
       - platform: event
         event_type: yandex_speaker
         event_data:
           value: "С возвращением, дорогой мне человек! Я скучала без тебя!"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
-    actions:
+    action:
       - service: light.turn_on
         target:
           entity_id: light.light_bathroom
@@ -38,18 +39,18 @@ automation:
       - delay:
           seconds: 3
       - service: script.yandex_tts_hum_status
-    mode: single
 
   # Прощание
   - id: "661464a3-ab6d-438e-847b-f2b6ddfee59a"
     alias: "Уведомление. Яндекс: Прощание"
-    description: "Выключает весь свет в доме, включает камеру в полноцветном режиме и произносит прощальное сообщение через Яндекс колонку."
-    triggers:
+    description: "Выключает весь свет, включает камеры и произносит прощальное сообщение через Яндекс."
+    mode: single
+    trigger:
       - platform: event
         event_type: yandex_speaker
         event_data:
           value: "Я буду скучать! Возвращайся быстрее"
-    actions:
+    action:
       - delay: "00:00:04"
       - service: script.yandex_tts_door_status
       - service: light.turn_off
@@ -64,28 +65,26 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - action: notify.master
+              - service: notify.master
                 data:
                   message: "Свет в квартире выключен! Приятной дороги!"
-    mode: single
 
-  # Уведомление. Яндекс: Температура ниже установленного уровня
+  # Температура ниже уровня
   - id: "a8c5eb07-9381-46d5-bc65-0f52dd7079a8"
     alias: "Уведомление. Яндекс: Температура ниже установленного уровня"
-    description: ""
-    triggers:
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.temperature_below_20
         to: "on"
         for:
-          minutes: 1 # Убедимся, что состояние "on" устойчиво в течение 1 минуты
-    conditions:
+          minutes: 1
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
-    actions:
+    action:
       - service: script.yandex_tts_door_status
-    mode: single

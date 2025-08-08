@@ -74,6 +74,13 @@ input_number:
     step: 1
     initial: 1
 
+  cpu_107:
+    name: "CPU 107 (Minim)"
+    min: 1
+    max: 16
+    step: 1
+    initial: 1
+
 ##############################################################################
 #                                 СЕНСОРЫ
 ##############################################################################
@@ -145,6 +152,15 @@ template:
           {% set cpus = states('input_number.cpu_106') | float(1) %}
           {{ (raw / cpus) | round(2) }}
 
+      - name: "CPU LXC Minim Music Server Normalized"
+        unique_id: cpu_lxc_lms_107_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: >-
+          {% set raw = states('sensor.lxc_minim_107_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_107') | float(1) %}
+          {{ (raw / cpus) | round(2) }}
+
       # --- Сенсоры загрузки относительно ХОСТА ---
       # Показывают, какой процент от ОБЩЕЙ мощности сервера использует гость.
       - name: "CPU VM HAOS12 Host Percent"
@@ -207,5 +223,14 @@ template:
         icon: mdi:chart-pie
         state: >-
           {% set raw = states('sensor.lxc_lyrionmusicserver_106_cpu_used') | float(0) %}
+          {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw / host_threads) | round(2) }}
+
+      - name: "CPU LXC Minim Server Host Percent"
+        unique_id: cpu_lxc_minim_107_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_minim_107_cpu_used') | float(0) %}
           {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
           {{ (raw / host_threads) | round(2) }}

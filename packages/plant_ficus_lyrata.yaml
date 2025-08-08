@@ -62,75 +62,93 @@ binary_sensor:
         unique_id: plant_alert_ficus_lyrata_soil
         friendly_name: "Необходимость полива (Фикус лировидный)"
         device_class: problem
+        availability_template: >-
+          {{ states('sensor.ficus_lyrata_filtered_soil_moisture') not in ['unknown','unavailable',''] and
+             states('number.ficus_lyrata_min_soil_moisture') not in ['unknown','unavailable',''] }}
         value_template: >-
-          {% set moisture = states('sensor.ficus_lyrata_filtered_soil_moisture') | float(default=0) %}
-          {% set min_threshold = states('number.ficus_lyrata_min_soil_moisture') | float(default=0) %}
+          {% set moisture = states('sensor.ficus_lyrata_filtered_soil_moisture') | float(0) %}
+          {% set min_threshold = states('number.ficus_lyrata_min_soil_moisture') | float(0) %}
           {{ moisture > 0 and moisture < min_threshold }}
       plant_alert_ficus_lyrata_temperature:
         unique_id: plant_alert_ficus_lyrata_temperature
         friendly_name: "Необходимость согрева или охлаждения (Фикус лировидный)"
         device_class: problem
+        availability_template: >-
+          {{ states('sensor.ficus_lyrata_filtered_temperature') not in ['unknown','unavailable',''] and
+             states('number.ficus_lyrata_min_temperature') not in ['unknown','unavailable',''] and
+             states('number.ficus_lyrata_max_temperature') not in ['unknown','unavailable',''] }}
         value_template: >-
-          {% set temperature = states('sensor.ficus_lyrata_filtered_temperature') | float(default=0) %}
-          {% set min_threshold = states('number.ficus_lyrata_min_temperature') | float(default=0) %}
-          {% set max_threshold = states('number.ficus_lyrata_max_temperature') | float(default=0) %}
+          {% set temperature = states('sensor.ficus_lyrata_filtered_temperature') | float(0) %}
+          {% set min_threshold = states('number.ficus_lyrata_min_temperature') | float(0) %}
+          {% set max_threshold = states('number.ficus_lyrata_max_temperature') | float(0) %}
           {{ (temperature > 0 and temperature < min_threshold) or (temperature > max_threshold) }}
 
 ##############################################################################
 #                              АВТОМАТИЗАЦИИ
 ##############################################################################
 automation:
-  # Уведомление при необходимости полива (когда человек дома)
+  # Полив (домой + кулдаун)
   - id: "3ee8085c-621a-49f0-98f6-cce0d5c3c49b"
     alias: "Растение. Фикус лировидный: Уведомление о поливе"
-    triggers:
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.plant_alert_ficus_lyrata_soil
         to: "on"
-    conditions:
+    condition:
       - condition: state
         entity_id: person.master
         state: "home"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
       - condition: template
         value_template: >-
-          {% set last_notification = states('input_datetime.last_ficus_lyrata_soil_notification') %}
-          {% set last_notification_ts = as_timestamp(last_notification) if last_notification not in ['unknown', 'unavailable', 'none'] else 0 %}
-          {{ (as_timestamp(now()) - last_notification_ts) > 10800 }}
-    actions:
+          {% set last = states('input_datetime.last_ficus_lyrata_soil_notification') %}
+          {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
+          {% set cooldown = (states('input_number.plants_notification_cooldown_hours') | float(3) * 3600) | int %}
+          {{ (now().timestamp() - last_ts) > cooldown }}
+    action:
       - service: script.plant_check_conditions
         data:
           plant_name: "Фикус лировидный"
           plant_name_latin: "ficus_lyrata"
 
-  # Уведомление при недопустимой температуре (когда человек дома)
+  # Температура (домой + кулдаун)
   - id: "3ee8085c-621a-49f0-98f6-cce0d5c3c49c"
     alias: "Растение. Фикус лировидный: Уведомление о температуре"
-    triggers:
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.plant_alert_ficus_lyrata_temperature
         to: "on"
-    conditions:
+    condition:
       - condition: state
         entity_id: person.master
         state: "home"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
       - condition: template
         value_template: >-
-          {% set last_notification = states('input_datetime.last_ficus_lyrata_temperature_notification') %}
-          {% set last_notification_ts = as_timestamp(last_notification) if last_notification not in ['unknown', 'unavailable', 'none'] else 0 %}
-          {{ (as_timestamp(now()) - last_notification_ts) > 10800 }}
-    actions:
+          {% set last = states('input_datetime.last_ficus_lyrata_temperature_notification') %}
+          {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
+          {% set cooldown = (states('input_number.plants_notification_cooldown_hours') | float(3) * 3600) | int %}
+          {{ (now().timestamp() - last_ts) > cooldown }}
+    action:
       - service: script.plant_check_conditions
         data:
           plant_name: "Фикус лировидный"
           plant_name_latin: "ficus_lyrata"
 
-  # Регулярная проверка состояния растения (каждые 6 часов)
+  # Периодическая проверка (каждые 6 часов)
   - id: "plant-ficus-periodic-check"
     alias: "Растение. Фикус лировидный: Периодическая проверка"
-    triggers:
+    mode: single
+    trigger:
       - platform: time_pattern
         hours: "/6"
-    actions:
+    action:
       - service: script.plant_check_conditions
         data:
           plant_name: "Фикус лировидный"

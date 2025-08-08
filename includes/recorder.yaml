@@ -24,8 +24,8 @@ include:
 
   # Включаем группы сущностей по маске имени
   entity_globs:
-    - sensor.temperature_*
-    - sensor.humidity_*
+    - sensor.*temperature*
+    - sensor.*humidity*
     - sensor.*_battery*
     - sensor.*_pressure
     - sensor.*_co2
@@ -34,6 +34,11 @@ include:
     - binary_sensor.*_occupancy
     - sensor.cpu_*_normalized
     - sensor.cpu_*_host_percent
+    - sensor.*_energy
+    # Цветы
+    - sensor.ficus_*
+    - sensor.euphorbia_*
+    - plant.*
 
   # Включаем отдельные сущности, которые не попали в правила выше
   entities:
@@ -59,6 +64,20 @@ include:
     - sensor.speedtest_upload
     - sensor.speedtest_ping
     - sensor.vremia_igry_na_ps5_segodnia_2
+    # Климатические кастомные
+    - sensor.uroven_co2_sglazhennyi
+    - sensor.vlazhnost_vannoi_usrednennaia_za_5_minut
+    - sensor.temperatura_v_gostinnoi_sglazhennaia
+    - sensor.temperatura_v_spalne_sglazhennaia
+    - sensor.srednee_znachenie_temperatury_v_masterskoi_2
+    # Электроэнергия
+    - sensor.potreblenie_stiralnoi_mashiny
+    # Кто был дома
+    - input_text.currently_home
+    # Тестовая секция
+    - sensor.app_usage_last_month
+    - sensor.vremia_igry_na_ps5_segodnia_2
+    - sensor.ps5_948_activity
 
 # --- Теперь определяем, что мы ТОЧНО НЕ хотим хранить ---
 exclude:
@@ -79,6 +98,11 @@ exclude:
   # Исключаем отдельные "шумные" сущности
   entities:
     - binary_sensor.backups_stale # Если он не важен для истории
+  event_types:
+    - call_service # часто и шумно; отключите, если не используете Logbook по сервисам
+    - automation_triggered
+    - logbook_entry
+    - service_registered # статичные, не нужны в истории
 
 
   # Ссылка на сервер MariaDB в секретах по шаблону:

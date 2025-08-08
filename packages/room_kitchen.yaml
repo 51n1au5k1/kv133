@@ -18,50 +18,43 @@ binary_sensor:
   - platform: template
     sensors:
       kitchen_need_ventilation:
-        # Если состояние уже "on", проверяем мягкие пороги (temp_low, hum_low).
-        # Если состояние "off", включаемся только при превышении жёстких порогов (temp_high, hum_high).
+        unique_id: kitchen_need_ventilation
         friendly_name: "Кухня: Нужна вытяжка (с гистерезисом)"
+        device_class: problem
+        availability_template: >
+          {{ states('sensor.kitchen_th_temperature') not in ['unknown','unavailable',''] and
+             states('sensor.livingroom_climat_sensor_temperature') not in ['unknown','unavailable',''] and
+             states('sensor.kitchen_th_humidity') not in ['unknown','unavailable',''] and
+             states('sensor.livingroom_climat_sensor_humidity') not in ['unknown','unavailable',''] }}
         value_template: >
-          {% if states('sensor.kitchen_th_temperature') in ['unknown', 'unavailable'] or 
-                states('sensor.livingroom_climat_sensor_temperature') in ['unknown', 'unavailable'] or 
-                states('sensor.kitchen_th_humidity') in ['unknown', 'unavailable'] or 
-                states('sensor.livingroom_climat_sensor_humidity') in ['unknown', 'unavailable'] %}
-            false
+          {% set temp_kitchen = states('sensor.kitchen_th_temperature') | float(0) %}
+          {% set temp_living = states('sensor.livingroom_climat_sensor_temperature') | float(0) %}
+          {% set hum_kitchen  = states('sensor.kitchen_th_humidity') | float(0) %}
+          {% set hum_living   = states('sensor.livingroom_climat_sensor_humidity') | float(0) %}
+
+          {% set temp_diff = temp_kitchen - temp_living %}
+          {% set hum_diff  = hum_kitchen  - hum_living  %}
+
+          {% set temp_high = states('input_number.kitchen_temp_hysteresis_threshold_high') | float(0) %}
+          {% set temp_low  = states('input_number.kitchen_temp_hysteresis_threshold_low')  | float(0) %}
+          {% set hum_high  = states('input_number.kitchen_hum_hysteresis_threshold_high')  | float(0) %}
+          {% set hum_low   = states('input_number.kitchen_hum_hysteresis_threshold_low')   | float(0) %}
+
+          {% set was_on = is_state('binary_sensor.kitchen_need_ventilation','on') %}
+          {% if was_on %}
+            {{ temp_diff > temp_low or hum_diff > hum_low }}
           {% else %}
-            {% set temp_kitchen = states('sensor.kitchen_th_temperature') | float(default=0) %}
-            {% set temp_livingroom = states('sensor.livingroom_climat_sensor_temperature') | float(default=0) %}
-            {% set hum_kitchen = states('sensor.kitchen_th_humidity') | float(default=0) %}
-            {% set hum_livingroom = states('sensor.livingroom_climat_sensor_humidity') | float(default=0) %}
-
-            {% set temp_diff = temp_kitchen - temp_livingroom %}
-            {% set hum_diff  = hum_kitchen - hum_livingroom %}
-
-            {% set temp_high = states('input_number.kitchen_temp_hysteresis_threshold_high') | float(default=0) %}
-            {% set temp_low = states('input_number.kitchen_temp_hysteresis_threshold_low') | float(default=0) %}
-            {% set hum_high = states('input_number.kitchen_hum_hysteresis_threshold_high') | float(default=0) %}
-            {% set hum_low = states('input_number.kitchen_hum_hysteresis_threshold_low') | float(default=0) %}
-
-            {% set old_state = states('binary_sensor.kitchen_need_ventilation') %}
-
-            {% if old_state == 'on' %}
-              {{ temp_diff > temp_low or hum_diff > hum_low }}
-            {% else %}
-              {{ temp_diff > temp_high or hum_diff > hum_high }}
-            {% endif %}
+            {{ temp_diff > temp_high or hum_diff > hum_high }}
           {% endif %}
 
 input_boolean:
-  # Этот флаг используется для предотвращения повторных уведомлений о необходимости
-  # включения вытяжки. Хорошо, что вы добавили иконку, чтобы визуально
-  # отличать состояние.
+  # Флаг для предотвращения повторных уведомлений о необходимости включить вытяжку
   kitchen_fan_cool_down:
     name: "Kitchen Fan Cool Down"
     initial: off
     icon: mdi:fan-alert
 
 input_number:
-  # Значения можно настраивать в зависимости от предпочтений из интерфейса
-
   kitchen_temp_hysteresis_threshold_high:
     name: "Жёсткий порог температуры (°C)"
     min: 1
@@ -87,131 +80,115 @@ input_number:
     step: 1
     initial: 8
 
+  # Новые настраиваемые интервалы
+  kitchen_notification_cooldown_min:
+    name: "Кухня: Интервал между уведомлениями (мин)"
+    min: 5
+    max: 120
+    step: 5
+    initial: 30
+  kitchen_fan_delay_min:
+    name: "Кухня: Задержка выключения вытяжки (мин)"
+    min: 0.5
+    max: 10
+    step: 0.5
+    initial: 1
+
 timer:
   # Таймер для предотвращения повторных уведомлений
   kitchen_notification_cooldown_timer:
-    duration: "00:30:00" # 30 минут между уведомлениями
+    duration: "00:30:00" # Базовое; фактическая длительность задаётся при старте
 
   # Таймер для задержки выключения вытяжки
   kitchen_fan_delay_timer:
-    duration: "00:01:00" #  минут(ы) работы вытяжки после нормализации
-
-  # Скрипт для интеграции с Яндекс -> yandex_helper.yaml
+    duration: "00:01:00" # Базовое; фактическая длительность задаётся при старте
 
 automation:
   ##########################################################################
-  # ПЕРЕКЛЮЧЕНИЕ СВЕТА ПРАВОЙ КЛАВИШЕЙ КУХОННОГО ВЫКЛЮЧАТЕЛЯ
+  # ПЕРЕКЛЮЧЕНИЕ ОСВЕЩЕНИЯ ЧЕРЕЗ ВЫКЛЮЧАТЕЛИ
   ##########################################################################
-  # Реагирует на одиночный клик правой клавишей (single_right),
-  # включая/выключая свет. Используется device trigger (MQTT).
-  # Благодаря этому можно управлять светом без смартфона.
-  #
   - id: "b29835d5-9911-47ec-8630-2adda70be854"
-    alias: "Кухня: Переключение света выключателем (правая клавиша)"
+    alias: "Кухня: Переключение освещения выключателями"
     description: >
-      Реагирует на нажатие правой клавиши кухонного выключателя, включая
-      или выключая освещение на кухне. Это обеспечивает удобное управление
-      светом без необходимости использования смартфона или голосовых команд.
-    triggers:
+      Управление основным светом и подсветкой фартука через кухонный выключатель
+      (правая клавиша) и сценический выключатель (1_single / 2_single).
+    mode: restart
+    trigger:
       - platform: device
         domain: mqtt
         device_id: cc6ef89720abb376a24e910e13f37902
         type: action
         subtype: single_right
-    conditions: []
-    actions:
-      - type: toggle
-        device_id: cc6ef89720abb376a24e910e13f37902
-        entity_id: 6ecc35aae49d8307be87809073a32233
-        domain: light
-    mode: single
-
-  ##########################################################################
-  # ПЕРЕКЛЮЧЕНИЕ ОСНОВНОГО СВЕТА ПО СЦЕНИЧЕСКОМУ ВЫКЛЮЧАТЕЛЮ
-  ##########################################################################
-  # Второй вариант управления освещением -- сцена/радиовыключатель.
-  # При одиночном нажатии subtype: 2_single переключаем (toggle) кухонный свет.
-  #
-  - id: "0971e7d4-086d-4caf-a24c-898f529e8a7a"
-    alias: "Кухня: Переключение света сценическим выключателем"
-    description: >
-      Автоматизация позволяет управлять основным светом на кухне с помощью
-      сценического выключателя. Реагирует на одиночное нажатие кнопки,
-      переключая свет, что облегчает управление освещением во время готовки
-      или другой деятельности на кухне.
-    triggers:
-      - platform: device
-        domain: mqtt
-        device_id: 719cda594198c3eafa3817b9230f2afa
-        type: action
-        subtype: 2_single
-    conditions: []
-    actions:
-      - service: light.toggle
-        target:
-          entity_id: light.kitchen_main_light
-    mode: single
-
-  ##########################################################################
-  # ПЕРЕКЛЮЧЕНИЕ ПОДСВЕТКИ РАБОЧЕЙ ПОВЕРХНОСТИ (ФАРТУК)
-  ##########################################################################
-  # Ещё одна кнопка (subtype: 1_single) того же сценического выключателя
-  # для подсветки «фартука» (рабочая зона). Тот же принцип toggle.
-  #
-  - id: "27a202bf-205e-4d10-bb04-8c60ca106493"
-    alias: "Кухня: Переключение подсветки рабочей поверхности сценическим выключателем"
-    description: >
-      Включение/выключение подсветки фартука при одиночном нажатии на
-      сценическом выключателе (кнопка 1_single).
-    triggers:
+        id: kitchen_switch_right
       - platform: device
         domain: mqtt
         device_id: 719cda594198c3eafa3817b9230f2afa
         type: action
         subtype: 1_single
-    conditions: []
-    actions:
-      - service: light.toggle
-        target:
-          entity_id: light.kitchen_fartuh
-    mode: single
+        id: scenic_1_single
+      - platform: device
+        domain: mqtt
+        device_id: 719cda594198c3eafa3817b9230f2afa
+        type: action
+        subtype: 2_single
+        id: scenic_2_single
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: kitchen_switch_right
+            sequence:
+              - type: toggle
+                device_id: cc6ef89720abb376a24e910e13f37902
+                entity_id: 6ecc35aae49d8307be87809073a32233
+                domain: light
+          - conditions:
+              - condition: trigger
+                id: scenic_1_single
+            sequence:
+              - service: light.toggle
+                target:
+                  entity_id: light.kitchen_fartuh
+          - conditions:
+              - condition: trigger
+                id: scenic_2_single
+            sequence:
+              - service: light.toggle
+                target:
+                  entity_id: light.kitchen_main_light
 
   ##########################################################################
   # ПРЕДУПРЕЖДЕНИЕ О НЕОБХОДИМОСТИ ВКЛЮЧЕНИЯ ВЫТЯЖКИ
   ##########################################################################
-  # Активируется, если на кухне температура > (гостиной + 5°C) ИЛИ
-  # влажность > (гостиной + 10%). Если вытяжка ещё не включена
-  # (input_boolean.kitchen_fan_cool_down == off), система отправляет
-  # голосовое уведомление (script.yandex_tts_kitchen_fan_alert) и
-  # включает флаг kitchen_fan_cool_down, чтобы не повторять уведомление
-  # часто. Автоматизация не срабатывает в фазе загрузки (system_startup_phase)
-  # и когда silent_mode==on.
-  #
   - id: "dc8af8f7-c0f5-4244-867b-00fc546039ba"
     alias: "Кухня: Предупреждение о необходимости включения вытяжки (гистерезис)"
     description: >
-      При включении binary_sensor.kitchen_need_ventilation (off->on)
-      отправляем уведомление и выставляем флаг kitchen_fan_cool_down, 
-      чтобы не повторяться.
-    triggers:
+      При включении binary_sensor.kitchen_need_ventilation (off→on) отправляем уведомление
+      и выставляем флаг kitchen_fan_cool_down, чтобы не повторяться.
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.kitchen_need_ventilation
         from: "off"
         to: "on"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.kitchen_fan_cool_down
         state: "off"
       - condition: state
         entity_id: timer.kitchen_notification_cooldown_timer
-        state: "idle" # Добавлена проверка на состояние таймера
+        state: "idle"
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
-    actions:
+    action:
       - service: script.yandex_tts_kitchen_fan_alert
       - service: input_boolean.turn_on
         target:
@@ -219,56 +196,41 @@ automation:
       - service: timer.start
         target:
           entity_id: timer.kitchen_notification_cooldown_timer
+        data:
+          duration: "{{ (states('input_number.kitchen_notification_cooldown_min') | float(30) * 60) | int }}"
 
   ##########################################################################
-  # СБРОС ПРЕДУПРЕЖДЕНИЯ О ВЫТЯЖКЕ (kitchen_fan_cool_down)
+  # СБРОС ПРЕДУПРЕЖДЕНИЯ О ВЫТЯЖКЕ ПРИ НОРМАЛИЗАЦИИ
   ##########################################################################
-  # Если через 10 минут после срабатывания флага температура упала
-  # к гостиной, а влажность, считаем, что ситуация стабилизировалась,
-  # и сбрасываем флаг, чтобы в будущем снова можно было уведомить пользователя.
-  #
   - id: "8b7c3a73-7d74-4e6f-b1d5-4a9c1e3a9c12"
     alias: "Кухня: Сброс предупреждения о необходимости вытяжки (гистерезис)"
-    description: >
-      Когда binary_sensor.kitchen_need_ventilation возвращается в off, 
-      считаем, что кухня остыла/подсохла, и сбрасываем флаг kitchen_fan_cool_down.
-    triggers:
+    description: "Когда условия нормализовались (off), сбрасываем флаг."
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.kitchen_need_ventilation
         from: "on"
         to: "off"
-    conditions:
-      - condition: state
-        entity_id: timer.kitchen_notification_cooldown_timer
-        state: "idle"
-    actions:
-      - service: timer.start
-        target:
-          entity_id: timer.kitchen_notification_cooldown_timer
-      - wait_for_trigger:
-          - platform: event
-            event_type: timer.finished
-            event_data:
-              entity_id: timer.kitchen_notification_cooldown_timer
+    condition: []
+    action:
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.kitchen_fan_cool_down
 
   ##########################################################################
-  # СБРОС ПРЕДУПРЕЖДЕНИЯ О ВЫТЯЖКЕ (kitchen_fan_cool_down)
+  # СБРОС ФЛАГА ВЫТЯЖКИ ПРИ СТАРТЕ
   ##########################################################################
-  # Предотвращает ложные срабатывания при перезагрузке системы
-  #
   - id: "10f4f44c-a559-4281-9a1b-18aac1fd845b"
     alias: "Кухня: Сброс флага вытяжки при старте"
-    triggers:
+    mode: single
+    trigger:
       - platform: homeassistant
         event: start
-    conditions:
+    condition:
       - condition: state
         entity_id: binary_sensor.kitchen_need_ventilation
         state: "off"
-    actions:
+    action:
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.kitchen_fan_cool_down
@@ -278,64 +240,67 @@ automation:
   ##########################################################################
   - id: "e2d5d614-46cf-4706-9bfe-7a17cd81f0c1"
     alias: "Кухня: Автоматическое включение вытяжки"
-    description: >
-      Включает вытяжку когда binary_sensor.kitchen_need_ventilation становится on
-    triggers:
+    description: "Включает вытяжку, когда need_ventilation устойчиво on 1 минуту."
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.kitchen_need_ventilation
         from: "off"
         to: "on"
-    conditions:
+        for:
+          minutes: 1
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
         entity_id: switch.sonoff_10024c81be
         state: "off"
-    actions:
+    action:
       - service: switch.turn_on
         target:
           entity_id: switch.sonoff_10024c81be
 
   ##########################################################################
-  # ТАЙМЕР ЗАДЕРЖКИ ВЫКЛЮЧЕНИЯ ВЫТЯЖКИ
+  # ЗАПУСК ТАЙМЕРА ЗАДЕРЖКИ ВЫКЛЮЧЕНИЯ ВЫТЯЖКИ
   ##########################################################################
   - id: "d2986069-fb9c-4425-afc7-1b17f96cfff3"
     alias: "Кухня: Запуск таймера задержки выключения вытяжки"
-    description: >
-      Запускает таймер на 2 минуты когда условия нормализовались,
-      чтобы не выключать вытяжку сразу
-    triggers:
+    description: "Стартует таймер, когда условия нормализовались."
+    mode: single
+    trigger:
       - platform: state
         entity_id: binary_sensor.kitchen_need_ventilation
         from: "on"
         to: "off"
-    conditions:
+    condition:
       - condition: state
         entity_id: switch.sonoff_10024c81be
         state: "on"
-    actions:
+    action:
       - service: timer.start
         target:
           entity_id: timer.kitchen_fan_delay_timer
+        data:
+          duration: "{{ (states('input_number.kitchen_fan_delay_min') | float(1) * 60) | int }}"
 
   ##########################################################################
   # ВЫКЛЮЧЕНИЕ ВЫТЯЖКИ ПО ТАЙМЕРУ
   ##########################################################################
   - id: "95fecbf7-3ac8-4b4a-a7a8-a857a307be68"
     alias: "Кухня: Выключение вытяжки по таймеру"
-    description: >
-      Выключает вытяжку только после того как таймер закончится
-    triggers:
+    description: "Выключает вытяжку по окончании таймера, если условия нормальны."
+    mode: single
+    trigger:
       - platform: event
         event_type: timer.finished
         event_data:
           entity_id: timer.kitchen_fan_delay_timer
-    conditions:
+    condition:
       - condition: state
         entity_id: binary_sensor.kitchen_need_ventilation
         state: "off"
-    actions:
+    action:
       - service: switch.turn_off
         target:
           entity_id: switch.sonoff_10024c81be
