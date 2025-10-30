@@ -21,6 +21,7 @@ include:
     - weather
     - media_player
     - automation
+    - event
 
   # Включаем группы сущностей по маске имени
   entity_globs:
@@ -35,38 +36,34 @@ include:
     - sensor.cpu_*_normalized
     - sensor.cpu_*_host_percent
     - sensor.*_energy
+    - sensor.*_power
     # Цветы
     - sensor.ficus_*
     - sensor.euphorbia_*
     - plant.*
+    # Виртуализация
+    - sensor.lxc_*
+    - sensor.qemu_*
+    - sensor.*_pve_*
+    # Скорость интернета
+    - sensor.speedtest_*
+    # Фильтры климатическойц техники
+    - sensor.*_filter_*
+    # Контроль уровня воды
+    - event.*_low_water_*
+    # Сейф
+    - sensor.strongbox_*
+    # Эксперементальные
+    - sensor.vremia_igry_*
+    - sensor.*_ps5_*
 
-  # Включаем отдельные сущности, которые не попали в правила выше
+  # Включаем отдельные сущности, которые не попали в правила выше (ТОЛЬКО точные ID)
   entities:
     # Системные и специфические сенсоры
     - sensor.maria_db_size
-    - sensor.node_pve_cpu_used
-    - sensor.node_pve_memory_used
-    - sensor.qemu_haos12_3_100_memory_used
-    - sensor.lxc_mariadb_101_memory_used
-    - sensor.lxc_jackett_102_memory_used
-    - sensor.lxc_jellyfin_103_memory_used
-    - sensor.lxc_deluge_104_memory_used
-    - sensor.lxc_debian_105_memory_used
-    - sensor.lxc_lyrionmusicserver_106_memory_used
-    - sensor.qemu_haos12_3_100_last_boot
-    - sensor.storage_pve_raid_home_server_disk_free
-    - sensor.storage_pve_raid_home_server_disk_used_percentage
-    - sensor.disk_pve_128gb_ssd_temperature
-    - sensor.node_pve_memory_used_percentage
-    - sensor.node_pve_swap_used_percentage
-    - sensor.node_pve_disk_used_percentage
-    - sensor.speedtest_download
-    - sensor.speedtest_upload
-    - sensor.speedtest_ping
-    - sensor.vremia_igry_na_ps5_segodnia_2
-    # Климатические кастомные
+    # Климатические кастомные (точные имена)
     - sensor.uroven_co2_sglazhennyi
-    - sensor.vlazhnost_vannoi_usrednennaia_za_5_minut
+    - sensor.bathroom_filtered_humidity
     - sensor.temperatura_v_gostinnoi_sglazhennaia
     - sensor.temperatura_v_spalne_sglazhennaia
     - sensor.srednee_znachenie_temperatury_v_masterskoi_2
@@ -74,10 +71,8 @@ include:
     - sensor.potreblenie_stiralnoi_mashiny
     # Кто был дома
     - input_text.currently_home
-    # Тестовая секция
+    # Тестовая секция (точный сенсор)
     - sensor.app_usage_last_month
-    - sensor.vremia_igry_na_ps5_segodnia_2
-    - sensor.ps5_948_activity
 
 # --- Теперь определяем, что мы ТОЧНО НЕ хотим хранить ---
 exclude:
@@ -91,19 +86,19 @@ exclude:
 
   # Исключаем "шумные" группы сущностей
   entity_globs:
-    - sensor.*_linkquality # Отличное исключение, обновляется очень часто
-    - sensor.*_power_* # Обычно тоже очень "шумные"
-    - binary_sensor.*_battery_low # Дублирует информацию sensor.*_battery < порога
+    - sensor.*_linkquality # Очень частые апдейты
+    - sensor.*_power_* # Часто "шумные"
+    - binary_sensor.*_battery_low # Дублирует информацию про батарею
 
   # Исключаем отдельные "шумные" сущности
   entities:
     - binary_sensor.backups_stale # Если он не важен для истории
+
+  # Системные типы событий (для истории не нужны)
   event_types:
-    - call_service # часто и шумно; отключите, если не используете Logbook по сервисам
+    - call_service
     - automation_triggered
     - logbook_entry
-    - service_registered # статичные, не нужны в истории
-
-
-  # Ссылка на сервер MariaDB в секретах по шаблону:
-  # db_link: mysql://user:pass@IP/homeassistant?charset=utf8mb4&ssl=true
+    - service_registered
+# Ссылка на сервер MariaDB в секретах по шаблону:
+# db_link: mysql://user:pass@IP/homeassistant?charset=utf8mb4&ssl=true

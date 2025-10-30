@@ -3,39 +3,25 @@
 ################################################################################
 #
 # Назначение:
-#   Данный пакет Home Assistant предназначен для управления:
-#     - Освещением: бра, свет в зоне дивана, люстрой;
-#     - Климатическими устройствами: кондиционер, очиститель воздуха, увлажнитель;
-#     - Проветриванием на основе уровня CO2.
+#   Управление:
+#     • Освещением (бра, люстра, правая группа света).
+#     • Климатом (кондиционер, очиститель воздуха, увлажнитель).
+#     • Проветриванием на основе CO₂.
 #
-# Автоматизации позволяют:
-#   • Управлять освещением с помощью сценического выключателя:
-#     - Бра: одиночное нажатие кнопки 4;
-#     - Люстра: одиночное нажатие кнопки 3;
-#     - Свет в зоне дивана: двойное нажатие кнопки 4.
-#   • Контролировать климатические устройства:
-#     - Отключать устройства при открытии двери на балкон (дольше 1 минуты);
-#     - Восстанавливать их состояние при закрытии двери, сохраняя предыдущее состояние.
-#   • Управлять проветриванием на основе уровня CO2:
-#     - Автоматически включать состояние "нуждается в проветривании", если CO2 выше жёсткого порога;
-#     - Считать проветривание завершённым, если CO2 опустился ниже мягкого порога.
-#   • Отправлять уведомления:
-#     - Необходимость проветривания и завершение проветривания (через Яндекс.Станцию и Телеграм);
-#     - Замена фильтра кондиционера (при уровне жизни фильтра < 10%).
-#
-# Особенности:
+# Основные фичи:
 #   1. Проветривание:
-#      • Пороговые значения (жёсткий и мягкий) настраиваются через интерфейс Home Assistant;
-#      • Период усреднения CO2 и время сброса уведомлений настраиваются через `input_number`.
-#      • Гистерезис предотвращает частые переключения состояний.
-#   2. Климатические устройства:
-#      • Кондиционер, очиститель воздуха и увлажнитель отключаются при открытии двери;
-#      • Их состояние восстанавливается при закрытии двери, если не включён зимний режим.
-#   3. Защита от ошибок:
-#      • Кондиционер автоматически отключается, если активирован зимний режим.
-#      • Автоматическое сброс уведомлений (например, о CO2 или замене фильтра) после истечения заданного времени.
-#   4. Интеграция с уведомлениями:
-#      • Уведомления через Яндекс.Станцию (голосовые) и Телеграм (текстовые и с изображением).
+#      - livingroom_ventilation_need → "нужно проветрить"
+#      - livingroom_ventilation_status → "проветривание завершено"
+#      - Голос/TG уведомления + антиспам флаги.
+#
+#   2. Климат:
+#      - Если двери на балкон открыты ≥1 мин → вырубаем климат и запоминаем,
+#        что было включено.
+#      - Когда закрылись → включаем обратно то, что сами выключили.
+#      - Зимний режим блокирует кондиционер.
+#
+#   3. Свет:
+#      - MQTT-кнопка: разные клики управляют разными светильниками.
 #
 ################################################################################
 
@@ -46,14 +32,16 @@ input_number:
     max: 2000
     step: 50
     initial: 1000
+
   co2_threshold_low:
     name: "Порог CO2 для завершения проветривания (мягкий)"
     min: 300
     max: 1500
     step: 50
     initial: 550
+
   co2_notification_reset_period:
-    name: "Период сброса уведомлений"
+    name: "Период сброса уведомлений CO₂ (мин)"
     min: 5
     max: 60
     step: 1
@@ -62,6 +50,7 @@ input_number:
 binary_sensor:
   - platform: template
     sensors:
+      # Нужно ли проветривать (CO₂ выше порога). Гистерезис через high/low.
       livingroom_ventilation_need:
         unique_id: livingroom_ventilation_need
         friendly_name: "Необходимость проветривания"
@@ -69,12 +58,13 @@ binary_sensor:
         availability_template: >
           {{ states('sensor.uroven_co2_sglazhennyi') not in ['unknown','unavailable',''] }}
         value_template: >
-          {% set co2  = states('sensor.uroven_co2_sglazhennyi') | float(0) %}
-          {% set high = states('input_number.co2_threshold_high') | float(0) %}
-          {% set low  = states('input_number.co2_threshold_low')  | float(0) %}
+          {% set co2    = states('sensor.uroven_co2_sglazhennyi') | float(0) %}
+          {% set high   = states('input_number.co2_threshold_high') | float(0) %}
+          {% set low    = states('input_number.co2_threshold_low')  | float(0) %}
           {% set was_on = is_state('binary_sensor.livingroom_ventilation_need','on') %}
           {{ (co2 > low) if was_on else (co2 > high) }}
 
+      # Проветривание завершено (CO₂ стабильно < мягкого порога)
       livingroom_ventilation_status:
         unique_id: livingroom_ventilation_status
         friendly_name: "Статус проветривания"
@@ -85,7 +75,7 @@ binary_sensor:
           {% set low = states('input_number.co2_threshold_low') | float(0) %}
           {{ co2 < low }}
 
-      # Двери на балкон (любая открыта -> on)
+      # Любая дверь на балкон открыта -> on
       doors_in_kitchen_livingroom:
         unique_id: doors_in_kitchen_livingroom
         friendly_name: "Двери на балкон с гостиной"
@@ -98,6 +88,7 @@ binary_sensor:
           {{ sensors | select('is_state', 'on') | list | length > 0 }}
 
 sensor:
+  # Сглаженный CO₂
   - platform: filter
     name: "Уровень CO2 (сглаженный)"
     entity_id: sensor.co2_monitor_co2
@@ -106,8 +97,9 @@ sensor:
         window_size: "00:02"
         precision: 0
 
+  # Сглаженная температура в гостиной
   - platform: filter
-    name: "Температура в гостинной (сглаженная)"
+    name: "Температура в гостиной (сглаженная)"
     entity_id: sensor.livingroom_average_temperature
     filters:
       - filter: time_simple_moving_average
@@ -118,24 +110,27 @@ sensor:
 #                             АВТОМАТИЗАЦИИ
 ##############################################################################
 automation:
-  # Уведомление: требуется проветривание
+  # ----------------------------------------------------------------------------
+  # Уведомление: требуется проветривание (CO₂ превысил жёсткий порог)
+  # ----------------------------------------------------------------------------
   - id: "b44e93fc-7746-4ff5-8846-2d350fecb813"
     alias: "Уведомление о необходимости проветривания (усреднённое значение)"
-    description: "CO2 выше жёсткого порога — уведомить (TTS/Telegram), проставить флаг."
+    description: "CO₂ выше порога → голос/TG уведомление → вкл флаг, чтобы не спамить."
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.livingroom_ventilation_need
         to: "on"
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.co2_voice_notification_sensor
         state: "off"
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    action:
+    actions:
       - choose:
+          # громко в колонку
           - conditions:
               - condition: state
                 entity_id: input_boolean.silent_mode
@@ -144,7 +139,8 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - service: script.yandex_tts_co2_alert
+              - action: script.yandex_tts_co2_alert
+          # тихо в телеграм
           - conditions:
               - condition: state
                 entity_id: input_boolean.silent_mode
@@ -153,34 +149,37 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - service: notify.master
+              - action: notify.master
                 data:
-                  message: "Уровень CO2 превышает норму. Рекомендуется проветрить гостиную."
-      - service: input_boolean.turn_on
+                  message: "Уровень CO₂ превышает норму. Рекомендуется проветрить гостиную."
+      - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.co2_voice_notification_sensor
 
+  # ----------------------------------------------------------------------------
   # Уведомление: проветривание завершено
+  # ----------------------------------------------------------------------------
   - id: "31a294d7-4c2d-4289-a8b0-04f2cea38553"
     alias: "Уведомление о завершении проветривания (усреднённое значение)"
-    description: "CO2 устойчиво ниже мягкого порога — уведомить (TTS/Telegram), проставить флаг."
+    description: "CO₂ упал ниже мягкого порога стабильно → голос/TG + флаг."
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.livingroom_ventilation_status
         from: "off"
         to: "on"
         for:
           minutes: 1
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.co2_text_notification_sensor
         state: "off"
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    action:
+    actions:
       - choose:
+          # громко в колонку
           - conditions:
               - condition: state
                 entity_id: input_boolean.silent_mode
@@ -189,7 +188,8 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - service: script.yandex_tts_co2_normal
+              - action: script.yandex_tts_co2_normal
+          # тихо в телеграм
           - conditions:
               - condition: state
                 entity_id: input_boolean.silent_mode
@@ -198,95 +198,100 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - service: notify.master
+              - action: notify.master
                 data:
-                  message: "Проветривание завершено. Уровень CO2 в норме."
-      - service: input_boolean.turn_on
+                  message: "Проветривание завершено. Уровень CO₂ в норме."
+      - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.co2_text_notification_sensor
 
-  # HELPER: Сброс флагов уведомлений CO2
+  # ----------------------------------------------------------------------------
+  # HELPER: Сброс флагов уведомлений CO₂ после таймера
+  # ----------------------------------------------------------------------------
   - id: "469fe5d8-4b48-40bb-b967-0d09a83ee4f0"
-    alias: "HELPER: Сброс уведомлений СО2"
+    alias: "HELPER: Сброс уведомлений CO₂"
     mode: restart
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id:
           - input_boolean.co2_voice_notification_sensor
           - input_boolean.co2_text_notification_sensor
         to: "on"
-    action:
+    actions:
       - delay: "00:{{ states('input_number.co2_notification_reset_period') | int }}:00"
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         target:
           entity_id:
             - input_boolean.co2_voice_notification_sensor
             - input_boolean.co2_text_notification_sensor
 
   ##########################################################################
-  # Освещение по сценическому выключателю
+  # Управление светом с много-кнопочного выключателя
   ##########################################################################
   - id: "9fff2de3-f169-4fda-8a8a-91966fc51f13"
     alias: "Гостиная: переключение бра (кнопка 4, одиночное нажатие)"
     mode: restart
-    trigger:
-      - platform: device
+    triggers:
+      - trigger: device
         domain: mqtt
         device_id: 719cda594198c3eafa3817b9230f2afa
         type: action
         subtype: 4_single
-    condition: []
-    action:
-      - service: light.toggle
+    conditions: []
+    actions:
+      - action: light.toggle
         target:
           entity_id: light.livingroom_scone_dimmer
 
   - id: "54ea7c3d-a37d-4ce4-80ff-f2da00a450c2"
     alias: "Гостиная: переключение люстры (кнопка 3, одиночное нажатие)"
     mode: restart
-    trigger:
-      - platform: device
+    triggers:
+      - trigger: device
         domain: mqtt
         device_id: 719cda594198c3eafa3817b9230f2afa
         type: action
         subtype: 3_single
-    condition: []
-    action:
-      - service: light.toggle
+    conditions: []
+    actions:
+      - action: light.toggle
         target:
           entity_id: light.livingroom_main_switch_left
 
   - id: "916eb0c3-eee6-409d-9ce2-4dc00c9f7051"
     alias: "Гостиная: переключение правого света (кнопка 4, двойное нажатие)"
     mode: restart
-    trigger:
-      - platform: device
+    triggers:
+      - trigger: device
         domain: mqtt
         device_id: 719cda594198c3eafa3817b9230f2afa
         type: action
         subtype: 4_double
-    condition: []
-    action:
-      - service: light.toggle
+    conditions: []
+    actions:
+      - action: light.toggle
         target:
           entity_id: light.livingroom_main_switch_right
 
   ##############################################################################
-  # Климат: отключение при открытой двери (на 1 мин) с сохранением состояния
+  # Климат OFF: дверь открыта ≥1 мин → выключить всё и запомнить, что было ON
   ##############################################################################
   - id: "f4e42442-155e-4d0a-87c2-3f21fd72025d"
     alias: "Гостиная: Климат, отключить устройства при открытии двери"
-    description: "Через 1 минуту открытой двери выключить климат/очиститель/увлажнитель, запомнив их состояние."
+    description: >
+      Если двери на балкон открыты устойчиво 1 минуту —
+      выключить кондиционер, очиститель, увлажнитель,
+      предварительно сохранив их состояние.
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.doors_in_kitchen_livingroom
         to: "on"
         for:
           minutes: 1
-    condition: []
-    action:
-      # Кондиционер (если был не 'off' и не включён зимний режим)
+    conditions: []
+    actions:
+      # Кондиционер (если сейчас не off и не зима)
       - choose:
           - conditions:
               - condition: template
@@ -295,52 +300,57 @@ automation:
                 entity_id: input_boolean.winter_mode
                 state: "off"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.door_open_climate_pre_state
-              - service: climate.turn_off
+              - action: climate.turn_off
                 target:
                   entity_id: climate.konditsioner
-      # Очиститель
+
+      # Очиститель воздуха
       - choose:
           - conditions:
               - condition: state
-                entity_id: switch.zhimi_mb3_a5d3_switch_status
+                entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.door_open_fan_pre_state
-              - service: switch.turn_off
+              - action: fan.turn_off
                 target:
-                  entity_id: switch.zhimi_mb3_a5d3_switch_status
+                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+
       # Увлажнитель
       - choose:
           - conditions:
               - condition: state
-                entity_id: switch.evolution_hf_878
+                entity_id: humidifier.xiaomi_cn_823407205_p3
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.door_open_humidifier_pre_state
-              - service: switch.turn_off
+              - action: humidifier.turn_off
                 target:
-                  entity_id: switch.evolution_hf_878
+                  entity_id: humidifier.xiaomi_cn_823407205_p3
 
   ##############################################################################
-  # Климат: восстановление состояния при закрытой двери
+  # Климат RESTORE: дверь закрылась → вернуть то, что сами выключили
   ##############################################################################
   - id: "0347cae6-1b2f-436a-a54c-792feafa9620"
     alias: "Гостиная: Климат, восстановление состояния устройств"
-    description: "При закрытии двери восстановить устройства, если они были выключены автоматикой."
+    description: >
+      Когда двери закрылись — включаем обратно только те девайсы,
+      которые были включены до автоотключения.
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.doors_in_kitchen_livingroom
         to: "off"
-    condition: []
-    action:
+    conditions: []
+    actions:
+      # Вернуть кондиционер
       - choose:
           - conditions:
               - condition: state
@@ -350,101 +360,113 @@ automation:
                 entity_id: input_boolean.winter_mode
                 state: "off"
             sequence:
-              - service: climate.turn_on
+              - action: climate.turn_on
                 target:
                   entity_id: climate.konditsioner
+
+      # Вернуть очиститель
       - choose:
           - conditions:
               - condition: state
                 entity_id: input_boolean.door_open_fan_pre_state
                 state: "on"
             sequence:
-              - service: switch.turn_on
+              - action: fan.turn_on
                 target:
-                  entity_id: switch.zhimi_mb3_a5d3_switch_status
+                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+
+      # Вернуть увлажнитель
       - choose:
           - conditions:
               - condition: state
                 entity_id: input_boolean.door_open_humidifier_pre_state
                 state: "on"
             sequence:
-              - service: switch.turn_on
+              - action: humidifier.turn_on
                 target:
-                  entity_id: switch.evolution_hf_878
-      - service: input_boolean.turn_off
+                  entity_id: humidifier.xiaomi_cn_823407205_p3
+
+      # Сброс флагов "что было включено"
+      - action: input_boolean.turn_off
         target:
           entity_id:
             - input_boolean.door_open_climate_pre_state
             - input_boolean.door_open_fan_pre_state
             - input_boolean.door_open_humidifier_pre_state
 
-  # Защита: не включать кондиционер в зимнем режиме
+  # ----------------------------------------------------------------------------
+  # Защита: кондиционер не должен работать, если включён зимний режим
+  # ----------------------------------------------------------------------------
   - id: "b9867c28-be9f-425e-9fee-0aea777d04c0"
-    alias: "HELPER: Защита — не включать кондиционер при активном Зимнем режиме"
-    description: "Если включён зимний режим, любое включение кондиционера тут же отменяется."
+    alias: "HELPER: Защита — не включать кондиционер при активном зимнем режиме"
+    description: "Если winter_mode=on, любое включение кондиционера сразу отменяется."
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: climate.konditsioner
         from: "off"
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.winter_mode
         state: "on"
-    action:
-      - service: climate.turn_off
+    actions:
+      - action: climate.turn_off
         target:
           entity_id: climate.konditsioner
-      - service: notify.master
+      - action: notify.master
         data:
-          message: "Кондиционер принудительно отключён: включён Зимний режим."
-      - service: script.yandex_tts_kondicioner_warning
+          message: "Кондиционер принудительно отключён: активен зимний режим."
+      - action: script.yandex_tts_kondicioner_warning
 
-  # Уведомление: заменить фильтр кондиционера
-  - id: "4d19ce98-16f7-41ea-afcf-34ffb4e64b4a"
-    alias: "Уведомление. Телеграм: Необходимо заменить фильтр"
-    description: "Если ресурс фильтра <10% в течение 1 мин — уведомить и пометить."
-    mode: single
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.konditsioner_filter_remaining_life
+  ##############################################################################
+  # Технические триггеры климатической техники без действий
+  # (оставлены как 'сигнальные', чтобы на них могли ссылаться другие пакеты)
+  ##############################################################################
+
+  # Очиститель — фильтр <10%
+  - id: "a4596f3c-27bf-48a8-a6db-62f9905f12fd"
+    alias: "Триггер: фильтр очистителя <10%"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.zhimi_cn_271517251_mb3_filter_life_level_p_4_3
         below: 10
-        for:
-          minutes: 1
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.silent_mode
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.filter_replace_notified
-        state: "off"
-      - condition: time
-        after: "08:00:00"
-        before: "20:00:00"
-    action:
-      - service: notify.master
-        data:
-          message: "Необходимо заменить фильтр в кондиционере"
-      - service: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.filter_replace_notified
+        for: "00:01:00"
+    actions: []
 
-  # HELPER: сброс уведомления о замене фильтра
-  - id: "da15cbba-b4f0-42e5-8bcd-5e9affe17073"
-    alias: "HELPER: Сброс уведомления о замене фильтра"
-    description: "Если ресурс фильтра снова >10% (1 мин), сбросить флаг."
-    mode: single
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.konditsioner_filter_remaining_life
+  # Очиститель — фильтр >10%
+  - id: "373bc4e2-1993-46df-85c5-0ff0470a1630"
+    alias: "Триггер: фильтр очистителя >10%"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.zhimi_cn_271517251_mb3_filter_life_level_p_4_3
         above: 10
-        for:
-          minutes: 1
-    condition: []
-    action:
-      - service: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.filter_replace_notified
+        for: "00:01:00"
+    actions: []
+
+  # Увлажнитель — фильтр <10%
+  - id: "a6f8e632-52ec-4857-a6f3-b9b74a69e1a5"
+    alias: "Триггер: фильтр увлажнителя <10%"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.xiaomi_cn_823407205_p3_filter_life_level_p_8_1
+        below: 10
+        for: "00:01:00"
+    actions: []
+
+  # Увлажнитель — фильтр >10%
+  - id: "121ce3ac-de14-4ba8-984d-454c7ae9b3ec"
+    alias: "Триггер: фильтр увлажнителя >10%"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.xiaomi_cn_823407205_p3_filter_life_level_p_8_1
+        above: 10
+        for: "00:01:00"
+    actions: []
+
+  # Низкий уровень воды
+  - id: "0889817f-ac88-4d48-8cbd-a0f57efa6f04"
+    alias: "Триггер: низкий уровень воды в увлажнителе"
+    triggers:
+      - trigger: state
+        entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
+    actions: []

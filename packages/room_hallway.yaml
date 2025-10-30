@@ -2,22 +2,24 @@
 # /packages/room_hallway.yaml
 ################################################################################
 #
-# Этот пакет Home Assistant настроен для автоматизации освещения в прихожей,
-# обеспечивая удобство и эффективность управления светом. Включает в себя
-# автоматизации для реагирования на действия пользователя и изменения в
-# окружающей среде, а также таймер для контроля продолжительности включения
-# света.
+# Назначение:
+#   Этот пакет Home Assistant настраивает:
+#     • Автоматизации освещения в прихожей (кнопка, дверь, движение, таймер, мигание).
+#     • Контроль микроклимата СЕЙФА (strongbox): сглаживание T/RH, расчёт точки росы,
+#       абсолютной влажности, бинарные датчики «риск плесени»/«норма», флаг уведомлений
+#       и подтверждения для отсечки ложных срабатываний.
 #
 # Доработки:
 #   - Добавлен гистерезис (for: в триггерах) для стабильности.
-#   - silent_mode/startup_phase во все релевантные автоматизации.
-#   - Настраиваемый duration таймера и количество миганий via input_number.
+#   - silent_mode/startup_phase во все релевантные автоматизации освещения.
+#   - Настраиваемая длительность таймера и количество миганий через input_number.
 #   - Логирование и проверки на someone_is_home/unavailable.
+#   - СЕЙФ: настраиваемые пороги RH/T и времена подтверждения; вычисление точки росы и абс. влажности.
 #
 ################################################################################
 
 ##############################################################################
-#                             ВХОДНЫЕ БУЛЕВЫЕ ПЕРЕМЕННЫЕ
+#                          ВХОДНЫЕ БУЛЕВЫЕ ПЕРЕМЕННЫЕ
 ##############################################################################
 input_boolean:
   hallway_first_door_open:
@@ -25,6 +27,15 @@ input_boolean:
     initial: off
     icon: mdi:door-open
 
+  # --- СЕЙФ: флаг «уведомление отправлено» (его слушает пакет Telegram) ---
+  strongbox_hum_text_notified:
+    name: "Сейф: текстовое уведомление отправлено"
+    initial: off
+    icon: mdi:message-alert
+
+##############################################################################
+#                          ВХОДНЫЕ ЧИСЛОВЫЕ ПАРАМЕТРЫ
+##############################################################################
 input_number:
   hallway_timer_duration:
     name: "Продолжительность таймера прихожей (мин)"
@@ -32,6 +43,7 @@ input_number:
     max: 5
     step: 0.5
     initial: 1.5
+
   hallway_blink_count:
     name: "Количество миганий при звонке"
     min: 1
@@ -39,19 +51,167 @@ input_number:
     step: 1
     initial: 3
 
+  # --- СЕЙФ: пороги и времена подтверждения ---
+  strongbox_humidity_high:
+    name: "Сейф: высокий порог RH (%)"
+    min: 50
+    max: 85
+    step: 1
+    initial: 65
+
+  strongbox_humidity_low:
+    name: "Сейф: низкий порог RH (%) (гистерезис)"
+    min: 40
+    max: 80
+    step: 1
+    initial: 55
+
+  strongbox_temp_min:
+    name: "Сейф: минимальная температура (°C)"
+    min: 5
+    max: 25
+    step: 0.5
+    initial: 15
+
+  strongbox_confirm_min:
+    name: "Сейф: подтверждение риска (мин)"
+    min: 1
+    max: 60
+    step: 1
+    initial: 10
+
+  strongbox_resolve_min:
+    name: "Сейф: подтверждение нормализации (мин)"
+    min: 1
+    max: 120
+    step: 1
+    initial: 20
+
 ##############################################################################
-#                                ТАЙМЕРЫ
+#                                   ТАЙМЕРЫ
 ##############################################################################
 timer:
   timer_hallway:
     name: "Движение отсутствует"
-    duration: "00:01:30"  # Базовое; при старте задаём динамически через data.duration
+    duration: "00:01:30" # Базовое; при старте задаём динамически через data.duration
+
+  # Окно прибытия
+  timer_arrival_window:
+    name: "Окно после прихода домой"
+    duration: "00:10:00" # можно потом вынести в input_number
 
 ##############################################################################
-#                             АВТОМАТИЗАЦИИ
+#                                   СЕНСОРЫ
+##############################################################################
+# СЕЙФ: сглаживание температуры и влажности для устойчивых расчётов
+sensor:
+  - platform: filter
+    name: "strongbox_humidity_smoothed"
+    unique_id: strongbox_humidity_smoothed
+    entity_id: sensor.strongbox_th_humidity
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "00:05"
+        precision: 1
+
+  - platform: filter
+    name: "strongbox_temperature_smoothed"
+    unique_id: strongbox_temperature_smoothed
+    entity_id: sensor.strongbox_th_temperature
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "00:05"
+        precision: 2
+
+##############################################################################
+#                               ШАБЛОННЫЕ СЕНСОРЫ
+##############################################################################
+# СЕЙФ: производные — точка росы и абсолютная влажность
+template:
+  - sensor:
+      - name: "strongbox_dew_point_c"
+        unique_id: strongbox_dew_point_c
+        state_class: measurement
+        unit_of_measurement: "°C"
+        icon: mdi:water-percent
+        availability: >-
+          {{ states('sensor.strongbox_temperature_smoothed') not in ['unknown','unavailable','']
+             and states('sensor.strongbox_humidity_smoothed') not in ['unknown','unavailable',''] }}
+        state: >-
+          {% set T  = states('sensor.strongbox_temperature_smoothed') | float(0) %}
+          {% set RH = states('sensor.strongbox_humidity_smoothed')    | float(0) %}
+          {% if RH <= 0 %}
+            unknown
+          {% else %}
+            {% set a, b = 17.62, 243.12 %}
+            {% set gamma = ((a*T)/(b+T)) + (RH/100) | log %}
+            {{ ((b*gamma)/(a-gamma)) | round(2) }}
+          {% endif %}
+
+      - name: "Сейф: абсолютная влажность, г/м³"
+        unique_id: strongbox_absolute_humidity_gm3
+        unit_of_measurement: "г/м³"
+        icon: mdi:water-percent
+        availability: >-
+          {{ states('sensor.strongbox_temperature_smoothed') not in ['unknown','unavailable','']
+             and states('sensor.strongbox_humidity_smoothed') not in ['unknown','unavailable',''] }}
+        state: >-
+          {# AH = 1324.95 * (RH/100) * exp(17.67*T/(T+243.5)) / (T+273.15) #}
+          {% set T  = states('sensor.strongbox_temperature_smoothed') | float(0) %}
+          {% set RH = states('sensor.strongbox_humidity_smoothed')   | float(0) %}
+          {% if RH <= 0 %}
+            unknown
+          {% else %}
+            {% set x = (17.67 * T) / (T + 243.5) %}
+            {{ (1324.95 * (RH/100.0) * (2.718281828459045 ** x) / (T + 273.15)) | round(2) }}
+          {% endif %}
+
+##############################################################################
+#                              БИНАРНЫЕ ДАТЧИКИ
+##############################################################################
+# СЕЙФ: «риск плесени» с гистерезисом и «условия в норме»
+binary_sensor:
+  - platform: template
+    sensors:
+      strongbox_mold_risk:
+        unique_id: strongbox_mold_risk
+        friendly_name: "Сейф: риск плесени"
+        device_class: problem
+        availability_template: >-
+          {{ states('sensor.strongbox_temperature_smoothed') not in ['unknown','unavailable','']
+             and states('sensor.strongbox_humidity_smoothed') not in ['unknown','unavailable','']
+             and states('sensor.strongbox_dew_point_c') not in ['unknown','unavailable',''] }}
+        value_template: >-
+          {% set T   = states('sensor.strongbox_temperature_smoothed') | float(0) %}
+          {% set RH  = states('sensor.strongbox_humidity_smoothed')    | float(0) %}
+          {% set dp  = states('sensor.strongbox_dew_point_c')         | float(-100) %}
+          {% set hi  = states('input_number.strongbox_humidity_high') | float(65) %}
+          {% set lo  = states('input_number.strongbox_humidity_low')  | float(55) %}
+          {% set was = is_state('binary_sensor.strongbox_mold_risk','on') %}
+          {% set close_to_dp = (T - dp) <= 1.0 %}
+          {{ (RH >= lo and close_to_dp) if was else (RH >= hi or (RH >= lo and close_to_dp)) }}
+
+      strongbox_safe_status:
+        unique_id: strongbox_safe_status
+        friendly_name: "Сейф: условия в норме"
+        device_class: safety
+        availability_template: >-
+          {{ states('sensor.strongbox_temperature_smoothed') not in ['unknown','unavailable','']
+             and states('sensor.strongbox_humidity_smoothed') not in ['unknown','unavailable',''] }}
+        value_template: >-
+          {% set T  = states('sensor.strongbox_temperature_smoothed') | float(0) %}
+          {% set RH = states('sensor.strongbox_humidity_smoothed')    | float(0) %}
+          {% set lo = states('input_number.strongbox_humidity_low') | float(55) %}
+          {% set tmin = states('input_number.strongbox_temp_min')  | float(15) %}
+          {{ RH <= lo and T >= tmin }}
+
+##############################################################################
+#                                 АВТОМАТИЗАЦИИ
 ##############################################################################
 automation:
-  # Вкл/выкл света кнопкой
+  ##########################################################################
+  # Прихожая: Вкл/выкл света кнопкой
+  ##########################################################################
   - id: "fc57ec27-9c9d-489a-8f5f-050b489466f7"
     alias: "Прихожая: Вкл/выкл света кнопкой"
     description: "Тоггл света по кнопке; после — старт/отмена таймера по факту."
@@ -96,7 +256,9 @@ automation:
           message: "Свет в прихожей toggled по кнопке."
           level: info
 
-  # Включение освещения при открытии двери
+  ##########################################################################
+  # Прихожая: Включение освещения при открытии двери
+  ##########################################################################
   - id: "3c9a07a9-58ee-4287-87ee-734687c93bba"
     alias: "Прихожая: Включение освещения при открытии двери"
     description: "Включает свет при устойчиво открытой двери."
@@ -133,7 +295,9 @@ automation:
           message: "Свет в прихожей включён по двери."
           level: info
 
-  # Включение света по движению и низкой освещённости
+  ##########################################################################
+  # Прихожая: Включение света по движению и низкой освещённости
+  ##########################################################################
   - id: "7f815fb8-98f4-437a-96fc-06984d9a4a25"
     alias: "Прихожая: Вкл света при движении и низкой освещенности"
     description: "Включает подсветку шлюза при движении и низкой освещённости."
@@ -169,7 +333,9 @@ automation:
           message: "Свет в прихожей включён по движению."
           level: info
 
-  # Запуск таймера при отсутствии движения
+  ##########################################################################
+  # Прихожая: Запуск таймера при отсутствии движения
+  ##########################################################################
   - id: "3b6e37de-3b10-4201-afad-221dbe4cd4a0"
     alias: "Прихожая: Запуск таймера при отсутствии движения"
     description: "Стартует таймер, когда движение прекратилось."
@@ -206,7 +372,9 @@ automation:
           message: "Таймер прихожей запущен (отсутствие движения)."
           level: info
 
-  # Перезапуск таймера при обнаружении движения
+  ##########################################################################
+  # Прихожая: Перезапуск таймера при обнаружении движения
+  ##########################################################################
   - id: "479b917d-e4c2-4149-97e7-d12779b9f3ce"
     alias: "Прихожая: Перезапуск таймера при обнаружении движения"
     description: "Продлевает освещение при новом движении."
@@ -243,7 +411,9 @@ automation:
           message: "Таймер прихожей перезапущен (движение)."
           level: info
 
-  # Выключение света по истечении таймера
+  ##########################################################################
+  # Прихожая: Выключение света по истечении таймера
+  ##########################################################################
   - id: "7f6bdbae-a73b-4509-8db8-43f71a3525ca"
     alias: "Прихожая: Выключение света по таймеру"
     description: "Выключает освещение по окончании таймера (кроме режима уборки)."
@@ -268,17 +438,19 @@ automation:
           message: "Свет в прихожей выключен по таймеру."
           level: info
 
-  # Включение света при первом открытии двери после прихода домой
+  ##########################################################################
+  # Прихожая: Включение света при первом открытии двери после прихода домой
+  ##########################################################################
   - id: "first-door-home-automation"
     alias: "Прихожая: Включение света при первом открытии двери после прихода домой"
-    description: "Если человек только пришёл (менее 10 минут), первое открытие двери включает свет."
+    description: "Включаем свет, если дверь впервые открыта в активное окно после прихода."
     mode: single
     trigger:
       - platform: state
         entity_id: binary_sensor.hallway_door_contact
         to: "on"
         for:
-          seconds: 5
+          seconds: 2 # было 5 — можно оставить 5, если датчик стабильный
     condition:
       - condition: state
         entity_id: input_boolean.hallway_first_door_open
@@ -286,13 +458,14 @@ automation:
       - condition: state
         entity_id: person.master
         state: "home"
-      - condition: template
-        value_template: "{{ (as_timestamp(now()) - as_timestamp(states.person.master.last_changed)) < 600 }}"
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: template
         value_template: "{{ states('binary_sensor.hallway_door_contact') not in ['unknown','unavailable',''] }}"
+      - condition: state
+        entity_id: timer.timer_arrival_window
+        state: "active" # ключевая проверка «ещё в окне после прихода»
     action:
       - service: light.turn_on
         target:
@@ -305,6 +478,9 @@ automation:
       - service: input_boolean.turn_on
         target:
           entity_id: input_boolean.hallway_first_door_open
+      - service: timer.cancel
+        target:
+          entity_id: timer.timer_arrival_window
       - service: timer.start
         target:
           entity_id: timer.timer_hallway
@@ -312,28 +488,34 @@ automation:
           duration: "{{ (states('input_number.hallway_timer_duration') | float(1.5) * 60) | int }}"
       - service: system_log.write
         data:
-          message: "Свет в прихожей включён при первом входе."
+          message: "Свет в прихожей включён при первом входе (окно прибытия активно)."
           level: info
 
-  # Сброс флага первого открытия двери при уходе пользователя
+  ##########################################################################
+  # Прихожая: Сброс флага «первое открытие двери» при уходе
+  ##########################################################################
   - id: "reset-first-door-flag"
-    alias: "Прихожая: Сброс флага первого открытия двери"
-    description: "Сбрасывает флаг при уходе (not_home)."
+    alias: "Прихожая: Пришёл домой — открыть окно и сбросить флаг"
     mode: single
     trigger:
       - platform: state
         entity_id: person.master
-        to: "not_home"
+        to: "home"
     action:
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.hallway_first_door_open
+      - service: timer.start
+        target:
+          entity_id: timer.timer_arrival_window
       - service: system_log.write
         data:
-          message: "Флаг первого открытия двери сброшен (ушёл из дома)."
+          message: "Прибытие домой: сброс флага и старт окна 10 минут."
           level: info
 
-  # Оповещение: звонок в дверь (TTS + мигание)
+  ##########################################################################
+  # Прихожая: Уведомление. Яндекс: Звонок в дверь (мигание)
+  ##########################################################################
   - id: "37a7b942-71ea-456e-8f9e-1718c8c34a8d"
     alias: "Уведомление. Яндекс: Звонок в дверь"
     description: "Алиса произносит фразу и мигает светом при нажатии кнопки."
@@ -344,6 +526,8 @@ automation:
         device_id: d2c3001cdc59660c456de45aec09da91
         type: action
         subtype: single
+      - platform: state
+        entity_id: event.madv_cn_329651133_miowlv2l_doorbell_ring_e_2_1
     condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
@@ -390,7 +574,9 @@ automation:
           message: "Обработан звонок в дверь (мигание выполнено)."
           level: info
 
-  # Оповещение: попытка снятия кнопки
+  ##########################################################################
+  # Прихожая: Уведомление. Входную кнопку пытаются снять
+  ##########################################################################
   - id: "26345165-2c00-489c-af7b-c4b92110c937"
     alias: "Уведомление. Входную кнопку пытаются снять"
     description: "TTS + Telegram при встряхивании кнопки."
@@ -417,3 +603,61 @@ automation:
         data:
           message: "Обнаружена попытка снятия входной кнопки."
           level: warning
+
+  ############################################################################
+  # СЕЙФ: подтв. РИСК плесени -> поднять флаг (дальше телега отправит)
+  ############################################################################
+  - id: "strongbox_risk_confirm"
+    alias: "Сейф: риск плесени (подтверждение)"
+    description: "Если risk=on устойчиво strongbox_confirm_min минут — поднять флаг уведомления."
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.strongbox_mold_risk
+        to: "on"
+        for:
+          minutes: "{{ states('input_number.strongbox_confirm_min') | int(10) }}"
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.strongbox_hum_text_notified
+        state: "off"
+    action:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.strongbox_hum_text_notified
+      - service: system_log.write
+        data:
+          message: "Сейф: подтверждён риск плесени (флаг уведомления поднят)."
+          level: warning
+
+  ############################################################################
+  # СЕЙФ: подтв. НОРМА -> сбросить флаг (дальше телега отправит)
+  ############################################################################
+  - id: "strongbox_risk_resolved_confirm"
+    alias: "Сейф: риск снят (подтверждение нормализации)"
+    description: "Если safe_status=on устойчиво strongbox_resolve_min минут — сбросить флаг уведомления."
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.strongbox_safe_status
+        to: "on"
+        for:
+          minutes: "{{ states('input_number.strongbox_resolve_min') | int(20) }}"
+    condition:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.strongbox_hum_text_notified
+        state: "on"
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.strongbox_hum_text_notified
+      - service: system_log.write
+        data:
+          message: "Сейф: условия нормализованы (флаг уведомления сброшен)."
+          level: info

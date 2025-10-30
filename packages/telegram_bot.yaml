@@ -207,7 +207,7 @@ script:
             <b>🌡 Температура:</b> {{ states('sensor.livingroom_climat_sensor_temperature') | default('N/A') }}°C
             <b>💧 Влажность:</b> {{ states('sensor.livingroom_climat_sensor_humidity') | default('N/A') }}%
             <b>🌿 CO₂:</b> {{ states('sensor.co2_monitor_co2') | default('N/A') }} ppm
-            <b>💨 PM2.5:</b> {{ states('sensor.zhimi_mb3_a5d3_pm25') | default('N/A') }} µg/m³
+            <b>💨 PM2.5:</b> {{ states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') | default('N/A') }} µg/m³
             <b>🚪 Статус дверей:</b> {% if is_state('binary_sensor.gostinaia_balkon_contact', 'on') or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
           inline_keyboard: >
             {{ [

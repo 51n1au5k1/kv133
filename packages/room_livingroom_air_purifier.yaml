@@ -1,0 +1,203 @@
+################################################################################
+# /packages/room_livingroom_air_purifier.yaml
+################################################################################
+#
+# Функции:
+#   • Автоматическое управление очистителем воздуха в гостиной:
+#       - Берём PM2.5 с датчика очистителя:
+#         sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6
+#       - Сглаживаем статистикой за последний период (anti-шум)
+#       - Включаем, если PM2.5 > верхнего порога
+#       - Выключаем, если PM2.5 < нижнего порога
+#       - Гистерезис, антидребезг, мин. время работы/простоя
+#   • Устройство:
+#       fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+#
+################################################################################
+
+##############################################################################
+#                           ВХОДНЫЕ ПЕРЕМЕННЫЕ
+##############################################################################
+
+input_boolean:
+  # Флаг включения автоматического режима очистителя
+  livingroom_air_purifier_auto:
+    name: "Гостиная: авто-режим очистителя"
+    icon: mdi:autorenew
+    initial: true
+
+input_number:
+  # Нижний порог: если PM2.5 ОПУСТИЛСЯ ниже — можно выключать
+  livingroom_pm25_low:
+    name: "Гостиная: нижний порог PM2.5 (µg/m³)"
+    min: 0
+    max: 75
+    step: 1
+    initial: 10
+    unit_of_measurement: "µg/m³"
+
+  # Верхний порог: если PM2.5 ПРЕВЫСИЛ — нужно включать
+  livingroom_pm25_high:
+    name: "Гостиная: верхний порог PM2.5 (µg/m³)"
+    min: 5
+    max: 100
+    step: 1
+    initial: 20
+    unit_of_measurement: "µg/m³"
+
+  # Минимальное время работы (чтобы не выключать слишком рано)
+  livingroom_air_min_on_min:
+    name: "Очиститель: мин. время работы (мин)"
+    min: 1
+    max: 120
+    step: 1
+    initial: 10
+
+  # Минимальное время простоя (чтобы не включать слишком часто)
+  livingroom_air_min_off_min:
+    name: "Очиститель: мин. время простоя (мин)"
+    min: 1
+    max: 120
+    step: 1
+    initial: 15
+
+##############################################################################
+#                               СЕНСОРЫ
+##############################################################################
+
+# Сглаживание PM2.5: берём среднее за последние 5 минут, чтобы убрать «пилу»
+sensor:
+  - platform: statistics
+    name: "Living Room PM2.5 Avg"
+    entity_id: sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6
+    state_characteristic: mean
+    sampling_size: 120 # до 120 последних выборок
+    max_age:
+      minutes: 5 # окно усреднения ~5 минут
+
+##############################################################################
+#                               БИНАРНЫЕ СЕНСОРЫ
+##############################################################################
+
+binary_sensor:
+  - platform: template
+    sensors:
+      livingroom_need_air_purify:
+        unique_id: livingroom_need_air_purify
+        friendly_name: "Гостиная: нужна очистка воздуха (гистерезис)"
+        device_class: problem
+
+        # Доступность: когда есть сырые данные PM2.5 (а не unknown/unavailable)
+        availability_template: >-
+          {{ states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') not in ['unknown','unavailable',''] }}
+
+        # Логика:
+        #   - берём сглаженное значение PM2.5 (если есть), иначе — сырое
+        #   - если PM2.5 > high → ON (нужно чистить)
+        #   - если PM2.5 < low  → OFF (можно выключить)
+        #   - иначе держим предыдущее состояние
+        #   - защита от некорректных порогов (low >= high)
+        value_template: >-
+          {% set pm_raw = states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') | float(none) %}
+          {% set pm_avg = states('sensor.living_room_pm2_5_avg') | float(none) if states('sensor.living_room_pm2_5_avg') not in ['unknown','unavailable',''] else none %}
+          {% set pm = pm_avg if pm_avg is not none else pm_raw %}
+          {% if pm is none %}
+            {{ is_state('binary_sensor.livingroom_need_air_purify','on') }}
+          {% else %}
+            {% set low  = states('input_number.livingroom_pm25_low')  | float(10) %}
+            {% set high = states('input_number.livingroom_pm25_high') | float(20) %}
+            {% if low >= high %}
+              {% set high = low + 1 %}
+            {% endif %}
+            {% set was_on = is_state('binary_sensor.livingroom_need_air_purify','on') %}
+            {% if was_on %}
+              {{ pm > low }}
+            {% else %}
+              {{ pm > high }}
+            {% endif %}
+          {% endif %}
+
+##############################################################################
+#                              АВТОМАТИЗАЦИИ
+##############################################################################
+
+automation:
+  ##########################################################################
+  # ВКЛЮЧЕНИЕ ОЧИСТИТЕЛЯ
+  ##########################################################################
+  - id: "7b7b1b1a-2f7a-4c67-8ccf-7c3b0c5f2d11"
+    alias: "Гостиная: включить очиститель (по PM2.5)"
+    description: >
+      Если PM2.5 стабильно выше верхнего порога (гистерезисный сенсор ON)
+      в течение ≥5 мин — включаем очиститель. Учитываем мин. время простоя.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.livingroom_need_air_purify
+        from: "off"
+        to: "on"
+        for:
+          minutes: 5 # антидребезг (ждём стабилизации несколько минут)
+
+    conditions:
+      # Автоматический режим включён
+      - condition: state
+        entity_id: input_boolean.livingroom_air_purifier_auto
+        state: "on"
+
+      # Минимальное время простоя прошло (устойчиво учитываем рестарт HA)
+      - condition: template
+        value_template: >-
+          {% set lc = states.fan.zhimi_cn_271517251_mb3_s_2_air_purifier.last_changed %}
+          {{ is_state('fan.zhimi_cn_271517251_mb3_s_2_air_purifier','off')
+             and (as_timestamp(now()) - as_timestamp(lc, as_timestamp(now()))) >
+                 (states('input_number.livingroom_air_min_off_min') | int * 60) }}
+
+    actions:
+      # Включаем очиститель
+      - action: fan.turn_on
+        target:
+          entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+      # (Опционально) режим авто/тихий — можно добавить при необходимости:
+      # - action: fan.set_preset_mode
+      #   target:
+      #     entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+      #   data:
+      #     preset_mode: auto
+
+  ##########################################################################
+  # ВЫКЛЮЧЕНИЕ ОЧИСТИТЕЛЯ
+  ##########################################################################
+  - id: "e0d6d9f3-0c1c-4822-9b05-ea2e7e2f0b5c"
+    alias: "Гостиная: выключить очиститель (по PM2.5)"
+    description: >
+      Если PM2.5 стабильно ниже нижнего порога (гистерезисный сенсор OFF)
+      в течение ≥5 мин — выключаем очиститель. Проверяем мин. время работы.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.livingroom_need_air_purify
+        from: "on"
+        to: "off"
+        for:
+          minutes: 5 # антидребезг
+
+    conditions:
+      # Автоматический режим включён
+      - condition: state
+        entity_id: input_boolean.livingroom_air_purifier_auto
+        state: "on"
+
+      # Минимальное время работы прошло (учитываем рестарт HA)
+      - condition: template
+        value_template: >-
+          {% set lc = states.fan.zhimi_cn_271517251_mb3_s_2_air_purifier.last_changed %}
+          {{ is_state('fan.zhimi_cn_271517251_mb3_s_2_air_purifier','on')
+             and (as_timestamp(now()) - as_timestamp(lc, as_timestamp(now()))) >
+                 (states('input_number.livingroom_air_min_on_min') | int * 60) }}
+
+    actions:
+      # Выключаем очиститель
+      - action: fan.turn_off
+        target:
+          entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier

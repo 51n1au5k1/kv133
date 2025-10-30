@@ -11,19 +11,20 @@
 #
 ################################################################################
 
-telegram_bot:
-  # ----------------------------------------------------------------------------
-  # Telegram-бот (polling).
-  # Здесь мы указываем API-ключ и список пользователей, которым разрешён доступ
-  # к боту через chat_id. Параметр parse_mode: html позволяет использовать
-  # HTML-разметку в уведомлениях (жирный шрифт, ссылки и т.д.).
-  # ----------------------------------------------------------------------------
+# Теперь настраивается в интеграциях
+# telegram_bot:
+#   # ----------------------------------------------------------------------------
+#   # Telegram-бот (polling).
+#   # Здесь мы указываем API-ключ и список пользователей, которым разрешён доступ
+#   # к боту через chat_id. Параметр parse_mode: html позволяет использовать
+#   # HTML-разметку в уведомлениях (жирный шрифт, ссылки и т.д.).
+#   # ----------------------------------------------------------------------------
 
-  - platform: polling
-    api_key: !secret api_key_bot
-    parse_mode: html
-    allowed_chat_ids:
-      - !secret chat_id_andrei
+#   - platform: polling
+#     api_key: !secret api_key_bot
+#     parse_mode: html
+#     allowed_chat_ids:
+#       - !secret chat_id_andrei
 
 notify:
   # ----------------------------------------------------------------------------
@@ -39,3 +40,23 @@ notify:
     name: group_notifications
     services:
       - service: master
+# Отладочная автоматизация
+automation:
+  - id: "debug_telegram_trigger"
+    alias: "DEBUG Telegram Trigger Structure"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_command
+    actions:
+      - service: system_log.write
+        data:
+          level: warning
+          message: >
+            DEBUG telegram_command trigger keys:
+            platform={{ trigger.platform }}
+            has_event={{ trigger.event is defined }}
+            event_type={{ trigger.event.event_type if trigger.event is defined else 'no-event' }}
+            chat_id={{ trigger.event.data.chat_id if trigger.event is defined and trigger.event.data.chat_id is defined else 'no-chat_id' }}
+            user_id={{ trigger.event.data.user_id if trigger.event is defined and trigger.event.data.user_id is defined else 'no-user_id' }}
+            full_data={{ trigger.event.data if trigger.event is defined else 'no-data' }}

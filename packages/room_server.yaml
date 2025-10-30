@@ -3,19 +3,16 @@
 ################################################################################
 #
 # Назначение:
-#   Данный пакет Home Assistant управляет мониторингом состояния розеток,
-#   подключённых к ИБП, и отправляет уведомления в случае их недоступности.
-#   Также создаются бинарные сенсоры, которые показывают, когда устройства
-#   находятся в режиме профилактики ИБП (розетки отключены по расписанию).
-#   Добавлена автоматизация управления вентилятором серверной в зависимости
-#   от температуры.
+#   - Мониторинг состояния розеток, подключённых к ИБП.
+#   - Уведомления при их недоступности.
+#   - Контроль температуры серверной и управление вентилятором.
 #
-# Доработки:
-#   - Добавлен binary_sensor для температуры с гистерезисом (high/low пороги).
-#   - Input_number для настраиваемых порогов температуры.
-#   - Timer для delay_off вентилятора.
-#   - silent_mode/startup_phase в уведомлениях.
-#   - Логирование и проверки на unavailable/someone_is_home.
+# Что тут есть:
+#   input_number.*        → настраиваемые пороги температуры и тайминги.
+#   binary_sensor.*       → флаги профилактики ИБП + флаг "жарко в серверной".
+#   timer.*               → подтверждение устойчиво низкой температуры и
+#                            задержка выключения вентилятора.
+#   automation.*          → уведомления об авариях питания и логика вентилятора.
 #
 ################################################################################
 
@@ -26,18 +23,21 @@ input_number:
     max: 40
     step: 1
     initial: 30
+
   server_temp_low_threshold:
     name: "Порог низкой температуры сервера (°C)"
     min: 20
     max: 35
     step: 1
     initial: 28
+
   server_temp_off_persist_min:
     name: "Сервер: устойчиво низкая температура (мин)"
     min: 5
     max: 60
     step: 5
     initial: 30
+
   server_fan_delay_min:
     name: "Сервер: задержка выключения вентилятора (мин)"
     min: 1
@@ -46,11 +46,11 @@ input_number:
     initial: 5
 
 binary_sensor:
-  # ----------------------------------------------------------------------------
-  # 1) РОУТЕР НА ПРОФИЛАКТИКЕ ИБП
-  # ----------------------------------------------------------------------------
   - platform: template
     sensors:
+      # ----------------------------------------------------------------------------
+      # 1) РОУТЕР НА ПРОФИЛАКТИКЕ ИБП
+      # ----------------------------------------------------------------------------
       ups_maintenance_router:
         unique_id: ups_maintenance_router
         friendly_name: "Роутер на профилактике ИБП"
@@ -94,39 +94,40 @@ binary_sensor:
         availability_template: >
           {{ states('sensor.0xa4c13861a18df7c8_temperature') not in ['unknown','unavailable',''] }}
         value_template: >
-          {% set temp = states('sensor.0xa4c13861a18df7c8_temperature') | float(0) %}
-          {% set high = states('input_number.server_temp_high_threshold') | float(30) %}
-          {% set low  = states('input_number.server_temp_low_threshold')  | float(28) %}
+          {% set temp   = states('sensor.0xa4c13861a18df7c8_temperature') | float(0) %}
+          {% set high   = states('input_number.server_temp_high_threshold') | float(30) %}
+          {% set low    = states('input_number.server_temp_low_threshold')  | float(28) %}
           {% set was_on = is_state('binary_sensor.server_temp_high','on') %}
           {{ (temp > low) if was_on else (temp > high) }}
         delay_on:
-          minutes: 2    # устойчиво «высоко» 2 мин
+          minutes: 2 # устойчиво "высоко" 2 мин
 
 timer:
   server_temp_off_persist:
     name: "Сервер: подтверждение низкой температуры"
-    duration: "00:30:00"  # Базовое; фактическая длительность задаётся при старте
+    duration: "00:30:00" # базовое значение; реальная длительность задаётся динамически
+
   server_fan_delay:
     name: "Сервер: задержка выключения вентилятора"
-    duration: "00:05:00"  # Базовое; фактическая длительность задаётся при старте
+    duration: "00:05:00" # базовое значение; реальная длительность задаётся динамически
 
 automation:
   # ----------------------------------------------------------------------------
-  # УВЕДОМЛЕНИЕ О НЕДОСТУПНОСТИ РОЗЕТКИ
+  # УВЕДОМЛЕНИЕ О НЕДОСТУПНОСТИ РОЗЕТКИ (ИБП / питание)
   # ----------------------------------------------------------------------------
   - id: "12858001-138d-4238-97f9-e5a501c6fe18"
     alias: "Уведомление: Розетка недоступна (электричество отключено)"
     description: "Уведомляет, если розетка стала недоступной (ИБП/электричество)."
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id:
           - switch.my_multi_outlet_left
           - switch.my_multi_outlet_right
         to: "unavailable"
         for:
           minutes: 1
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
@@ -136,60 +137,67 @@ automation:
       - condition: state
         entity_id: binary_sensor.someone_is_home
         state: "on"
-    action:
-      - service: notify.master
+    actions:
+      - action: notify.master
         data:
           message: >
             ⚠️ Внимание! Розетка {{ trigger.entity_id }} недоступна.
             Возможно, отключено электричество или проблемы с ИБП.
-      - service: system_log.write
+      - action: system_log.write
         data:
           message: "Розетка {{ trigger.entity_id }} недоступна — уведомление отправлено."
           level: warning
 
   # ----------------------------------------------------------------------------
-  # КОНТРОЛЬ ТЕМПЕРАТУРЫ СЕРВЕРНОЙ: ВЕНТИЛЯТОР
+  # КОНТРОЛЬ ТЕМПЕРАТУРЫ СЕРВЕРНОЙ: УПРАВЛЕНИЕ ВЕНТИЛЯТОРОМ
   # ----------------------------------------------------------------------------
   - id: "server_room_fan_control"
     alias: "Контроль температуры серверной: управление вентилятором"
-    description: "High — включаем вентилятор; Off — запускаем подтверждение низкой температуры."
+    description: >
+      При перегреве — включить вентилятор.
+      Когда остыло — запустить подтверждение стабильной низкой температуры.
     mode: restart
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.server_temp_high
         from: "off"
         to: "on"
         id: high
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.server_temp_high
         from: "on"
         to: "off"
         id: low
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: template
         value_template: >
           {{ states('sensor.0xa4c13861a18df7c8_temperature') not in ['unknown','unavailable'] }}
-    action:
+    actions:
       - choose:
+          # Температура высокая → сразу включаем вентилятор, отменяем таймеры
           - conditions:
               - condition: trigger
                 id: high
             sequence:
-              - service: timer.cancel
+              - action: timer.cancel
                 target:
                   entity_id:
                     - timer.server_temp_off_persist
                     - timer.server_fan_delay
-              - service: fan.turn_on
+              - action: fan.turn_on
                 target:
                   entity_id: fan.server_fan
-              - service: system_log.write
+              - action: system_log.write
                 data:
-                  message: "Вентилятор сервера включён (темп: {{ states('sensor.0xa4c13861a18df7c8_temperature') }}°)."
+                  message: >
+                    Вентилятор сервера включён
+                    (температура: {{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C).
                   level: info
+
+          # Температура упала → запустить таймер подтверждения устойчиво низкой температуры
           - conditions:
               - condition: trigger
                 id: low
@@ -197,67 +205,74 @@ automation:
                 entity_id: fan.server_fan
                 state: "on"
             sequence:
-              - service: timer.start
+              - action: timer.start
                 target:
                   entity_id: timer.server_temp_off_persist
                 data:
-                  duration: "{{ (states('input_number.server_temp_off_persist_min') | float(30) * 60) | int }}"
-              - service: system_log.write
+                  duration: >
+                    {{ (states('input_number.server_temp_off_persist_min') | float(30) * 60) | int }}
+              - action: system_log.write
                 data:
                   message: "Запущен таймер подтверждения низкой температуры сервера."
                   level: info
 
   # ----------------------------------------------------------------------------
-  # СТАБИЛЬНО НИЗКАЯ ТЕМПЕРАТУРА: ЗАПУСК ЗАДЕРЖКИ ВЫКЛЮЧЕНИЯ ВЕНТИЛЯТОРА
+  # СТАБИЛЬНО НИЗКАЯ ТЕМПЕРАТУРА:
+  # запускаем задержку выключения вентилятора (grace period)
   # ----------------------------------------------------------------------------
   - id: "server_temp_off_persist_finished"
     alias: "Сервер: стабильная низкая температура — задержка выключения вентилятора"
-    description: "После подтверждённо низкой температуры запускаем задержку выключения вентилятора."
+    description: >
+      Таймер подтверждения низкой температуры закончился → запускаем таймер задержки
+      выключения вентилятора.
     mode: single
-    trigger:
-      - platform: event
+    triggers:
+      - trigger: event
         event_type: timer.finished
         event_data:
           entity_id: timer.server_temp_off_persist
-    condition:
+    conditions:
       - condition: state
         entity_id: binary_sensor.server_temp_high
         state: "off"
       - condition: state
         entity_id: fan.server_fan
         state: "on"
-    action:
-      - service: timer.start
+    actions:
+      - action: timer.start
         target:
           entity_id: timer.server_fan_delay
         data:
-          duration: "{{ (states('input_number.server_fan_delay_min') | float(5) * 60) | int }}"
-      - service: system_log.write
+          duration: >
+            {{ (states('input_number.server_fan_delay_min') | float(5) * 60) | int }}
+      - action: system_log.write
         data:
           message: "Запущен таймер задержки выключения вентилятора сервера."
           level: info
 
   # ----------------------------------------------------------------------------
-  # ВЫКЛЮЧЕНИЕ ВЕНТИЛЯТОРА ПО ТАЙМЕРУ
+  # ФИНАЛ: ВЫКЛЮЧЕНИЕ ВЕНТИЛЯТОРА ПО ТАЙМЕРУ
   # ----------------------------------------------------------------------------
   - id: "server_fan_delay_off"
     alias: "Выключение вентилятора сервера по таймеру"
-    description: "Выключает вентилятор после таймера, если температура всё ещё низкая."
+    description: "Выключает вентилятор после задержки, если всё ещё не жарко."
     mode: single
-    trigger:
-      - platform: event
+    triggers:
+      - trigger: event
         event_type: timer.finished
         event_data:
           entity_id: timer.server_fan_delay
-    condition:
+    conditions:
       - condition: state
         entity_id: binary_sensor.server_temp_high
         state: "off"
-    action:
-      - service: fan.turn_off
+    actions:
+      - action: fan.turn_off
         target:
           entity_id: fan.server_fan
-      - service: system_log.write
+      - action: system_log.write
         data:
-          message: "Вентилятор сервера выключен по таймеру (темп: {{ states('sensor.0xa4c13861a18df7c8_temperature') }}°)."
+          message: >
+            Вентилятор сервера выключен по таймеру
+            (температура: {{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C).
           level: info

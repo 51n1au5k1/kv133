@@ -33,3 +33,4 @@
 /packages/del
 /packages/new
 /ps5-mqtt
+.ha_run.lock

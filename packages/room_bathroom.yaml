@@ -132,49 +132,98 @@ timer:
 #                             АВТОМАТИЗАЦИИ
 ##############################################################################
 automation:
-  # Включение вентилятора при повышенной влажности
+  # ------------------------------------------------------------------------
+  # Ванная: Вытяжка, включение
+  # ------------------------------------------------------------------------
   - id: "dc1acbee-6ecd-45a4-8eae-ab69034c3117"
-    alias: "Ванная: Вытяжка, включение."
-    description: "Включение вентилятора при высокой усреднённой влажности в ванной."
+    alias: "Ванная: Вытяжка, включение"
+    description: >
+      Если влажность выше верхнего порога (bathroom_humidity_max=on),
+      и вытяжка сейчас выключена — включаем вентилятор.
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.bathroom_humidity_max
         to: "on"
-    condition:
+
+    conditions:
+      # HA полностью загрузился (не выполняем логику в фазу старта)
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+
+      # Вентилятор реально сейчас выключен, чтобы не спамить turn_on
       - condition: state
         entity_id: fan.bathroom_relay_l1
         state: "off"
-    action:
-      - service: fan.turn_on
+
+    actions:
+      - action: fan.turn_on
         target:
           entity_id: fan.bathroom_relay_l1
 
-  # Запуск таймера для продува вентилятора при снижении влажности
+  # ------------------------------------------------------------------------
+  # Ванная: Запуск таймера продува при снижении влажности
+  # ------------------------------------------------------------------------
   - id: "6ebb6fa8-9cd1-4ebd-839d-44d175e6c319"
-    alias: "Ванная: Запуск таймера на продув по снижении влажности"
-    description: "При снижении влажности ниже минимального порога запускается таймер на 2 минуты перед отключением вентилятора."
+    alias: "Ванная: Старт продува перед отключением вентилятора"
+    description: >
+      Когда влажность упала ниже нижнего порога (bathroom_humidity_min=on),
+      запускаем таймер продува. По окончании таймера вентилятор будет выключен.
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.bathroom_humidity_min
         to: "on"
-    action:
-      - service: timer.start
+
+    conditions:
+      # HA уже загрузился
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+
+      # Вентилятор есть смысл дуть только если он сейчас включён
+      - condition: state
+        entity_id: fan.bathroom_relay_l1
+        state: "on"
+
+      # Не запускаем второй таймер, если он уже крутится
+      - condition: state
+        entity_id: timer.bathroom_fan_cooldown
+        state: "idle"
+
+    actions:
+      - action: timer.start
         target:
           entity_id: timer.bathroom_fan_cooldown
 
-  # Выключение вентилятора по истечении таймера продува
+  # ------------------------------------------------------------------------
+  # Ванная: Выключение вентилятора по окончании продува
+  # ------------------------------------------------------------------------
   - id: "7a1db18b-0366-47cf-8260-6109b01447f9"
-    alias: "Ванная: Выключение вентилятора по окончании продува"
-    description: "После истечения таймера bathroom_fan_cooldown вентилятора автоматически выключают."
+    alias: "Ванная: Выключение вентилятора после продува"
+    description: >
+      Когда таймер bathroom_fan_cooldown заканчивается, выключаем вентилятор,
+      но только если влажность уже стабильно ниже порога (bathroom_humidity_min всё ещё on).
     mode: single
-    trigger:
-      - platform: event
+    triggers:
+      - trigger: event
         event_type: timer.finished
         event_data:
           entity_id: timer.bathroom_fan_cooldown
-    action:
-      - service: fan.turn_off
+
+    conditions:
+      # Только если влажность действительно упала и держится внизу
+      - condition: state
+        entity_id: binary_sensor.bathroom_humidity_min
+        state: "on"
+
+      # Вентилятор всё ещё работает (иначе нечего выключать)
+      - condition: state
+        entity_id: fan.bathroom_relay_l1
+        state: "on"
+
+    actions:
+      - action: fan.turn_off
         target:
           entity_id: fan.bathroom_relay_l1

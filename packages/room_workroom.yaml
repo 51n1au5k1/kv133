@@ -14,11 +14,7 @@
 #        состояние подсветки рабочего стола.
 #     2) Уведомления при низкой температуре —
 #        отправка уведомлений в Telegram и голосом через Яндекс.Станцию.
-#
-# Особенности:
-#   • Используется domain: mqtt c type: action и subtype: single.
-#   • Контроль температуры в мастерской с учетом усреднённого значения.
-#   • Уведомления отправляются в зависимости от режима тишины и наличия людей дома.
+#     3) Сброс антиспам-флага уведомлений о температуре.
 #
 ################################################################################
 
@@ -41,9 +37,6 @@ input_boolean:
     initial: false
     icon: mdi:bell-ring
 
-##############################################################################
-#                             АВТОМАТИЗАЦИИ
-##############################################################################
 automation:
   # ----------------------------------------------------------------------------
   # 1) ВКЛ/ВЫКЛ ПОДСВЕТКИ РАБОЧЕЙ ЗОНЫ КНОПКОЙ
@@ -53,51 +46,65 @@ automation:
     description: >
       Одиночное нажатие физической кнопки переключает (toggle) подсветку рабочего стола.
     mode: restart
-    trigger:
-      - platform: device
+    triggers:
+      - trigger: device
         domain: mqtt
         device_id: 8067572bca7252311fc2ce6152f90f34
         type: action
         subtype: single
         discovery_id: "0x00158d0003cffd82 action_single"
-    condition: []
-    action:
-      - type: toggle
-        device_id: 3a9919ab25ad577158f751a70c35f8e2
-        entity_id: light.working_room_led
-        domain: light
+    conditions: []
+    actions:
+      - action: light.toggle
+        target:
+          entity_id: light.working_room_led
 
   # ----------------------------------------------------------------------------
   # 2) Уведомление: Температура в мастерской ниже 20° (усреднённое значение)
   # ----------------------------------------------------------------------------
   - id: "abe6206a-a428-4b31-928f-789c38355279"
     alias: "Уведомление о низкой температуре в мастерской (усреднённое значение)"
+    description: >
+      Если с усреднённого датчика температура в мастерской <20°C при открытой двери,
+      напомнить закрыть дверь (голосом или Телеграм) и выставить флаг,
+      чтобы не спамить до сброса.
     mode: single
-    trigger:
-      - platform: numeric_state
+
+    triggers:
+      - trigger: numeric_state
         entity_id: sensor.srednee_znachenie_temperatury_v_masterskoi_2
         below: 20
         for:
           minutes: 1
-    condition:
+
+    conditions:
+      # дверь реально открыта (холод идёт с балкона)
       - condition: state
         entity_id: binary_sensor.masterskaia_balkon_contact
         state: "on"
+
+      # HA уже загрузился
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
+
+      # не уведомляли ещё недавно
       - condition: state
         entity_id: input_boolean.workroom_th_notice
         state: "off"
+
+      # данные не мусор
       - condition: template
-        value_template: >
-          {{ states('sensor.srednee_znachenie_temperatury_v_masterskoi_2') not in ['unknown','unavailable'] and
-             states('binary_sensor.masterskaia_balkon_contact') not in ['unknown','unavailable'] }}
-    action:
+        value_template: >-
+          {{ states('sensor.srednee_znachenie_temperatury_v_masterskoi_2') not in ['unknown','unavailable',''] and
+            states('binary_sensor.masterskaia_balkon_contact') not in ['unknown','unavailable',''] }}
+
+    actions:
       - variables:
           telegram_message: "Температура в мастерской ниже 20°. Это мастерская, а не холодильник! Закройте дверь."
+
       - choose:
-          # Если режим тишины выключен и мастер дома — голосовое уведомление
+          # Вариант 1: можно сказать голосом (silent_mode=off и хозяин дома)
           - conditions:
               - condition: state
                 entity_id: input_boolean.silent_mode
@@ -106,14 +113,11 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - service: media_player.play_media
-                target:
-                  entity_id: media_player.yandex_station_ff98f0294437799304d0788d
+              - action: script.yandex_tts_generic
                 data:
-                  media_content_id: >
-                    Внимание! Температура в мастерской ниже двадцати градусов. Закройте дверь!
-                  media_content_type: "text"
-          # Если режим тишины включён и мастер дома — Telegram
+                  text: "Внимание! Температура в мастерской ниже двадцати градусов. Закройте дверь!"
+
+          # Вариант 2: тихий режим, тогда пишем в Телеграм
           - conditions:
               - condition: state
                 entity_id: input_boolean.silent_mode
@@ -122,29 +126,34 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - service: notify.master
+              - action: notify.master
                 data:
                   message: "{{ telegram_message }}"
-      - service: input_boolean.turn_on
+
+      # ставим флаг антиспама
+      - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.workroom_th_notice
-      - service: system_log.write
+
+      # лог
+      - action: system_log.write
         data:
           message: "Отправлено уведомление о низкой температуре в мастерской (<20°C)."
           level: info
 
+
   # ----------------------------------------------------------------------------
-  # HELPER: Сброс уведомлений о температуре в мастерской
+  # 3) HELPER: Сброс уведомлений о температуре в мастерской
   # ----------------------------------------------------------------------------
   - id: "9bdeb719-0792-4176-8451-367273fdbb4c"
     alias: "HELPER: Сброс уведомлений о температуре в мастерской"
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: input_boolean.workroom_th_notice
         to: "on"
-    action:
+    actions:
       - delay: "00:{{ states('input_number.low_th_notification_reset_period') | int }}:00"
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.workroom_th_notice

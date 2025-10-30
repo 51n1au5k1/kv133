@@ -96,10 +96,6 @@ binary_sensor:
              or (temp2 not in ['unknown','unavailable'] and temp2|float <= 20)
              or (temp3 not in ['unknown','unavailable'] and temp3|float <= 20) }}
 
-  # temperature_below_20:
-  #   - 'on', если кто-то дома
-  #   - 'off', иначе.
-
   - platform: template
     sensors:
       someone_is_home:
@@ -142,6 +138,15 @@ template:
         # При необходимости можно изменить на любое подходящее значение.
         state: "739"
 
+  - sensor:
+      - name: livingroom_sockets_power_total
+        unique_id: livingroom_sockets_power_total
+        unit_of_measurement: W
+        # Сумарная мощность розеток в гостиной
+        state: >-
+          {{ states('sensor.livingroom_socket_l_power')|float(0)
+           + states('sensor.livingroom_socket_r_power')|float(0) }}
+
 ##############################################################################
 #  ВХОДНЫЕ ПАРАМЕТРЫ
 #  Входные переменные сохраняются между перезагрузками системы
@@ -163,7 +168,7 @@ template:
 input_boolean:
   # --------------------------------------------------------------------------
   # 1) Фаза загрузки системы
-  # --------------------------------------------------------------------------
+  # --
   # Активируется при старте Home Assistant, указывая, что система в процессе
   # загрузки (например, чтобы временно приостановить срабатывание некоторых
   # автоматизаций). Позже автоматически отключается.
@@ -174,7 +179,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 2) Режим тишины
-  # --------------------------------------------------------------------------
+  # --
   # Используется, чтобы переключать «тихий режим» в определенные часы суток
   # (23:00--09:00 по умолчанию). В этом режиме система блокирует громкие
   # уведомления или отключает/уменьшает громкость оповещений.
@@ -189,7 +194,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 3) Зимний режим
-  # --------------------------------------------------------------------------
+  # --
   # Активирует особые сценарии/автоматизации для зимних месяцев.
   # Например, может поддерживать более высокий уровень обогрева
   # или запускать другие специфичные для зимы процессы.
@@ -200,7 +205,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 4) Режим уборки в ванной
-  # --------------------------------------------------------------------------
+  # --
   # Может использоваться для автоматизаций, связанных с уборкой:
   # включение вытяжки, освещения или других устройств в ванной
   # в «режиме уборки», чтобы удобно и безопасно заниматься чисткой/мойкой.
@@ -211,18 +216,23 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 5) Уведомление о замене фильтра отправлено
-  # --------------------------------------------------------------------------
-  # Флаг, показывающий, что пользователю уже было отправлено уведомление
+  # --
+  # Флаги, показывающий, что пользователю уже было отправлено уведомление
   # о необходимости замены фильтра (например, в очистителе воздуха).
   # Используется, чтобы не присылать повторные уведомления.
-  filter_replace_notified:
-    name: "Уведомление о замене фильтра отправлено"
-    initial: off
-    icon: mdi:filter-outline
 
+  air_filter_replace_notified:
+    name: "Очиститель воздуха: уведомление о замене фильтра отправлено"
+    initial: off
+    icon: mdi:air-filter
+
+  humidifier_filter_replace_notified:
+    name: "Увлажнитель: уведомление о замене фильтра отправлено"
+    initial: off
+    icon: mdi:water-alert
   # --------------------------------------------------------------------------
   # 6) Сенсор текстовых уведомлений о СО2
-  # --------------------------------------------------------------------------
+  # --
   # Активируется, если было отправлено текстовое уведомление о повышенном
   # уровне CO2. Автоматизации могут затем сбрасывать этот флаг по таймеру
   # или при смене условий.
@@ -233,7 +243,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 7) Сенсор голосовых уведомлений о СО2
-  # --------------------------------------------------------------------------
+  # --
   # Аналогично предыдущему, но для голосовых уведомлений
   # (например, через TTS-модуль).
   co2_voice_notification_sensor:
@@ -243,7 +253,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 9) Climate Pre-Restart State
-  # --------------------------------------------------------------------------
+  # --
   # Технический флаг, запоминающий состояние климатической системы
   # (например, кондиционера) перед перезагрузкой Home Assistant.
   # После рестарта используется для восстановления прежнего состояния.
@@ -253,7 +263,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 10) Fan Pre-Restart State
-  # --------------------------------------------------------------------------
+  # --
   # Аналогично предыдущему пункту, но для вентилятора/очистителя воздуха.
   # Запоминает состояние устройства.
   fan_pre_restart_state:
@@ -262,7 +272,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 11) Humidifier Pre-Restart State
-  # --------------------------------------------------------------------------
+  # --
   # Аналогично предыдущим пунктам (9, 10), но для увлажнителя.
   humidifier_pre_restart_state:
     name: "Humidifier Pre-Restart State"
@@ -270,7 +280,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 12) Climate Pre-State When Door Opened
-  # --------------------------------------------------------------------------
+  # --
   # Запоминает состояние климатической системы при открытии двери
   # (например, при проветривании). Может использоваться, чтобы автоматически
   # вернуть систему в исходный режим, когда дверь закрывается.
@@ -280,7 +290,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 13) Fan Pre-State When Door Opened
-  # --------------------------------------------------------------------------
+  # --
   # Аналогично предыдущему пункту (12), но для вентилятора.
   door_open_fan_pre_state:
     name: "Fan Pre-State When Door Opened"
@@ -288,14 +298,14 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # 14) Humidifier Pre-State When Door Opened
-  # --------------------------------------------------------------------------
+  # --
   # Аналогично предыдущим пунктам. Запоминает состояние увлажнителя.
   door_open_humidifier_pre_state:
     name: "Humidifier Pre-State When Door Opened"
     initial: off
   # --------------------------------------------------------------------------
   # 15) Force Camera Off
-  # --------------------------------------------------------------------------
+  # --
   # Переключатель форсированного режима отключения камер
   force_camera_off:
     name: "Форсированное отключение камер"
@@ -303,12 +313,50 @@ input_boolean:
     icon: mdi:cctv-off
   # --------------------------------------------------------------------------
   # 16) Защита освещения ванной при запуске
-  # --------------------------------------------------------------------------
+  # --
   # Защита освещения ванной при запуске
   bathroom_lights_startup_protection:
     name: "Защита освещения ванной при запуске"
     initial: on
     icon: mdi:shield-home
+  # --------------------------------------------------------------------------
+  # 17) Хелпер-флаги цикла стиральной машины
+  # --
+  # Стиралка: цикл начинался после текущего старта HA
+  wm_cycle_seen_start:
+    name: "Стиралка: цикл начинался после текущего старта HA"
+    initial: off
+    icon: mdi:flag-outline
+  # Хелпер-флаг статуса стиральной машины
+  washing_machine_running:
+    name: "Стиральная машина работает"
+    initial: off
+    icon: mdi:washing-machine
+  # Хелпер-флаг запоминания статуса стиральной машины
+  washing_machine_pre_restart_state:
+    name: "Washing Machine Pre-Restart State"
+    initial: off
+    icon: mdi:washing-machine
+
+  # Хелпер-флаг отключения питания стиралки
+  wm_socket_outage_active:
+    name: "Стиралка: авария питания активна"
+    initial: off
+    icon: mdi:power-plug-off
+
+  # --------------------------------------------------------------------------
+  # 18) Хелпер-флаг уведомлений о звонке в дверь
+  # --
+
+  doorbell_spam_guard:
+    name: Doorbell spam guard
+    icon: mdi:bell-badge
+  # --------------------------------------------------------------------------
+  # 20) Хелпер-флаг уведомлений о недостаточно воды
+  # --
+  humidifier_low_water_notified:
+    name: Humidifier low water notified
+    icon: mdi:water-alert
 
 ##############################################################################
 #  ВХОДНЫЕ БУЛЕВЫ (INPUT_BOOLEAN)
@@ -390,19 +438,16 @@ automation:
   # ----------------------------------------------------------------------------
   # Обновление списка пользователей, находящихся дома
   # ----------------------------------------------------------------------------
-  # Срабатывает при изменении состояния пользователей или их устройств
-  # (например, смена Wi-Fi-сети или статуса присутствия).
-  # При срабатывании записывает всех «домашних» в input_text.currently_home.
-
   - id: "c6382818-05ed-4590-be92-b367489fb0e1"
     alias: "HELPER: Обновление списка пользователей, находящихся дома"
+    mode: single
     triggers:
-      - platform: state
+      - trigger: state
         entity_id:
           - binary_sensor.andrei_is_home
           - person.master
     actions:
-      - service: input_text.set_value
+      - action: input_text.set_value
         target:
           entity_id: input_text.currently_home
         data:
@@ -419,16 +464,13 @@ automation:
   - id: "d8084e61-405b-4f92-8c86-527254cc6753"
     alias: "HELPER:Переключение зимнего режима по месяцам"
     description: >
-      Автоматизация, которая ежедневно проверяет, нужно ли включить
-      или выключить зимний режим в зависимости от текущего месяца.
-      Считаем «зимой» период с ноября (11) по март (3).
-      Если время года подходит под зимний период, включаем boolean.winter_mode,
-      иначе -- выключаем.
+      Автоматически включает/выключает зимний режим в зависимости от месяца.
+      Зимой считаются ноябрь (11) – март (3).
     mode: single
     triggers:
-      - platform: time
+      - trigger: time
         at: "00:01:00"
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     conditions: []
     actions:
@@ -438,87 +480,92 @@ automation:
                 value_template: >
                   {{ now().month >= 11 or now().month <= 3 }}
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.winter_mode
         default:
-          - service: input_boolean.turn_off
+          - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.winter_mode
 
   # --------------------------------------------------------------------------
-  # Включение датчика фазы загрузки системы после старта
+  # Фаза загрузки: включение флага при старте HA
   # --------------------------------------------------------------------------
   - id: "38ea50fb-09bc-4d39-a771-1727ab72f265"
     alias: "HELPER: Фаза: Включение датчика загрузки"
     description: "Активируем system_startup_phase при старте Home Assistant"
     mode: single
     triggers:
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     actions:
-      - service: input_boolean.turn_on
+      - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.system_startup_phase
 
   # --------------------------------------------------------------------------
-  # Отключение датчика фазы загрузки через 2 минуты после старта
+  # Фаза загрузки: автоотключение флага через 2 мин после старта HA
   # --------------------------------------------------------------------------
   - id: "03e3ffd0-4e1e-4200-b0e3-1ce6a2d77d6a"
     alias: "HELPER: Фаза: Отключение датчика загрузки (2 минуты)"
-    description: "Выключаем input_boolean.system_startup_phase спустя 2 минуты после старта"
+    description: "Через 2 минуты после старта выключаем system_startup_phase"
     mode: single
     triggers:
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     actions:
       - delay: "00:02:00"
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.system_startup_phase
 
   # --------------------------------------------------------------------------
-  # Режим тишины (c 23:00 до 09:00)
+  # Режим тишины (23:00 включить silent_mode)
   # --------------------------------------------------------------------------
   - id: "cc269239-a6dd-422f-ba2a-3d57e4c5981e"
     alias: "HELPER: Установка режима тишины (23:00)"
     mode: single
     triggers:
-      - platform: time
+      - trigger: time
         at: "23:00:00"
     actions:
-      - service: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.silent_mode
-
-  - id: "6ed14663-ebe5-4ab3-bc3b-43e682c45f3b"
-    alias: "HELPER: Снятие режима тишины (09:00)"
-    mode: single
-    triggers:
-      - platform: time
-        at: "09:00:00"
-    actions:
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.silent_mode
 
   # --------------------------------------------------------------------------
-  # Сброс boolean-сенсоров при завершении проветривания (livingroom_ventilation_status)
+  # Режим тишины (09:00 снять silent_mode)
+  # --------------------------------------------------------------------------
+  - id: "6ed14663-ebe5-4ab3-bc3b-43e682c45f3b"
+    alias: "HELPER: Снятие режима тишины (09:00)"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "09:00:00"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.silent_mode
+
+  # --------------------------------------------------------------------------
+  # Сброс CO2-нотифаеров после проветривания
   # --------------------------------------------------------------------------
   - id: "7df1e59a-af5d-4496-be72-e687afdbf08e"
     alias: "HELPER: Обновление сенсора контроля уведомлений о уровне CO2"
     mode: single
     triggers:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.livingroom_ventilation_status
-        from: "on"
-        to: "off"
+        from: "off"
+        to: "on"
+        for:
+          minutes: 1
     conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
     actions:
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         target:
           entity_id:
             - input_boolean.co2_voice_notification_sensor
@@ -531,9 +578,10 @@ automation:
     alias: "HELPER: Сохранение состояний климатической техники"
     mode: single
     triggers:
-      - platform: homeassistant
+      - trigger: homeassistant
         event: shutdown
     actions:
+      # кондиционер
       - choose:
           - conditions:
               - condition: state
@@ -543,39 +591,39 @@ automation:
                 entity_id: input_boolean.winter_mode
                 state: "off"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.climate_pre_restart_state
         default:
-          - service: input_boolean.turn_off
+          - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.climate_pre_restart_state
-
+      # очиститель воздуха (fan)
       - choose:
           - conditions:
               - condition: state
-                entity_id: switch.zhimi_mb3_a5d3_switch_status
+                entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.fan_pre_restart_state
         default:
-          - service: input_boolean.turn_off
+          - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.fan_pre_restart_state
-
+      # увлажнитель
       - choose:
           - conditions:
               - condition: state
-                entity_id: switch.evolution_hf_878
+                entity_id: humidifier.xiaomi_cn_823407205_p3
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.humidifier_pre_restart_state
         default:
-          - service: input_boolean.turn_off
+          - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.humidifier_pre_restart_state
 
@@ -586,9 +634,10 @@ automation:
     alias: "HELPER: Восстановление состояний климатической техники"
     mode: single
     triggers:
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     actions:
+      # кондиционер
       - choose:
           - conditions:
               - condition: state
@@ -598,28 +647,31 @@ automation:
                 entity_id: input_boolean.winter_mode
                 state: "off"
             sequence:
-              - service: climate.turn_on
+              - action: climate.turn_on
                 target:
                   entity_id: climate.konditsioner
+      # очиститель воздуха
       - choose:
           - conditions:
               - condition: state
                 entity_id: input_boolean.fan_pre_restart_state
                 state: "on"
             sequence:
-              - service: switch.turn_on
+              - action: fan.turn_on
                 target:
-                  entity_id: switch.zhimi_mb3_a5d3_switch_status
+                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+      # увлажнитель
       - choose:
           - conditions:
               - condition: state
                 entity_id: input_boolean.humidifier_pre_restart_state
                 state: "on"
             sequence:
-              - service: switch.turn_on
+              - action: humidifier.turn_on
                 target:
-                  entity_id: switch.evolution_hf_878
-      - service: input_boolean.turn_off
+                  entity_id: humidifier.xiaomi_cn_823407205_p3
+      # сбрасываем флаги pre_restart
+      - action: input_boolean.turn_off
         target:
           entity_id:
             - input_boolean.climate_pre_restart_state
@@ -631,11 +683,21 @@ automation:
   # ----------------------------------------------------------------------------
   - id: "bee019e8-c011-4283-85df-4cbbbc00e92f"
     alias: "Камеры: Управление в зависимости от присутствия"
-    description: "Включение/выключение камер в зависимости от того, кто дома, но с учетом режима форсированного отключения."
+    description: "Вкл/выкл камер по факту присутствия, с антифлаппингом и без дублей."
     mode: single
     triggers:
-      - platform: state
+      # устойчиво НИКОГО НЕТ дома 2 минуты
+      - trigger: state
         entity_id: binary_sensor.someone_is_home
+        to: "off"
+        for: "00:02:00"
+        id: away
+      # устойчиво КТО-ТО ДОМА 2 минуты
+      - trigger: state
+        entity_id: binary_sensor.someone_is_home
+        to: "on"
+        for: "00:02:00"
+        id: home
     conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
@@ -646,42 +708,42 @@ automation:
     actions:
       - choose:
           - conditions:
+              - condition: trigger
+                id: away
               - condition: state
-                entity_id: binary_sensor.someone_is_home
+                entity_id: group.cameras
                 state: "off"
             sequence:
-              - service: switch.turn_on
+              - action: switch.turn_on
                 target:
                   entity_id: group.cameras
-              - service: notify.master
+              - action: notify.master
                 data:
                   message: "Камеры включены: Никого нет дома."
-
           - conditions:
+              - condition: trigger
+                id: home
               - condition: state
-                entity_id: binary_sensor.someone_is_home
+                entity_id: group.cameras
                 state: "on"
             sequence:
-              - service: switch.turn_off
+              - action: switch.turn_off
                 target:
                   entity_id: group.cameras
-              - service: notify.master
+              - action: notify.master
                 data:
                   message: "Камеры выключены: Кто-то дома."
 
   # --------------------------------------------------------------------------
-  # Автоматизация: Блокировка включения камер при форсированном отключении
+  # Блокировка включения камер при force_camera_off
   # --------------------------------------------------------------------------
   - id: "98df0b92-1c60-4e48-a065-3412a0706124"
     alias: "Камеры: Блокировка включения при форсированном отключении"
     description: >
-      Эта автоматизация предназначена для предотвращения включения камер,
-      когда активирован режим принудительного отключения (force_camera_off).
-      Если один из переключателей камер переходит в состояние "on" при активном режиме,
-      автоматизация немедленно отключает его и отправляет уведомление пользователю.
+      Не даём включиться камерам, если активирован режим форсированного отключения.
     mode: parallel
     triggers:
-      - platform: state
+      - trigger: state
         entity_id:
           - switch.chuangmi_cn_309825146_ipc019_on_p_2_1
           - switch.chuangmi_cn_311366982_ipc019_on_p_2_1
@@ -691,51 +753,49 @@ automation:
         entity_id: input_boolean.force_camera_off
         state: "on"
     actions:
-      - service: switch.turn_off
+      - action: switch.turn_off
         target:
           entity_id:
             - switch.chuangmi_cn_309825146_ipc019_on_p_2_1
             - switch.chuangmi_cn_311366982_ipc019_on_p_2_1
-      - service: notify.master
+      - action: notify.master
         data:
           message: "Попытка включения камер заблокирована (форсированное отключение)."
 
   # --------------------------------------------------------------------------
-  # Автоматизация: Очистка базы данных MariaDB в 03:00
+  # Очистка базы данных MariaDB в 03:40
   # --------------------------------------------------------------------------
   - id: "779498b6-e63f-454d-8866-8e7e7a94d8e4"
-    alias: "MariaDB: Очистка базы в 3:00"
+    alias: "MariaDB: Очистка базы в 3:40"
     description: >
-      Автоматизация запускается ежедневно в 03:00 и выполняет очистку базы данных
-      с использованием сервиса recorder.purge, оставляя данные за последние 90 дней.
-      Это помогает предотвратить бесконтрольное разрастание БД.
+      Каждый день в 03:40 запускаем recorder.purge,
+      оставляя историю только за последние 90 дней.
     mode: single
-    trigger:
-      - platform: time
+    triggers:
+      - trigger: time
         at: "03:40:00"
-    action:
-      - service: recorder.purge
+    actions:
+      - action: recorder.purge
         data:
           keep_days: 90
-          repack: false # для MariaDB не нужен; true только для SQLite
-          apply_to_entities: [] # пусто = ко всем
+
   ##############################################################################
   # Выключение света, отпаривателя и ТВ в рабочие дни
   ##############################################################################
   - id: "8a46561c-f48f-4c93-b53e-d1af940fdb6d"
     alias: "Рабочие дни: Выключение света, отпаривателя и ТВ (09:00-17:00)"
     description: >
-      В рабочие дни (ПН-ПТ) в период с 09:00 до 17:00, если режим уборки выключен
-      и никого нет дома, отключаются все освещение, розетка отпаривателя и ТВ.
+      В будни с 09:00 до 17:00, если никого нет дома и не идёт уборка,
+      выключаем свет, отпариватель и ТВ.
     mode: single
     triggers:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.someone_is_home
         to: "off"
-      - platform: time
+      - trigger: time
         at: "09:00:00"
     conditions:
-      # Ограничение по дням недели
+      # день недели Пн-Пт
       - condition: time
         weekday:
           - mon
@@ -743,26 +803,26 @@ automation:
           - wed
           - thu
           - fri
-      # Ограничение по времени суток (между 09:00 и 17:00)
+      # внутри 09:00-17:00
       - condition: time
         after: "09:00:00"
         before: "17:00:00"
-      # Режим уборки должен быть выключен
+      # уборка выключена
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-      # Проверка, что никого нет дома
+      # никого нет дома
       - condition: state
         entity_id: binary_sensor.someone_is_home
         state: "off"
     actions:
-      - service: homeassistant.turn_off
+      - action: homeassistant.turn_off
         target:
           entity_id: light.all_lights
-      - service: switch.turn_off
+      - action: switch.turn_off
         target:
           entity_id: switch.smart_plug_in_unit_vykliuchatel
-      - service: homeassistant.turn_off
+      - action: homeassistant.turn_off
         target:
           entity_id: group.living_room_tv
 
@@ -772,11 +832,10 @@ automation:
   - id: "ee320693-2e76-435b-8012-3a908046d4d5e"
     alias: "Выключение отпаривателя при отсутствии дома"
     description: >
-      Автоматизация отключает розетку отпаривателя (switch.smart_plug_in_unit_vykliuchatel),
-      если датчик присутствия (binary_sensor.someone_is_home) фиксирует, что никого нет дома.
+      Если никого нет дома → выключаем розетку отпаривателя.
     mode: single
     triggers:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.someone_is_home
         to: "off"
     conditions:
@@ -784,6 +843,22 @@ automation:
         entity_id: binary_sensor.someone_is_home
         state: "off"
     actions:
-      - service: switch.turn_off
+      - action: switch.turn_off
         target:
           entity_id: switch.smart_plug_in_unit_vykliuchatel
+
+  ################################################################################
+  # Сброс флагов стирки при старте HA
+  ################################################################################
+  - id: "76238992-89bc-48c6-bd82-27e8a7c79b6d"
+    alias: "HELPER: Сброс флагов стирки при старте HA"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.wm_cycle_seen_start
+            - input_boolean.washing_machine_running

@@ -14,49 +14,49 @@ automation:
     alias: "Уведомление. Яндекс: Приветствие"
     description: "Отключение камеры, включение света в прихожей и доклад о климате"
     mode: single
-    trigger:
-      - platform: event
+    triggers:
+      - trigger: event
         event_type: yandex_speaker
         event_data:
           value: "С возвращением, дорогой мне человек! Я скучала без тебя!"
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
-    action:
-      - service: light.turn_on
+    actions:
+      - action: light.turn_on
         target:
           entity_id: light.light_bathroom
       - delay:
           seconds: 4
-      - service: script.yandex_tts_ppm_status
+      - action: script.yandex_tts_ppm_status
       - delay:
           seconds: 6
-      - service: script.yandex_tts_temp_status
+      - action: script.yandex_tts_temp_status
       - delay:
           seconds: 3
-      - service: script.yandex_tts_hum_status
+      - action: script.yandex_tts_hum_status
 
   # Прощание
   - id: "661464a3-ab6d-438e-847b-f2b6ddfee59a"
     alias: "Уведомление. Яндекс: Прощание"
     description: "Выключает весь свет, включает камеры и произносит прощальное сообщение через Яндекс."
     mode: single
-    trigger:
-      - platform: event
+    triggers:
+      - trigger: event
         event_type: yandex_speaker
         event_data:
           value: "Я буду скучать! Возвращайся быстрее"
-    action:
+    actions:
       - delay: "00:00:04"
-      - service: script.yandex_tts_door_status
-      - service: light.turn_off
+      - action: script.yandex_tts_door_status
+      - action: light.turn_off
         target:
           entity_id: light.all_lights
-      - service: switch.turn_on
+      - action: switch.turn_on
         target:
           entity_id: group.cameras
       - choose:
@@ -65,7 +65,7 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - service: notify.master
+              - action: notify.master
                 data:
                   message: "Свет в квартире выключен! Приятной дороги!"
 
@@ -73,18 +73,82 @@ automation:
   - id: "a8c5eb07-9381-46d5-bc65-0f52dd7079a8"
     alias: "Уведомление. Яндекс: Температура ниже установленного уровня"
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.temperature_below_20
         to: "on"
         for:
           minutes: 1
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
-    action:
-      - service: script.yandex_tts_door_status
+    actions:
+      - action: script.yandex_tts_door_status
+
+  # Гостиная: очиститель — фильтр <10%
+  - id: "01419dd5-e5e1-4767-957a-b5ca66d04403"
+    alias: "Яндекс: очиститель — фильтр <10%"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.zhimi_cn_271517251_mb3_filter_life_level_p_4_3
+        below: 10
+        for: "00:01:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.someone_is_home
+        state: "on"
+    actions:
+      - action: script.yandex_tts_generic
+        data:
+          text: "Очиститель воздуха сообщает: ресурс фильтра менее десяти процентов. Пора заменить фильтр."
+
+  # Гостиная: увлажнитель — фильтр <10%
+  - id: "0946c623-c1c3-42f5-8f91-3289455f9d76"
+    alias: "Яндекс: увлажнитель — фильтр <10%"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.xiaomi_cn_823407205_p3_filter_life_level_p_8_1
+        below: 10
+        for: "00:01:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.someone_is_home
+        state: "on"
+    actions:
+      - action: script.yandex_tts_generic
+        data:
+          text: "Фильтр увлажнителя требует замены. Его ресурс менее десяти процентов."
+
+  # Гостиная: увлажнитель — низкий уровень воды
+  - id: "abee01b3-024f-4e26-9c64-384a1634449f"
+    alias: "Яндекс: увлажнитель — низкий уровень воды"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
+    conditions:
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.someone_is_home
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - action: script.yandex_tts_generic
+        data:
+          text: "Внимание! В увлажнителе закончилась вода. Пожалуйста, долейте."

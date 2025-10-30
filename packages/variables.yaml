@@ -73,6 +73,7 @@ sensor:
   # ==================================================================
   # 2) Усреднённая температура/влажность в гостиной
   # ==================================================================
+
   - platform: template
     sensors:
       livingroom_average_temperature:
@@ -90,7 +91,7 @@ sensor:
           {% if vals | length > 0 %}
             {{ (vals | sum / (vals | length)) | round(1) }}
           {% else %}
-            {{ 20.0 }}
+            unknown
           {% endif %}
 
       livingroom_average_humidity:
@@ -108,7 +109,7 @@ sensor:
           {% if vals | length > 0 %}
             {{ (vals | sum / (vals | length)) | round(1) }}
           {% else %}
-            {{ 50.0 }}
+            unknown
           {% endif %}
 
   # ==================================================================

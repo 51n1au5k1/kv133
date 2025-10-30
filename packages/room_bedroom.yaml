@@ -43,38 +43,52 @@ automation:
   - id: "a658b6fc-d264-4c6b-8185-e3b503f5a7e5"
     alias: "Спальня: Отключение розетки при зарядке телефона Андрея ночью"
     description: >
-      Отключение розетки для зарядки Google Pixel 8 PRO, чтобы предотвратить
-      перезарядку и перегрев устройства ночью.
+      Если Pixel 8 Pro заряжен почти полностью ночью, отключаем розетку,
+      чтобы не жарить батарею до утра.
     mode: single
-    trigger:
-      - platform: numeric_state
+    triggers:
+      - trigger: numeric_state
         entity_id: sensor.pixel_8_pro_battery_level
         above: 99
         for:
           minutes: 1
-    condition:
+
+    conditions:
+      # телефон реально заряжается
       - condition: state
         entity_id: sensor.pixel_8_pro_battery_state
         state: "charging"
+
+      # только ночной интервал
       - condition: time
         after: "01:00:00"
         before: "07:00:00"
+
+      # HA уже полностью поднялся
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
+
+      # валидные данные по батарее
       - condition: template
         value_template: >-
-          {{ states('sensor.pixel_8_pro_battery_level') not in ['unknown', 'unavailable'] }}
+          {{ states('sensor.pixel_8_pro_battery_level') not in ['unknown', 'unavailable', ''] }}
+
+      # розетка действительно включена (есть что отключать)
       - condition: state
         entity_id: switch.0x00158d0002530ba3
         state: "on"
-    action:
-      - service: switch.turn_off
+
+    actions:
+      - action: switch.turn_off
         target:
           entity_id: switch.0x00158d0002530ba3
-      - service: system_log.write
+
+      - action: system_log.write
         data:
-          message: "Розетка зарядки отключена ночью (уровень: {{ states('sensor.pixel_8_pro_battery_level') }}%)."
+          message: >-
+            Розетка зарядки телефона отключена ночью.
+            Текущий заряд: {{ states('sensor.pixel_8_pro_battery_level') }}%.
           level: info
 
   # ----------------------------------------------------------------------------
@@ -83,57 +97,83 @@ automation:
   - id: "9f1229c2-0ce2-4483-9953-1f6cdc6fa18e"
     alias: "Уведомление о низкой температуре в спальне (усреднённое значение)"
     description: >
-      Уведомление, если температура в спальне ниже 20° и открыта дверь/окно.
+      Если температура в спальне <20°C дольше минуты при открытом балконе —
+      предупредить (но не во время старта HA и не в тихом режиме).
     mode: single
-    trigger:
-      - platform: numeric_state
+    triggers:
+      - trigger: numeric_state
         entity_id: sensor.temperatura_v_spalne_sglazhennaia
         below: 20
         for:
           minutes: 1
-    condition:
+
+    conditions:
+      # HA не в фазе запуска
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
+
+      # не в тихом режиме — чтобы не орать в ночи
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
+
+      # балкон (или окно спальни) реально открыт => есть причина для холода
       - condition: state
         entity_id: binary_sensor.0x00158d00044d5d11_contact
         state: "on"
+
+      # кто-то дома, иначе спам в пустую
       - condition: state
         entity_id: binary_sensor.someone_is_home
         state: "on"
+
+      # сенсор температуры не unavailable
       - condition: template
         value_template: >-
-          {{ states('sensor.temperatura_v_spalne_sglazhennaia') not in ['unknown', 'unavailable'] }}
+          {{ states('sensor.temperatura_v_spalne_sglazhennaia') not in ['unknown', 'unavailable', ''] }}
+
+      # мы ещё не уведомляли недавно
       - condition: state
         entity_id: input_boolean.bedroom_th_notice
         state: "off"
-    action:
+
+    actions:
       - variables:
-          message: "Температура в спальне ниже 20°. Динозавры любят тепло! Закройте балкон в спальне."
+          message: >-
+            Температура в спальне ниже 20°. Закройте балкон в спальне.
+
+      # телега + голос (если мастер дома)
       - choose:
           - conditions:
               - condition: state
                 entity_id: person.master
                 state: "home"
             sequence:
-              - service: notify.master
+              - action: notify.master
                 data:
                   message: "{{ message }}"
-              - service: script.yandex_tts_temp_status
-      - service: input_boolean.turn_on
+
+              # если у тебя есть голосовой скрипт для температуры — он остаётся
+              - action: script.yandex_tts_temp_status
+
+      # ставим флаг "я уже предупредил"
+      - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.bedroom_th_notice
-      - service: timer.start
+
+      # запускаем таймер авто-сброса флага, чтобы потом разрешить новые уведомления
+      - action: timer.start
         target:
           entity_id: timer.bedroom_th_notice_reset
         data:
           duration: "00:{{ states('input_number.low_th_notification_reset_period') | int }}:00"
-      - service: system_log.write
+
+      - action: system_log.write
         data:
-          message: "Уведомление о низкой температуре в спальне отправлено ({{ states('sensor.temperatura_v_spalne_sglazhennaia') }}°)."
+          message: >-
+            Уведомление о низкой температуре в спальне отправлено.
+            T={{ states('sensor.temperatura_v_spalne_sglazhennaia') }}°C.
           level: info
 
   # ----------------------------------------------------------------------------
@@ -141,17 +181,23 @@ automation:
   # ----------------------------------------------------------------------------
   - id: "fdf3d865-6bdb-4c9b-9acd-fa7f7dc432d6"
     alias: "HELPER: Сброс уведомлений о температуре в спальне"
+    description: "Когда истекает таймер bedroom_th_notice_reset — разрешаем снова слать предупреждения."
     mode: single
-    trigger:
-      - platform: event
+
+    triggers:
+      - trigger: event
         event_type: timer.finished
         event_data:
           entity_id: timer.bedroom_th_notice_reset
-    action:
-      - service: input_boolean.turn_off
+
+    conditions: []
+
+    actions:
+      - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.bedroom_th_notice
-      - service: system_log.write
+
+      - action: system_log.write
         data:
-          message: "Флаг уведомления о температуре в спальне сброшен."
+          message: "Флаг bedroom_th_notice сброшен (спальня)."
           level: info

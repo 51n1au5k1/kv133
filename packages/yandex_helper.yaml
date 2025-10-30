@@ -49,6 +49,21 @@ input_text:
 ################################################################################
 
 script:
+  yandex_tts_generic:
+    alias: "Yandex TTS — универсальное сообщение"
+    fields:
+      text:
+        description: "Текст для воспроизведения"
+    sequence:
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      - service: media_player.play_media
+        target:
+          entity_id: "{{ yandex_station_entity }}"
+        data:
+          media_content_id: "{{ text }}"
+          media_content_type: "text"
+
   yandex_tts_ppm_status:
     alias: "Yandex_TTS_ppm_status"
     sequence:
@@ -285,6 +300,46 @@ script:
             {{ ["Кажется, вы забыли, что зимой не рекомендуется использовать кондиционер!",
                 "Рекомендую забыть о кондиционере в зимний период.",
                 "Кондиционер впал в зимнюю спячку"] | random }}
+          media_content_type: "text"
+    mode: single
+    icon: "yandex:alisa"
+
+  yandex_tts_washing_machine_power_lost:
+    alias: "yandex_tts_wm_power_lost"
+    sequence:
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.someone_is_home
+        state: "on"
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      - service: media_player.play_media
+        target:
+          entity_id: "{{ yandex_station_entity }}"
+        data:
+          media_content_id: "Внимание! Стирка прервана: питание стиральной машины недоступно."
+          media_content_type: "text"
+    mode: single
+    icon: "yandex:alisa"
+
+  yandex_tts_washing_machine_power_restored:
+    alias: "yandex_tts_wm_power_restored"
+    sequence:
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.someone_is_home
+        state: "on"
+      - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+      - service: media_player.play_media
+        target:
+          entity_id: "{{ yandex_station_entity }}"
+        data:
+          media_content_id: "Питание стиральной машины восстановлено."
           media_content_type: "text"
     mode: single
     icon: "yandex:alisa"

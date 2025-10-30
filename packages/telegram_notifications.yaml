@@ -146,143 +146,94 @@ automation:
   # ----------------------------------------------------------------------------
   # Уведомление: Прогноз погоды
   # ----------------------------------------------------------------------------
-  # Отправляет в Telegram ежедневный прогноз погоды.
-  # Триггер установлен на 07:45:00 (каждое утро).
-  # Отправляется по отдельности Андрею (notify.master).
-  # Включает текущую погоду и прогноз на весь день от Open-meteo.
-  # ----------------------------------------------------------------------------
   - id: "ac0837cf-9ecb-413b-96fb-89552934212d"
     alias: "Уведомление. Телеграм: Прогноз погоды"
     description: "Отправляет прогноз погоды на сегодня в Телеграм каждое утро."
-    trigger:
-      - platform: time
+    mode: single
+    triggers:
+      - trigger: time
         at: "07:45:00"
-    action:
-      # Отправка прогноза Андрею
-      - service: script.telegram_send_weather_forecast
+    actions:
+      - action: script.telegram_send_weather_forecast
         data:
           recipient: notify.master
-    mode: single
 
   # ----------------------------------------------------------------------------
   # Уведомление: Открытие входной двери
   # ----------------------------------------------------------------------------
-  # Предназначено для отправки уведомления Андрею (notify.master), если дверь
-  # открылась, а он (master) не дома. Это может быть сигналом потенциального
-  # проникновения или кого-то другого, кто пришёл в отсутствие владельца.
-  # ----------------------------------------------------------------------------
   - id: "1f7e3ae4-268e-4afa-a7e6-d395821f244b"
     alias: "Уведомление. Телеграм: Открытие входной двери"
     description: "Отправляет уведомление об открытии двери, если master не дома и режим уборки выключен."
-    trigger:
-      - platform: device
+    mode: single
+    triggers:
+      - trigger: device
         device_id: abd3e40b49cfbe61411bac5d87bf000f
         entity_id: binary_sensor.hallway_door_contact
         domain: binary_sensor
         type: opened
-    condition:
-      # Проверяем, что master не дома
+    conditions:
       - condition: state
         entity_id: person.master
         state: "not_home"
-      # Проверяем, что режим уборки выключен
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-    action:
-      - service: notify.master
+    actions:
+      - action: notify.master
         data:
           message: "⚠️ <b>Открытие входной двери!</b> 🔓"
-    mode: single
 
   # ----------------------------------------------------------------------------
   # Уведомление: Звонок в дверь
   # ----------------------------------------------------------------------------
-  # Аналогично предыдущему, но триггером является сигнал о звонке
-  # (MQTT-устройство). Отправляет уведомление Андрею, если мастер не дома.
-  # ----------------------------------------------------------------------------
   - id: "eaddf6dd-762d-487e-9bf2-ba018f10b742"
     alias: "Уведомление. Телеграм: Уведомление о звонке в дверь"
-    trigger:
-      - platform: device
+    mode: single
+    triggers:
+      - trigger: device
         domain: mqtt
         device_id: d2c3001cdc59660c456de45aec09da91
         type: action
         subtype: single
-    condition:
-      # Проверяем, что master не дома
+      - trigger: state
+        entity_id: event.madv_cn_329651133_miowlv2l_doorbell_ring_e_2_1
+    conditions:
       - condition: state
         entity_id: person.master
         state: "not_home"
-      # Проверяем, что режим уборки выключен
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-    action:
-      - service: notify.master
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.doorbell_spam_guard
+        state: "off"
+    actions:
+      - action: notify.master
         data:
           message: "⚠️ <b>Кто-то звонит в дверь</b>"
-    mode: single
-
-  # ----------------------------------------------------------------------------
-  # Уведомление о включении камеры (по расписанию)
-  # ----------------------------------------------------------------------------
-  # Данная автоматизация уведомляет об активации камеры (switch.chuangmi_ipc019_37da_switch_status).
-  # Условия:
-  #   - Пн--Пт: 09:00:00 -- 23:59:59
-  #   - Сб--Вс: 00:00:00 -- 23:59:59 (т.е. выходные когда угодно).
-  # Выбираем вариант уведомления случайным образом (messages | random).
-  # ----------------------------------------------------------------------------
-  - id: "417016e0-21fa-4ec3-a057-35deaa7a93f2"
-    alias: "Уведомление. Телеграм: Включение камеры"
-    trigger:
-      - platform: state
-        entity_id: group.cameras
-        to: "on"
-    condition:
-      - condition: or
-        conditions:
-          - condition: time
-            weekday:
-              - mon
-              - tue
-              - wed
-              - thu
-              - fri
-            after: "09:00:00"
-            before: "23:59:59"
-          - condition: time
-            weekday:
-              - sat
-              - sun
-            after: "00:00:00"
-            before: "23:59:59"
-    action:
-      - service: notify.master
-        data:
-          message: >
-            {% set messages = [
-              "⚠️ Внимание! Камеры включены! 🎥",
-              "⚠️ Внимание! Камеры активированы! 🎥",
-              "⚠️ Внимание! Камеры работают! 🎥"
-            ] %}
-            {{ messages | random }}
-    mode: single
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.doorbell_spam_guard
+      - delay: "00:00:30"
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.doorbell_spam_guard
 
   # ----------------------------------------------------------------------------
   # Уведомление: Сервер запущен
   # ----------------------------------------------------------------------------
-  # При старте Home Assistant (event: start) отправляет случайное приветственное
-  # сообщение в Telegram и прикрепляет картинку (ha_wakeup.png).
-  # ----------------------------------------------------------------------------
   - id: "686a3440-7629-4b55-b508-593caf3679af"
     alias: "Уведомление. Телеграм: Сервер запущен"
     description: "Уведомление о запуске сервера"
-    trigger:
-      - platform: homeassistant
+    mode: single
+    triggers:
+      - trigger: homeassistant
         event: start
-    action:
-      - service: notify.master
+    actions:
+      - action: notify.master
         data:
           message: >
             {{ ["Home assistant started!", "Home assistant is running now!", "Home assistant has begun!", "HA has started!"] | random }}
@@ -290,22 +241,19 @@ automation:
             photo:
               - file: "/config/www/images/notify_alert/ha_wakeup.png"
                 caption: "{{ ['Home assistant started!', 'Home assistant is running now!', 'Home assistant has begun!', 'HA has started!'] | random }}"
-    mode: single
 
   # ----------------------------------------------------------------------------
   # Уведомление: Сервер отключён
   # ----------------------------------------------------------------------------
-  # При сигнале "shutdown" Home Assistant отправляет уведомление, что сервер
-  # отключен, и показывает картинку (ha_shutdown.png).
-  # ----------------------------------------------------------------------------
   - id: "c8dc47aa-90f0-4522-b71e-4e99bbfe6c76"
     alias: "Уведомление. Телеграм: Сервер отключён"
     description: "Уведомление о выключении сервера"
-    trigger:
-      - platform: homeassistant
+    mode: single
+    triggers:
+      - trigger: homeassistant
         event: shutdown
-    action:
-      - service: notify.master
+    actions:
+      - action: notify.master
         data:
           message: >
             {{ ['Home Assistant shutdown', 'Shutdown of Home Assistant', 'HA has been shut down'] | random }}
@@ -313,20 +261,16 @@ automation:
             photo:
               - file: "/config/www/images/notify_alert/ha_shutdown.png"
                 caption: "{{ ['Home Assistant shutdown', 'Shutdown of Home Assistant', 'HA has been shut down'] | random }}"
-    mode: single
 
   # ----------------------------------------------------------------------------
-  # Уведомление: Доступно обновление компонента/плагина
-  # ----------------------------------------------------------------------------
-  # Срабатывает, когда любой из перечисленных update.*_update переходит в состояние 'on'.
-  # Отправляет сообщение, перечисляя название компонента, текущую и последнюю доступную
-  # версию. Также прилагается release_summary, если доступно в атрибутах.
+  # Уведомление: Возможны обновления компонентов
   # ----------------------------------------------------------------------------
   - id: "4c5c8e57-be5b-4380-88a1-4ecc730c19da"
     alias: "Уведомление. Телеграм: Возможно обновления компонента системы"
-    description: "Уведомление о возможности обновления компонента системы"
-    trigger:
-      - platform: state
+    description: "Оповещение о новых обновлениях компонентов Home Assistant"
+    mode: single
+    triggers:
+      - trigger: state
         entity_id:
           - update.file_editor_update
           - update.home_assistant_core_update
@@ -340,8 +284,8 @@ automation:
           - update.zigbee2mqtt_update
           - update.ps5_mqtt_update
         to: "on"
-    action:
-      - service: notify.master
+    actions:
+      - action: notify.master
         data:
           message: >
             {% set entity = trigger.to_state %}
@@ -353,46 +297,48 @@ automation:
             {% else %}
               Ошибка: Данные обновления недоступны.
             {% endif %}
-    mode: single
 
   # ----------------------------------------------------------------------------
   # Уведомление: Низкий заряд батареи массажёра
   # ----------------------------------------------------------------------------
-  # Триггер срабатывает, когда уровень заряда батареи массажёра падает ниже 30%
-  # Отправляет уведомление пользователю
-  # ----------------------------------------------------------------------------
   - id: "ab45665b-4995-448d-b180-c0e1d77184e9"
     alias: "Уведомление. Телеграм: Низкий заряд батареи массажёра"
-    trigger:
-      - platform: numeric_state
+    mode: single
+    triggers:
+      - trigger: numeric_state
         entity_id: sensor.soocare_cn_1083009681_m14_battery_level_p_3_1
         below: 30
-    condition:
-      # Проверяем, что не фаза загрузки
+    conditions:
+      - condition: state
+        entity_id: person.master
+        state: "home"
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    action:
-      - service: notify.master
+    actions:
+      - action: notify.master
         data:
           message: "⚠️ <b>Массажёр нуждается в зарядке!</b>"
-    mode: single
 
   # ----------------------------------------------------------------------------
   # Уведомление: Проблемы с жесткими дисками Proxmox
   # ----------------------------------------------------------------------------
   - id: "daa17acf-7c8a-4a8e-9fd0-4f2c5348c814"
     alias: "Уведомление. Телеграм: Проблемы с жесткими дисками Proxmox"
-    description: "Уведомление о проблемах с жесткими дисками Proxmox."
-    trigger:
-      - platform: state
+    mode: single
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.disk_pve_h_w_raid1_dev_sdb_health
         to: "on"
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.disk_pve_128gb_ssd_dev_sda_health
         to: "on"
-    action:
-      - service: notify.master
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - action: notify.master
         data:
           message: >-
             ⚠️ <b>Обнаружена проблема с жестким диском Proxmox!</b>
@@ -401,41 +347,181 @@ automation:
             {% elif trigger.entity_id == 'binary_sensor.disk_pve_128gb_ssd_dev_sda_health' %}
             🔴 Основной диск системы (sda) требует внимания!
             {% endif %}
-    mode: single
 
   # ----------------------------------------------------------------------------
   # Уведомление: Высокая загрузка диска Proxmox
   # ----------------------------------------------------------------------------
   - id: "4751a90b-0134-4906-84f0-e5b1a7cb02c2"
     alias: "Уведомление. Телеграм: Высокая загрузка диска Proxmox"
-    description: "Уведомление, если диск Proxmox использован более чем на 90%."
-    trigger:
-      - platform: numeric_state
+    mode: single
+    triggers:
+      - trigger: numeric_state
         entity_id: sensor.node_pve_disk_used_percentage
         above: 90
-    action:
-      - service: notify.master
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - action: notify.master
         data:
           message: >-
             ⚠️ <b>Предупреждение: Высокая загрузка диска на Proxmox!</b>
             Использование диска: {{ states('sensor.node_pve_disk_used_percentage') }}%.
-    mode: single
 
   # ----------------------------------------------------------------------------
   # Уведомление: Доступны обновления для Proxmox
   # ----------------------------------------------------------------------------
   - id: "ab5c1bd2-8756-4736-9909-52766bf989bd"
     alias: "Уведомление. Телеграм: Доступны обновления для Proxmox"
-    description: "Сообщает о наличии доступных обновлений для системы виртуализации."
-    trigger:
-      - platform: state
+    mode: single
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.node_pve_updates_packages
         to: "on"
-    action:
-      - service: notify.master
+    conditions:
+      - condition: state
+        entity_id: person.master
+        state: "home"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - action: notify.master
         data:
           message: >-
             🔄 <b>Доступны обновления для Proxmox!</b>
             Количество доступных обновлений: {{ states('sensor.node_pve_total_updates') | default(0) }}.
             Проверьте систему и обновите при необходимости.
+
+  # ----------------------------------------------------------------------------
+  # Телеграм: Сейф — риск плесени (подтвержденный)
+  # ----------------------------------------------------------------------------
+  - id: "666e2076-ea49-4c53-85de-ef23566b5d00"
+    alias: "Уведомление. Телеграм: Сейф — риск плесени"
     mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.strongbox_hum_text_notified
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - variables:
+          rh: "{{ states('sensor.strongbox_th_humidity') | float(0) | round(1) }}"
+          t: "{{ states('sensor.strongbox_th_temperature') | float(0) | round(1) }}"
+          dp: "{{ states('sensor.seif_tochka_rosy_c') | default(states('sensor.strongbox_th_temperature')) | float(0) | round(1) }}"
+          ah: "{{ states('sensor.seif_absolyutnaya_vlazhnost_g_m3') | default(0) | float(0) | round(2) }}"
+      - action: notify.master
+        data:
+          message: >-
+            ⚠️ <b>Сейф: риск плесени</b>
+            Влажность: <b>{{ rh }}%</b>, Температура: <b>{{ t }}°C</b>
+            Точка росы: <b>{{ dp }}°C</b>, Абс. влажн.: <b>{{ ah }} г/м³</b>
+
+            Рекомендации:
+            • Положите влагопоглотитель (силикагель) или замените пакет.
+            • Проветрите сейф и помещение (без резких перепадов).
+            • Стремитесь к RH 40–55% и T ≥ {{ states('input_number.strongbox_temp_min')|int }}°C.
+
+  # ----------------------------------------------------------------------------
+  # Телеграм: Сейф — условия нормализовались
+  # ----------------------------------------------------------------------------
+  - id: "cba8ab8b-5849-423a-bc56-6c04bfb51699"
+    alias: "Уведомление. Телеграм: Сейф — условия нормализовались"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.strongbox_hum_text_notified
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - variables:
+          rh: "{{ states('sensor.strongbox_th_humidity') | float(0) | round(1) }}"
+          t: "{{ states('sensor.strongbox_th_temperature') | float(0) | round(1) }}"
+      - action: notify.master
+        data:
+          message: >-
+            ✅ <b>Сейф: условия нормализованы</b>
+            Текущие значения: RH <b>{{ rh }}%</b>, T <b>{{ t }}°C</b>.
+
+  # ----------------------------------------------------------------------------
+  # Очиститель — фильтр <10%
+  # ----------------------------------------------------------------------------
+  - id: "d3bb27a3-51be-4ce6-8dc7-ebad482e5ea3"
+    alias: "Телеграм: очиститель — фильтр <10%"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.zhimi_cn_271517251_mb3_filter_life_level_p_4_3
+        below: 10
+        for: "00:01:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.air_filter_replace_notified
+        state: "off"
+    actions:
+      - action: notify.master
+        data:
+          message: "⚠️ Очиститель воздуха: ресурс фильтра &lt; 10%."
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.air_filter_replace_notified
+
+  # ----------------------------------------------------------------------------
+  # Увлажнитель — фильтр <10%
+  # ----------------------------------------------------------------------------
+  - id: "dbaaf929-4f15-4b23-8d4b-b8edd4083484"
+    alias: "Телеграм: увлажнитель — фильтр <10%"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.xiaomi_cn_823407205_p3_filter_life_level_p_8_1
+        below: 10
+        for: "00:01:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.humidifier_filter_replace_notified
+        state: "off"
+    actions:
+      - action: notify.master
+        data:
+          message: "⚠️ Увлажнитель: ресурс фильтра &lt; 10%."
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.humidifier_filter_replace_notified
+
+  # ----------------------------------------------------------------------------
+  # Низкий уровень воды
+  # ----------------------------------------------------------------------------
+  - id: "68eb40de-2339-4260-9bd6-3db5aa1604d9"
+    alias: "Телеграм: увлажнитель — низкий уровень воды"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.humidifier_low_water_notified
+        state: "off"
+    actions:
+      - action: notify.master
+        data:
+          message: "💧 Увлажнитель: низкий уровень воды. Пожалуйста, долейте воду."
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.humidifier_low_water_notified
