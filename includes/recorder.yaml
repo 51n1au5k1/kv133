@@ -22,15 +22,17 @@ include:
     - media_player
     - automation
     - event
-
+    - humidifier # увлажнитель
+    - fan # очиститель воздуха
   # Включаем группы сущностей по маске имени
   entity_globs:
     - sensor.*temperature*
     - sensor.*humidity*
     - sensor.*_battery*
     - sensor.*_pressure
-    - sensor.*_co2
-    - sensor.*_pm25
+    - sensor.*_co2*
+    - sensor.*_pm25*
+    - sensor.*_pm2_5*
     - binary_sensor.*_contact
     - binary_sensor.*_occupancy
     - sensor.cpu_*_normalized
@@ -73,6 +75,17 @@ include:
     - input_text.currently_home
     # Тестовая секция (точный сенсор)
     - sensor.app_usage_last_month
+    # Увлажнитель (Гостиная)
+    - input_number.livingroom_hum_low
+    - input_number.livingroom_hum_high
+    - input_number.livingroom_hum_min_on_min
+    - input_number.livingroom_hum_min_off_min
+
+    # Очиститель (Гостиная)
+    - input_number.livingroom_pm25_high
+    - input_number.livingroom_pm25_low
+    - input_number.livingroom_air_min_on_min
+    - input_number.livingroom_air_min_off_min
 
 # --- Теперь определяем, что мы ТОЧНО НЕ хотим хранить ---
 exclude:

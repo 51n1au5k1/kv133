@@ -77,8 +77,6 @@
 #
 # ====================================================================
 
-# Добавьте эти сущности в начало вашего пакета telegram_bot.yaml
-
 input_number:
   telegram_delay_ms:
     name: "Задержка в Telegram-боте (ms)"
@@ -88,55 +86,13 @@ input_number:
     initial: 200
     icon: mdi:timer-sand
 
-  telegram_menu_timeout:
-    name: "Таймаут меню Telegram (секунды)"
-    min: 30
-    max: 300
-    step: 30
-    initial: 120
-    icon: mdi:clock-alert
-
-  telegram_max_retries:
-    name: "Максимум попыток отправки"
-    min: 1
-    max: 5
-    step: 1
-    initial: 3
-    icon: mdi:reload
-
 input_boolean:
-  telegram_bot_enabled:
-    name: "Telegram бот активен"
-    initial: true
-    icon: mdi:robot
-
-  telegram_bot_verbose_mode:
-    name: "Подробные ответы Telegram"
-    initial: false
-    icon: mdi:message-text
-
   telegram_bot_log_commands:
     name: "Логировать команды Telegram"
     initial: true
     icon: mdi:math-log
 
-  telegram_bot_notify_errors:
-    name: "Уведомлять об ошибках Telegram"
-    initial: true
-    icon: mdi:alert-circle
-
-  telegram_bot_allow_guests:
-    name: "Разрешить гостевой доступ Telegram"
-    initial: false
-    icon: mdi:account-question
-
-input_text:
-  telegram_allowed_users:
-    name: "Разрешенные Telegram ID"
-    initial: ""
-    max: 255
-    icon: mdi:account-check
-    mode: text
+# Скрипты для отправки информации в Telegram
 
 script:
   toggle_device:
@@ -161,11 +117,14 @@ script:
         description: "ID пользователя"
         required: false
     sequence:
-      - service: "{{ domain }}.toggle"
+      - service: >-
+          {% if domain == 'climate' %}
+            climate.turn_{{ 'on' if is_state(entity, 'off') else 'off' }}
+          {% else %}
+            {{ domain }}.toggle
+          {% endif %}
         target:
           entity_id: "{{ entity }}"
-      - delay:
-          milliseconds: "{{ states('input_number.telegram_delay_ms') | int(default=200) }}"
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ message_id }}"
@@ -204,16 +163,19 @@ script:
           parse_mode: html
           message: |
             <b>🏠 Текущее состояние в гостиной:</b>
-            <b>🌡 Температура:</b> {{ states('sensor.livingroom_climat_sensor_temperature') | default('N/A') }}°C
-            <b>💧 Влажность:</b> {{ states('sensor.livingroom_climat_sensor_humidity') | default('N/A') }}%
-            <b>🌿 CO₂:</b> {{ states('sensor.co2_monitor_co2') | default('N/A') }} ppm
-            <b>💨 PM2.5:</b> {{ states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') | default('N/A') }} µg/m³
-            <b>🚪 Статус дверей:</b> {% if is_state('binary_sensor.gostinaia_balkon_contact', 'on') or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
+            🌡 <b>Температура:</b> {{ states('sensor.livingroom_climat_sensor_temperature') | default('N/A') }}°C
+            💧 <b>Влажность:</b> {{ states('sensor.livingroom_climat_sensor_humidity') | default('N/A') }}%
+            🌿 <b>CO₂:</b> {{ states('sensor.co2_monitor_co2') | default('N/A') }} ppm
+            💨 <b>PM2.5:</b> {{ states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') | default('N/A') }} µg/m³
+            🚪 <b>Статус дверей:</b> {% if is_state('binary_sensor.gostinaia_balkon_contact','on') or is_state('binary_sensor.0x00158d0003ce9922_contact','on') %}Открыта{% else %}Закрыта{% endif %}
           inline_keyboard: >
             {{ [
                 [ ["🔴 Люстра" if is_state("light.livingroom_main_switch_left", "off") else "🟢 Люстра", "/toggle_livingroom_main_switch_left"],
-                  ["🔴 Свет над диваном" if is_state("light.livingroom_main_switch_right", "off") else "🟢 Свет над диваном", "/toggle_livingroom_main_switch_right"] ],
-                [ ["🔴 Бра" if is_state("light.livingroom_scone_dimmer", "off") else "🟢 Бра", "/toggle_livingroom_scone_dimmer"] ],
+                  ["🔴 Свет над диваном" if is_state("light.livingroom_main_switch_right", "off") else "🟢 Свет над диваном", "/toggle_livingroom_main_switch_right"],
+                  ["🔴 Бра" if is_state("light.livingroom_scone_dimmer", "off") else "🟢 Бра", "/toggle_livingroom_scone_dimmer"] ],
+                [ ["🔴 Кондиционер" if is_state("climate.konditsioner", "off") else "🟢 Кондиционер", "/toggle_livingroom_konditsioner"],
+                  ["🔴 Очиститель" if is_state("fan.zhimi_cn_271517251_mb3_s_2_air_purifier", "off") else "🟢 Очиститель", "/toggle_livingroom_air_purifier"],
+                  ["🔴 Увлажнитель" if is_state("humidifier.xiaomi_cn_823407205_p3", "off") else "🟢 Увлажнитель", "/toggle_livingroom_humidifier"] ],
                 [ ["🔴 Угловая розетка" if is_state("switch.livingroom_socket_corner_r", "off") else "🟢 Угловая розетка", "/toggle_livingroom_socket_corner_r"],
                   ["🔴 Левая розетка" if is_state("switch.livingroom_socket_l", "off") else "🟢 Левая розетка", "/toggle_livingroom_socket_l"],
                   ["🔴 Правая розетка" if is_state("switch.livingroom_socket_r", "off") else "🟢 Правая розетка", "/toggle_livingroom_socket_r"] ],
@@ -297,8 +259,8 @@ script:
             <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
           inline_keyboard: >
             {{ [
-                [ ["🔴 Основной" if is_state("light.kitchen_main_light", "off") else "🟢 Основной", "/toggle_kitchen_main_light"] ],
-                [ ["🔴 Подсветка" if is_state("switch.kitchen_fartuh", "off") else "🟢 Подсветка", "/toggle_kitchen_fartuh"] ],
+                [ ["🔴 Основной" if is_state("light.kitchen_main_light", "off") else "🟢 Основной", "/toggle_kitchen_main_light"],
+                  ["🔴 Подсветка" if is_state("switch.kitchen_fartuh", "off") else "🟢 Подсветка", "/toggle_kitchen_fartuh"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/kitchen_control"] ]
               ] | tojson }}
 
@@ -314,8 +276,8 @@ script:
             <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.hallway_door_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
           inline_keyboard: >
             {{ [
-                [ ["🔴 Свет" if is_state("light.hallway_switch", "off") else "🟢 Свет", "/toggle_hallway_light"] ],
-                [ ["🔴 Шлюз" if is_state("light.gateway_light_04cf8c977cdd", "off") else "🟢 Шлюз", "/toggle_hallway_gateway_light"] ],
+                [ ["🔴 Свет" if is_state("light.hallway_switch", "off") else "🟢 Свет", "/toggle_hallway_light"],
+                  ["🔴 Шлюз" if is_state("light.gateway_light_04cf8c977cdd", "off") else "🟢 Шлюз", "/toggle_hallway_gateway_light"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/hallway_control"] ]
               ] | tojson }}
 
@@ -383,23 +345,22 @@ script:
                 [ ["👈 В меню", "/menu_back"] ]
               ] | tojson }}
 
-automation:
-  # Прогружаем при старте системы разрешенных пользователей бота
-  # надо в secrets.yaml указать:
-  # telegram_allowed_users_list: "123456789,987654321"
-  - id: "set_telegram_allowed_users_on_start"
-    alias: "Set Telegram Allowed Users on Start"
-    initial_state: true
-    triggers:
-      - platform: homeassistant
-        event: start
-    actions:
-      - service: input_text.set_value
+  pve_action:
+    alias: "PVE Action with Delay"
+    fields:
+      button: { required: true }
+      chat_id: { required: true }
+    sequence:
+      - service: button.press
         target:
-          entity_id: input_text.telegram_allowed_users
+          entity_id: "{{ button }}"
+      - delay:
+          seconds: 5
+      - service: script.send_pve_status
         data:
-          value: !secret telegram_allowed_users_list
+          target: "{{ chat_id }}"
 
+automation:
   # Приветственное сообщение (при вводе команды /start)
   - id: "telegram_bot_start"
     alias: "Telegram Bot Start (Приветствие)"
@@ -755,6 +716,72 @@ automation:
         data:
           entity: switch.livingroom_socket_r
           domain: switch
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+  # Гостиная - климатическая техника
+  - id: "toggle_livingroom_humidifier"
+    alias: "Telegram Bot Toggle Livingroom Humidifier"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_humidifier"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: humidifier.xiaomi_cn_823407205_p3
+          domain: humidifier
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "toggle_livingroom_air_purifier"
+    alias: "Telegram Bot Toggle Livingroom Air Purifier"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_air_purifier"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+          domain: fan
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "toggle_livingroom_konditsioner"
+    alias: "Telegram Bot Toggle Livingroom Konditsioner"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_konditsioner"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: climate.konditsioner
+          domain: climate
           menu_script: script.send_livingroom_status
           message_id: "{{ trigger.event.data.message.message_id }}"
           chat_id: "{{ trigger.event.data.chat_id }}"
@@ -1299,423 +1326,333 @@ automation:
         data:
           target: "{{ trigger.event.data.chat_id }}"
 
-  # Управление HAOS12 (Перезагрузка)
+  # Управление системой виртуализации
+  # === HAOS12 ===
   - id: "telegram_bot_reboot_haos12"
     alias: "Telegram Bot Reboot HAOS12"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_haos12"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.qemu_haos12_3_100_reboot
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.qemu_haos12_3_100_reboot
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
-  # Управление LXC MariaDB
+  # === MariaDB ===
   - id: "telegram_bot_start_mariadb"
     alias: "Telegram Bot Start LXC MariaDB"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/start_mariadb"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_mariadb_101_start
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_mariadb_101_start
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_stop_mariadb"
     alias: "Telegram Bot Stop LXC MariaDB"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/stop_mariadb"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_mariadb_101_stop
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_mariadb_101_stop
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_reboot_mariadb"
     alias: "Telegram Bot Reboot LXC MariaDB"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_mariadb"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_mariadb_101_reboot
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_mariadb_101_reboot
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
-  # Аналогичные автоматизации для Jackett, Jellyfin, Deluge, TorrServer, MinimServer
+  # === Jackett ===
   - id: "telegram_bot_start_jackett"
     alias: "Telegram Bot Start LXC Jackett"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/start_jackett"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_jackett_102_start
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_jackett_102_start
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_stop_jackett"
     alias: "Telegram Bot Stop LXC Jackett"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/stop_jackett"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_jackett_102_stop
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_jackett_102_stop
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_reboot_jackett"
     alias: "Telegram Bot Reboot LXC Jackett"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_jackett"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_jackett_102_reboot
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_jackett_102_reboot
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
+  # === Jellyfin ===
   - id: "telegram_bot_start_jellyfin"
     alias: "Telegram Bot Start LXC Jellyfin"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/start_jellyfin"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_jellyfin_103_start
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_jellyfin_103_start
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_stop_jellyfin"
     alias: "Telegram Bot Stop LXC Jellyfin"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/stop_jellyfin"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_jellyfin_103_stop
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_jellyfin_103_stop
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_reboot_jellyfin"
     alias: "Telegram Bot Reboot LXC Jellyfin"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_jellyfin"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_jellyfin_103_reboot
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_jellyfin_103_reboot
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
+  # === Deluge ===
   - id: "telegram_bot_start_deluge"
     alias: "Telegram Bot Start LXC Deluge"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/start_deluge"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_deluge_104_start
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_deluge_104_start
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_stop_deluge"
     alias: "Telegram Bot Stop LXC Deluge"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/stop_deluge"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_deluge_104_stop
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_deluge_104 # или button.lxc_deluge_104_stop
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_reboot_deluge"
     alias: "Telegram Bot Reboot LXC Deluge"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_deluge"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_deluge_104_reboot
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_deluge_104_reboot
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
+  # === TorrServer ===
   - id: "telegram_bot_start_torrserver"
     alias: "Telegram Bot Start LXC TorrServer"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/start_torrserver"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_debian_105_start
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_debian_105_start
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_stop_torrserver"
     alias: "Telegram Bot Stop LXC TorrServer"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/stop_torrserver"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_debian_105_stop
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_debian_105_stop
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_reboot_torrserver"
     alias: "Telegram Bot Reboot LXC TorrServer"
-    initial_state: true
-    triggers:
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_torrserver"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_debian_105_reboot
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_debian_105_reboot
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
+  # === MinimServer ===
   - id: "telegram_bot_start_minimserver"
-    alias: "Telegram Bot Start LXC Minim Server"
-    initial_state: true
-    triggers:
+    alias: "Telegram Bot Start LXC MinimServer"
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/start_minimserver"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_minim_107_start
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_minim_107_start
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_stop_minimserver"
-    alias: "Telegram Bot Stop LXC Minim Server"
-    initial_state: true
-    triggers:
+    alias: "Telegram Bot Stop LXC MinimServer"
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/stop_minimserver"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_minim_107_stop
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_minim_107_stop
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_reboot_minimserver"
-    alias: "Telegram Bot Reboot LXC Minim Server"
-    initial_state: true
-    triggers:
+    alias: "Telegram Bot Reboot LXC MinimServer"
+    trigger:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/reboot_minimserver"
-    conditions:
+    condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    actions:
-      - service: button.press
-        target:
-          entity_id: button.lxc_minim_107_reboot
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
+    action:
+      - service: script.pve_action
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          button: button.lxc_minim_107_reboot
+          chat_id: "{{ trigger.event.data.chat_id }}"
