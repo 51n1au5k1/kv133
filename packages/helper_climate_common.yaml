@@ -1,0 +1,1048 @@
+################################################################################
+# /packages/helper_climate_common.yaml
+################################################################################
+#
+# ИНФРАСТРУКТУРА КЛИМАТИЧЕСКОЙ СИСТЕМЫ
+#
+# Этот пакет предоставляет общие механизмы для автоматизации климата,
+# используемые в пакетах комнат (room_livingroom_*.yaml):
+#
+# ВКЛЮЧАЕТ:
+# 1. ТАЙМЕРЫ РАБОТЫ (input_datetime)
+#    • Последнее включение/выключение увлажнителя и очистителя
+#
+# 2. УНИВЕРСАЛЬНЫЙ СКРИПТ
+#    • script.climate_update_timers — обновление таймеров
+#
+# 3. PRE-RESTART СОХРАНЕНИЕ/ВОССТАНОВЛЕНИЕ
+#    • Запоминает состояния при shutdown → восстанавливает при старте
+#
+# 4. АНТИПРОВЕТРИВАНИЕ (дверь → климат)
+#    • Дверь открыта ≥1 мин → выключает климат
+#    • Дверь закрыта → восстанавливает состояния
+#
+# 5. ЗИМНИЙ РЕЖИМ
+#    • Автоматическое включение ноябрь–март
+#    • Блокировка кондиционера при winter_mode = on
+#
+# 6. CO₂ УВЕДОМЛЕНИЯ
+#    • Голосовые/Telegram оповещения при превышении порога
+#    • Антиспам + сброс по таймеру
+#
+# 7. УСРЕДНЁННЫЕ ДАТЧИКИ (гостиная)
+#    • Температура, влажность, давление (с компенсацией высоты)
+#
+# 8. БИНАРНЫЕ СЕНСОРЫ
+#    • livingroom_ventilation_need / livingroom_ventilation_status
+#    • temperature_below_20
+#
+# ВАЖНО:
+# • Логика включения/выключения очистителя и увлажнителя — в их пакетах
+# • Этот пакет — только инфраструктура, не управляет устройствами напрямую
+#
+################################################################################
+
+# === ОБЩИЕ ТАЙМЕРЫ ===
+input_datetime:
+  # УВЛАЖНИТЕЛЬ
+  humidifier_last_on:
+    name: "Увлажнитель: последнее включение"
+    has_date: true
+    has_time: true
+  humidifier_last_off:
+    name: "Увлажнитель: последнее выключение"
+    has_date: true
+    has_time: true
+
+  # ОЧИСТИТЕЛЬ
+  air_purifier_last_on:
+    name: "Очиститель: последнее включение"
+    has_date: true
+    has_time: true
+  air_purifier_last_off:
+    name: "Очиститель: последнее выключение"
+    has_date: true
+    has_time: true
+
+################################################################################
+# БИНАРНЫЕ СЕНСОРЫ
+################################################################################
+
+binary_sensor:
+  # ==========================================================================
+  # ДАТЧИКИ СОСТОЯНИЯ
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # Температура ниже 20°C
+  # --------------------------------------------------------------------------
+  # Включается ('on'), если хотя бы в одной комнате температура ≤ 20°C.
+  # Используется для уведомлений о холоде.
+  - platform: template
+    sensors:
+      temperature_below_20:
+        unique_id: temperature_below_20
+        friendly_name: "Температура ниже 20°C"
+        device_class: cold
+        value_template: >
+          {% set temp1 = states('sensor.temperatura_v_gostinnoi_sglazhennaia') %}
+          {% set temp2 = states('sensor.temperatura_v_spalne_sglazhennaia') %}
+          {% set temp3 = states('sensor.srednee_znachenie_temperatury_v_masterskoi_2') %}
+          {{ (temp1 not in ['unknown','unavailable'] and temp1|float <= 20)
+             or (temp2 not in ['unknown','unavailable'] and temp2|float <= 20)
+             or (temp3 not in ['unknown','unavailable'] and temp3|float <= 20) }}
+
+      # Нужно ли проветривать (CO₂ выше порога). Гистерезис через high/low.
+      livingroom_ventilation_need:
+        unique_id: livingroom_ventilation_need
+        friendly_name: "Необходимость проветривания"
+        device_class: problem
+        availability_template: >
+          {{ states('sensor.uroven_co2_sglazhennyi') not in ['unknown','unavailable',''] }}
+        value_template: >
+          {% set co2    = states('sensor.uroven_co2_sglazhennyi') | float(0) %}
+          {% set high   = states('input_number.co2_threshold_high') | float(0) %}
+          {% set low    = states('input_number.co2_threshold_low')  | float(0) %}
+          {% set was_on = is_state('binary_sensor.livingroom_ventilation_need','on') %}
+          {{ (co2 > low) if was_on else (co2 > high) }}
+
+      # Проветривание завершено (CO₂ стабильно < мягкого порога)
+      livingroom_ventilation_status:
+        unique_id: livingroom_ventilation_status
+        friendly_name: "Статус проветривания"
+        availability_template: >
+          {{ states('sensor.uroven_co2_sglazhennyi') not in ['unknown','unavailable',''] }}
+        value_template: >
+          {% set co2 = states('sensor.uroven_co2_sglazhennyi') | float(0) %}
+          {% set low = states('input_number.co2_threshold_low') | float(0) %}
+          {{ co2 < low }}
+
+##############################################################################
+#                           ШАБЛОННЫЕ СЕНСОРЫ
+##############################################################################
+template:
+  - sensor:
+      - name: "Норма атмосферного давления"
+        unique_id: fixed_pressure_value
+        unit_of_measurement: "mmHg"
+        state: "739"
+
+      - name: "Living Room Average Temperature"
+        unique_id: livingroom_average_temperature
+        unit_of_measurement: "°C"
+        icon: "mdi:thermometer"
+        availability: >-
+          {{ states('sensor.livingroom_climat_sensor_temperature') not in ['unknown','unavailable','']
+             or states('sensor.co2_monitor_temperature') not in ['unknown','unavailable',''] }}
+        state: >-
+          {% set t1 = states('sensor.livingroom_climat_sensor_temperature') | float(none) %}
+          {% set t2 = states('sensor.co2_monitor_temperature') | float(none) %}
+          {% set vals = [t1, t2] | reject('equalto', none) | list %}
+          {% if vals | length > 0 %}
+            {{ (vals | sum / (vals | length)) | round(1) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "Living Room Average Humidity"
+        unique_id: livingroom_average_humidity
+        unit_of_measurement: "%"
+        icon: "mdi:water-percent"
+        availability: >-
+          {{ states('sensor.livingroom_climat_sensor_humidity') not in ['unknown','unavailable','']
+             or states('sensor.co2_monitor_humidity') not in ['unknown','unavailable',''] }}
+        state: >-
+          {% set h1 = states('sensor.livingroom_climat_sensor_humidity') | float(none) %}
+          {% set h2 = states('sensor.co2_monitor_humidity') | float(none) %}
+          {% set vals = [h1, h2] | reject('equalto', none) | list %}
+          {% if vals | length > 0 %}
+            {{ (vals | sum / (vals | length)) | round(1) }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "Скорректированное атмосферное давление"
+        unique_id: livingroom_corrected_pressure
+        unit_of_measurement: "мм рт.ст."
+        icon: "mdi:gauge"
+        availability: >-
+          {{ states('sensor.livingroom_climat_sensor_pressure') not in ['unknown','unavailable',''] }}
+        state: >-
+          {% set raw_pressure = states('sensor.livingroom_climat_sensor_pressure') | float(0) %}
+          {% set correction = states('input_number.pressure_correction_value') | float(6) %}
+          {% if raw_pressure > 0 %}
+            {{ (raw_pressure + correction) | round(1) }}
+          {% else %}
+            0
+          {% endif %}
+
+sensor:
+  # Сглаженный CO₂
+  - platform: filter
+    name: "Уровень CO2 (сглаженный)"
+    entity_id: sensor.co2_monitor_co2
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "00:02"
+        precision: 0
+
+  # Сглаженная температура в гостиной
+  - platform: filter
+    name: "Температура в гостиной (сглаженная)"
+    entity_id: sensor.livingroom_average_temperature
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "00:02"
+        precision: 2
+
+##############################################################################
+#  ВХОДНЫЕ ПАРАМЕТРЫ
+#  Входные переменные сохраняются между перезагрузками системы
+##############################################################################
+input_boolean:
+  # --------------------------------------------------------------------------
+  # Зимний режим
+  # --
+  # Активирует особые сценарии/автоматизации для зимних месяцев.
+  # Например, может поддерживать более высокий уровень обогрева
+  # или запускать другие специфичные для зимы процессы.
+  winter_mode:
+    name: "Зимний режим"
+    initial: off
+    icon: mdi:snowflake
+
+  # --------------------------------------------------------------------------
+  # Уведомление о замене фильтра отправлено
+  # --
+  # Флаги, показывающий, что пользователю уже было отправлено уведомление
+  # о необходимости замены фильтра (например, в очистителе воздуха).
+  # Используется, чтобы не присылать повторные уведомления.
+
+  air_filter_replace_notified:
+    name: "Очиститель воздуха: уведомление о замене фильтра отправлено"
+    initial: off
+    icon: mdi:air-filter
+
+  humidifier_filter_replace_notified:
+    name: "Увлажнитель: уведомление о замене фильтра отправлено"
+    initial: off
+    icon: mdi:water-alert
+  # --------------------------------------------------------------------------
+  # Хелпер-флаг уведомлений о том, недостаточно воды в увлажнителе
+  # --
+  humidifier_low_water_notified:
+    name: Humidifier low water notified
+    icon: mdi:water-alert
+
+  # --------------------------------------------------------------------------
+  # Сенсор текстовых уведомлений о СО2
+  # --
+  # Активируется, если было отправлено текстовое уведомление о повышенном
+  # уровне CO2. Автоматизации могут затем сбрасывать этот флаг по таймеру
+  # или при смене условий.
+  co2_text_notification_sensor:
+    name: "Сенсор текстовых уведомлений о СО2"
+    initial: false
+    icon: mdi:message-alert
+
+  # --------------------------------------------------------------------------
+  # Сенсор голосовых уведомлений о СО2
+  # --
+  # Аналогично предыдущему, но для голосовых уведомлений
+  # (например, через TTS-модуль).
+  co2_voice_notification_sensor:
+    name: "Сенсор голосовых уведомлений о СО2"
+    initial: false
+    icon: mdi:account-voice
+
+  # --------------------------------------------------------------------------
+  # Технически флаги, запоминающий состояние климатической системы
+  # --------------------------------------------------------------------------
+  # Climate Pre-Restart State
+  # --
+  # Технический флаг, запоминающий состояние климатической системы
+  # (например, кондиционера) перед перезагрузкой Home Assistant.
+  # После рестарта используется для восстановления прежнего состояния.
+  climate_pre_restart_state:
+    name: "Climate Pre-Restart State"
+    initial: off
+
+  # --------------------------------------------------------------------------
+  # Fan Pre-Restart State
+  # --
+  # Аналогично предыдущему пункту, но для вентилятора/очистителя воздуха.
+  # Запоминает состояние устройства.
+  fan_pre_restart_state:
+    name: "Fan Pre-Restart State"
+    initial: off
+
+  # --------------------------------------------------------------------------
+  # Humidifier Pre-Restart State
+  # --
+  # Аналогично предыдущим пунктам, но для увлажнителя.
+  humidifier_pre_restart_state:
+    name: "Humidifier Pre-Restart State"
+    initial: off
+
+  # --------------------------------------------------------------------------
+  # Climate Pre-State When Door Opened
+  # --
+  # Запоминает состояние климатической системы при открытии двери
+  # (например, при проветривании). Может использоваться, чтобы автоматически
+  # вернуть систему в исходный режим, когда дверь закрывается.
+  door_open_climate_pre_state:
+    name: "Climate Pre-State When Door Opened"
+    initial: off
+
+  # --------------------------------------------------------------------------
+  # Fan Pre-State When Door Opened
+  # --
+  # Аналогично предыдущему пункту, но для вентилятора.
+  door_open_fan_pre_state:
+    name: "Fan Pre-State When Door Opened"
+    initial: off
+
+  # --------------------------------------------------------------------------
+  # Humidifier Pre-State When Door Opened
+  # --
+  # Аналогично предыдущим пунктам. Запоминает состояние увлажнителя.
+  door_open_humidifier_pre_state:
+    name: "Humidifier Pre-State When Door Opened"
+    initial: off
+
+#############################################################################
+#  ВХОДНЫЕ ЧИСЛОВЫЕ (INPUT_NUMBER)
+#############################################################################
+input_number:
+  low_th_notification_reset_period:
+    name: "Период сброса уведомлений о низкой температуре"
+    min: 5
+    max: 60
+    step: 1
+    initial: 20
+
+  pressure_correction_value:
+    name: "Поправка давления (мм рт.ст.)"
+    min: 0
+    max: 20
+    step: 0.5
+    unit_of_measurement: "мм рт.ст."
+    initial: 6
+
+  co2_threshold_high:
+    name: "Порог CO2 для проветривания (жёсткий)"
+    min: 400
+    max: 2000
+    step: 50
+    initial: 1000
+
+  co2_threshold_low:
+    name: "Порог CO2 для завершения проветривания (мягкий)"
+    min: 300
+    max: 1500
+    step: 50
+    initial: 550
+
+  co2_notification_reset_period:
+    name: "Период сброса уведомлений CO₂ (мин)"
+    min: 5
+    max: 60
+    step: 1
+    initial: 22
+
+##############################################################################
+# УНИВЕРСАЛЬНЫЙ СКРИПТ
+##############################################################################
+script:
+  climate_update_timers:
+    alias: "Обновить таймеры климата"
+    mode: parallel
+    fields:
+      device_on_entity:
+        description: "Entity включённого устройства (например, fan.xxx или humidifier.xxx)"
+        required: true
+      last_on_entity:
+        description: "input_datetime последнего включения"
+        required: true
+      last_off_entity:
+        description: "input_datetime последнего выключения"
+        required: true
+    sequence:
+      - variables:
+          dev: "{{ device_on_entity }}"
+          last_on: "{{ last_on_entity }}"
+          last_off: "{{ last_off_entity }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ is_state(dev, 'on') }}"
+            sequence:
+              - service: input_datetime.set_datetime
+                target:
+                  entity_id: "{{ last_on }}"
+                data:
+                  datetime: "{{ now().isoformat() }}"
+          - conditions:
+              - condition: template
+                value_template: "{{ is_state(dev, 'off') }}"
+            sequence:
+              - service: input_datetime.set_datetime
+                target:
+                  entity_id: "{{ last_off }}"
+                data:
+                  datetime: "{{ now().isoformat() }}"
+
+##############################################################################
+# АВТОМАТИЗАЦИИ
+##############################################################################
+automation:
+  # ==========================================================================
+  # ОБНОВЛЕНИЕ ТАЙМЕРОВ КЛИМАТИЧЕСКИХ УСТРОЙСТВ
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # Увлажнитель: обновление таймеров
+  # --------------------------------------------------------------------------
+  - id: "humidifier_timer_update"
+    alias: "HELPER: Увлажнитель: обновить таймеры"
+    description: >
+      Обновляет input_datetime.humidifier_last_on и humidifier_last_off
+      при каждом изменении состояния увлажнителя.
+
+      Используется для:
+      • Расчёта времени работы/простоя
+      • Статистики использования
+      • Антидребезга в автоматизациях
+    trigger:
+      - platform: state
+        entity_id: humidifier.xiaomi_cn_823407205_p3
+    action:
+      - service: script.climate_update_timers
+        data:
+          device_on_entity: humidifier.xiaomi_cn_823407205_p3
+          last_on_entity: input_datetime.humidifier_last_on
+          last_off_entity: input_datetime.humidifier_last_off
+
+  # --------------------------------------------------------------------------
+  # Очиститель: обновление таймеров
+  # --------------------------------------------------------------------------
+  - id: "air_purifier_timer_update"
+    alias: "HELPER: Очиститель: обновить таймеры"
+    description: >
+      Обновляет input_datetime.air_purifier_last_on и air_purifier_last_off
+      при каждом изменении состояния очистителя воздуха.
+
+      Используется для:
+      • Расчёта времени работы/простоя
+      • Статистики использования
+      • Антидребезга в автоматизациях
+    trigger:
+      - platform: state
+        entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+    action:
+      - service: script.climate_update_timers
+        data:
+          device_on_entity: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+          last_on_entity: input_datetime.air_purifier_last_on
+          last_off_entity: input_datetime.air_purifier_last_off
+
+  # --------------------------------------------------------------------------
+  # Инициализация таймеров при старте
+  # --------------------------------------------------------------------------
+  - id: "climate_timers_init"
+    alias: "HELPER: Инициализация таймеров климата при старте"
+    description: >
+      Инициализирует таймеры климатических устройств при старте Home Assistant.
+
+      Логика:
+      • Задержка 5 секунд (ожидание готовности устройств)
+      • Обновление таймеров на основе текущего состояния
+
+      Гарантирует корректные значения после перезагрузки системы.
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay: "00:00:05"
+      - service: script.climate_update_timers
+        data:
+          device_on_entity: humidifier.xiaomi_cn_823407205_p3
+          last_on_entity: input_datetime.humidifier_last_on
+          last_off_entity: input_datetime.humidifier_last_off
+      - service: script.climate_update_timers
+        data:
+          device_on_entity: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+          last_on_entity: input_datetime.air_purifier_last_on
+          last_off_entity: input_datetime.air_purifier_last_off
+
+  # ==========================================================================
+  # ЗИМНИЙ РЕЖИМ
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # Автоматическое переключение зимнего режима
+  # --------------------------------------------------------------------------
+  - id: "d8084e61-405b-4f92-8c86-527254cc6753"
+    alias: "HELPER: Переключение зимнего режима по месяцам"
+    description: >
+      Автоматически включает/выключает зимний режим в зависимости от месяца.
+
+      Логика:
+      • Зима: ноябрь (11) – март (3) → winter_mode = ON
+      • Лето: апрель (4) – октябрь (10) → winter_mode = OFF
+
+      Триггеры:
+      • 00:01 каждый день (проверка смены месяца)
+      • Старт Home Assistant (инициализация)
+
+      Влияние:
+      • Блокировка кондиционера при winter_mode = ON
+      • Особые настройки отопления
+    mode: single
+    triggers:
+      - trigger: time
+        at: "00:01:00"
+      - trigger: homeassistant
+        event: start
+    actions:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >
+                  {{ now().month >= 11 or now().month <= 3 }}
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.winter_mode
+        default:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.winter_mode
+
+  # ==========================================================================
+  # CO₂ УВЕДОМЛЕНИЯ
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # Сброс флагов CO₂ уведомлений после проветривания
+  # --------------------------------------------------------------------------
+  - id: "7df1e59a-af5d-4496-be72-e687afdbf08e"
+    alias: "HELPER: Обновление сенсора контроля уведомлений о уровне CO2"
+    description: >
+      Сбрасывает флаги уведомлений о CO₂ после завершения проветривания.
+
+      Логика:
+      • Триггер: CO₂ < 550 ppm стабильно 1 минуту
+      • Защита: игнорируется при старте HA (system_startup_phase)
+
+      Сбрасывает:
+      • co2_voice_notification_sensor (голосовые уведомления)
+      • co2_text_notification_sensor (Telegram уведомления)
+
+      Позволяет снова уведомить при следующем превышении порога.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.livingroom_ventilation_status
+        from: "off"
+        to: "on"
+        for:
+          minutes: 1
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.co2_voice_notification_sensor
+            - input_boolean.co2_text_notification_sensor
+
+  # --------------------------------------------------------------------------
+  # Уведомление: требуется проветривание
+  # --------------------------------------------------------------------------
+  - id: "b44e93fc-7746-4ff5-8846-2d350fecb813"
+    alias: "Уведомление о необходимости проветривания (усреднённое значение)"
+    description: >
+      Уведомляет о превышении порога CO₂ (> 1000 ppm).
+
+      Логика:
+      • Триггер: binary_sensor.livingroom_ventilation_need = ON
+      • Антиспам: флаг co2_voice_notification_sensor
+      • Защита: игнорируется при старте HA
+
+      Каналы уведомлений:
+      • Режим тишины OFF + дома → TTS в колонку
+      • Режим тишины ON + дома → Telegram
+
+      После уведомления:
+      • Включается флаг антиспама (22 мин)
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.livingroom_ventilation_need
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.co2_voice_notification_sensor
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - choose:
+          # громко в колонку
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.silent_mode
+                state: "off"
+              - condition: state
+                entity_id: person.master
+                state: "home"
+            sequence:
+              - action: script.yandex_tts_co2_alert
+          # тихо в телеграм
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.silent_mode
+                state: "on"
+              - condition: state
+                entity_id: person.master
+                state: "home"
+            sequence:
+              - action: notify.master
+                data:
+                  message: "Уровень CO₂ превышает норму. Рекомендуется проветрить гостиную."
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.co2_voice_notification_sensor
+
+  # --------------------------------------------------------------------------
+  # Уведомление: проветривание завершено
+  # --------------------------------------------------------------------------
+  - id: "31a294d7-4c2d-4289-a8b0-04f2cea38553"
+    alias: "Уведомление о завершении проветривания (усреднённое значение)"
+    description: >
+      Уведомляет о завершении проветривания (CO₂ < 550 ppm).
+
+      Логика:
+      • Триггер: binary_sensor.livingroom_ventilation_status = ON стабильно 1 мин
+      • Антиспам: флаг co2_text_notification_sensor
+      • Защита: игнорируется при старте HA
+
+      Каналы уведомлений:
+      • Режим тишины OFF + дома → TTS в колонку
+      • Режим тишины ON + дома → Telegram
+
+      После уведомления:
+      • Включается флаг антиспама (22 мин)
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.livingroom_ventilation_status
+        from: "off"
+        to: "on"
+        for:
+          minutes: 1
+    conditions:
+      - condition: state
+        entity_id: input_boolean.co2_text_notification_sensor
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - choose:
+          # громко в колонку
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.silent_mode
+                state: "off"
+              - condition: state
+                entity_id: person.master
+                state: "home"
+            sequence:
+              - action: script.yandex_tts_co2_normal
+          # тихо в телеграм
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.silent_mode
+                state: "on"
+              - condition: state
+                entity_id: person.master
+                state: "home"
+            sequence:
+              - action: notify.master
+                data:
+                  message: "Проветривание завершено. Уровень CO₂ в норме."
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.co2_text_notification_sensor
+
+  # --------------------------------------------------------------------------
+  # Автосброс флагов уведомлений CO₂
+  # --------------------------------------------------------------------------
+  - id: "469fe5d8-4b48-40bb-b967-0d09a83ee4f0"
+    alias: "HELPER: Сброс уведомлений CO₂"
+    description: >
+      Автоматически сбрасывает флаги антиспама CO₂ уведомлений через таймер.
+
+      Логика:
+      • Триггер: любой флаг уведомлений включился
+      • Задержка: input_number.co2_notification_reset_period (22 мин)
+      • Режим restart: новое включение → перезапуск таймера
+
+      Сбрасывает:
+      • co2_voice_notification_sensor
+      • co2_text_notification_sensor
+
+      Позволяет повторить уведомление, если проблема не устранена.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id:
+          - input_boolean.co2_voice_notification_sensor
+          - input_boolean.co2_text_notification_sensor
+        to: "on"
+    actions:
+      - delay: "00:{{ states('input_number.co2_notification_reset_period') | int }}:00"
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.co2_voice_notification_sensor
+            - input_boolean.co2_text_notification_sensor
+
+  # ==========================================================================
+  # PRE-RESTART: СОХРАНЕНИЕ И ВОССТАНОВЛЕНИЕ СОСТОЯНИЙ
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # Сохранение состояний перед shutdown
+  # --------------------------------------------------------------------------
+  - id: "5b187cde-0ad5-4132-bb68-a622dd15d6ff"
+    alias: "HELPER: Сохранение состояний климатической техники"
+    description: >
+      Сохраняет состояния климатических устройств перед выключением HA.
+
+      Сохраняет:
+      • Кондиционер (только если не зимний режим)
+      • Очиститель воздуха
+      • Увлажнитель
+
+      Логика:
+      • Триггер: homeassistant.shutdown
+      • ON → включает флаг pre_restart
+      • OFF → выключает флаг pre_restart
+
+      Используется для восстановления состояний после перезагрузки.
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: shutdown
+    actions:
+      # кондиционер
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: climate.konditsioner
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.winter_mode
+                state: "off"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.climate_pre_restart_state
+        default:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.climate_pre_restart_state
+      # очиститель воздуха (fan)
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.fan_pre_restart_state
+        default:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.fan_pre_restart_state
+      # увлажнитель
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: humidifier.xiaomi_cn_823407205_p3
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.humidifier_pre_restart_state
+        default:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.humidifier_pre_restart_state
+
+  # --------------------------------------------------------------------------
+  # Восстановление состояний после старта
+  # --------------------------------------------------------------------------
+  - id: "457a6711-67fa-4cb2-bcab-63c0cc58e054"
+    alias: "HELPER: Восстановление состояний климатической техники"
+    description: >
+      Восстанавливает состояния климатических устройств после запуска HA.
+
+      Восстанавливает:
+      • Кондиционер (только если не зимний режим)
+      • Очиститель воздуха
+      • Увлажнитель
+
+      Логика:
+      • Триггер: homeassistant.start
+      • Проверяет флаги pre_restart
+      • Включает только те устройства, которые были включены
+
+      Финал:
+      • Сбрасывает все флаги pre_restart
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      # кондиционер
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.climate_pre_restart_state
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.winter_mode
+                state: "off"
+            sequence:
+              - action: climate.turn_on
+                target:
+                  entity_id: climate.konditsioner
+      # очиститель воздуха
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.fan_pre_restart_state
+                state: "on"
+            sequence:
+              - action: fan.turn_on
+                target:
+                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+      # увлажнитель
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.humidifier_pre_restart_state
+                state: "on"
+            sequence:
+              - action: humidifier.turn_on
+                target:
+                  entity_id: humidifier.xiaomi_cn_823407205_p3
+      # сбрасываем флаги pre_restart
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.climate_pre_restart_state
+            - input_boolean.fan_pre_restart_state
+            - input_boolean.humidifier_pre_restart_state
+
+  # ==========================================================================
+  # АНТИПРОВЕТРИВАНИЕ: УПРАВЛЕНИЕ КЛИМАТОМ ПРИ ОТКРЫТИИ ДВЕРЕЙ
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # Выключение климата при открытии дверей
+  # --------------------------------------------------------------------------
+  - id: "f4e42442-155e-4d0a-87c2-3f21fd72025d"
+    alias: "HELPER: Гостиная: Климат, отключить устройства при открытии двери"
+    description: >
+      Выключает климатические устройства при открытии балконных дверей.
+
+      Логика:
+      • Триггер: дверь открыта стабильно 1 минуту
+      • Антифлаппинг: защита от кратковременных открытий
+
+      Выключает:
+      • Кондиционер (только если не зимний режим)
+      • Очиститель воздуха
+      • Увлажнитель
+
+      Сохранение состояний:
+      • Перед выключением → включает флаг door_open_*_pre_state
+      • Только для работающих устройств
+
+      Используется для восстановления при закрытии дверей.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom_2
+        to: "on"
+        for:
+          minutes: 1
+    actions:
+      # Кондиционер (если сейчас не off и не зима)
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ not is_state('climate.konditsioner', 'off') }}"
+              - condition: state
+                entity_id: input_boolean.winter_mode
+                state: "off"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.door_open_climate_pre_state
+              - action: climate.turn_off
+                target:
+                  entity_id: climate.konditsioner
+
+      # Очиститель воздуха
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.door_open_fan_pre_state
+              - action: fan.turn_off
+                target:
+                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+
+      # Увлажнитель
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: humidifier.xiaomi_cn_823407205_p3
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.door_open_humidifier_pre_state
+              - action: humidifier.turn_off
+                target:
+                  entity_id: humidifier.xiaomi_cn_823407205_p3
+
+  # --------------------------------------------------------------------------
+  # Восстановление климата при закрытии дверей
+  # --------------------------------------------------------------------------
+  - id: "0347cae6-1b2f-436a-a54c-792feafa9620"
+    alias: "HELPER: Гостиная: Климат, восстановление состояния устройств"
+    description: >
+      Восстанавливает климатические устройства после закрытия балконных дверей.
+
+      Логика:
+      • Триггер: дверь закрылась
+      • Проверяет флаги door_open_*_pre_state
+
+      Включает обратно:
+      • Кондиционер (только если не зимний режим)
+      • Очиститель воздуха
+      • Увлажнитель
+
+      Важно:
+      • Включает ТОЛЬКО то, что было выключено автоматизацией
+      • Не включает устройства, которые были выключены вручную
+
+      Финал:
+      • Сбрасывает все флаги door_open_*_pre_state
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom_2
+        to: "off"
+    actions:
+      # Вернуть кондиционер
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.door_open_climate_pre_state
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.winter_mode
+                state: "off"
+            sequence:
+              - action: climate.turn_on
+                target:
+                  entity_id: climate.konditsioner
+
+      # Вернуть очиститель
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.door_open_fan_pre_state
+                state: "on"
+            sequence:
+              - action: fan.turn_on
+                target:
+                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+
+      # Вернуть увлажнитель
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.door_open_humidifier_pre_state
+                state: "on"
+            sequence:
+              - action: humidifier.turn_on
+                target:
+                  entity_id: humidifier.xiaomi_cn_823407205_p3
+
+      # Сброс флагов "что было включено"
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.door_open_climate_pre_state
+            - input_boolean.door_open_fan_pre_state
+            - input_boolean.door_open_humidifier_pre_state
+
+  # ==========================================================================
+  # ЗАЩИТА КОНДИЦИОНЕРА В ЗИМНЕМ РЕЖИМЕ
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # Блокировка кондиционера зимой
+  # --------------------------------------------------------------------------
+  - id: "b9867c28-be9f-425e-9fee-0aea777d04c0"
+    alias: "HELPER: Защита — не включать кондиционер при активном зимнем режиме"
+    description: >
+      Принудительно отключает кондиционер при включённом зимнем режиме.
+
+      Логика:
+      • Триггер: кондиционер переключился из OFF в любое активное состояние
+      • Условие: winter_mode = ON
+
+      Действия:
+      • Немедленное выключение кондиционера
+      • Telegram уведомление
+      • TTS предупреждение (если дома)
+
+      Назначение:
+      • Предотвращает охлаждение помещения зимой
+      • Защита от случайного включения
+      • Экономия электроэнергии
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: climate.konditsioner
+        from: "off"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.winter_mode
+        state: "on"
+    actions:
+      - action: climate.turn_off
+        target:
+          entity_id: climate.konditsioner
+      - action: notify.master
+        data:
+          message: "Кондиционер принудительно отключён: активен зимний режим."
+      - action: script.yandex_tts_kondicioner_warning

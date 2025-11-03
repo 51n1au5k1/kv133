@@ -69,7 +69,6 @@ automation:
       напомнить закрыть дверь (голосом или Телеграм) и выставить флаг,
       чтобы не спамить до сброса.
     mode: single
-
     triggers:
       - trigger: numeric_state
         entity_id: sensor.srednee_znachenie_temperatury_v_masterskoi_2
@@ -140,7 +139,6 @@ automation:
         data:
           message: "Отправлено уведомление о низкой температуре в мастерской (<20°C)."
           level: info
-
 
   # ----------------------------------------------------------------------------
   # 3) HELPER: Сброс уведомлений о температуре в мастерской

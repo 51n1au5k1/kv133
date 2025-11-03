@@ -8,11 +8,7 @@
 #   Например, здесь определяются:
 #   1) Лимиты для управляющей логики вытяжки на кухне (kitchen_fan_temp_limit,
 #      kitchen_fan_hum_limit);
-#   2) Шаблонные сенсоры для вычисления усредненной температуры/влажности
-#      в гостиной (livingroom_average_temperature/humidity);
-#   3) Начальные значения для температуры/влажности кухни (kitchen_fan_temp_initial,
-#      kitchen_fan_hum_initial), которые зависят от гостиной + некоторой дельты;
-#   4) Погодные переводы (направления ветра, погода) как для OpenWeather
+#   2) Погодные переводы (направления ветра, погода) как для OpenWeather
 #      (open_meteo_*) так и для Яндекс (yandex_weather4notion_*).
 #
 ################################################################################
@@ -36,14 +32,6 @@ input_number:
     step: 1
     unit_of_measurement: "%"
     initial: 60
-
-  pressure_correction_value:
-    name: "Поправка давления (мм рт.ст.)"
-    min: 0
-    max: 20
-    step: 0.5
-    unit_of_measurement: "мм рт.ст."
-    initial: 6
 
 ##############################################################################
 #                             TEMPLATE SENSORS
@@ -71,49 +59,7 @@ sensor:
           {{ (states('sensor.livingroom_average_humidity') | float(50)) + 10 }}
 
   # ==================================================================
-  # 2) Усреднённая температура/влажность в гостиной
-  # ==================================================================
-
-  - platform: template
-    sensors:
-      livingroom_average_temperature:
-        unique_id: "livingroom_average_temperature"
-        friendly_name: "Living Room Average Temperature"
-        unit_of_measurement: "°C"
-        icon_template: "mdi:thermometer"
-        availability_template: >-
-          {{ states('sensor.livingroom_climat_sensor_temperature') not in ['unknown','unavailable','']
-             or states('sensor.co2_monitor_temperature') not in ['unknown','unavailable',''] }}
-        value_template: >-
-          {% set t1 = states('sensor.livingroom_climat_sensor_temperature') | float(none) %}
-          {% set t2 = states('sensor.co2_monitor_temperature') | float(none) %}
-          {% set vals = [t1, t2] | reject('equalto', none) | list %}
-          {% if vals | length > 0 %}
-            {{ (vals | sum / (vals | length)) | round(1) }}
-          {% else %}
-            unknown
-          {% endif %}
-
-      livingroom_average_humidity:
-        unique_id: "livingroom_average_humidity"
-        friendly_name: "Living Room Average Humidity"
-        unit_of_measurement: "%"
-        icon_template: "mdi:water-percent"
-        availability_template: >-
-          {{ states('sensor.livingroom_climat_sensor_humidity') not in ['unknown','unavailable','']
-             or states('sensor.co2_monitor_humidity') not in ['unknown','unavailable',''] }}
-        value_template: >-
-          {% set h1 = states('sensor.livingroom_climat_sensor_humidity') | float(none) %}
-          {% set h2 = states('sensor.co2_monitor_humidity') | float(none) %}
-          {% set vals = [h1, h2] | reject('equalto', none) | list %}
-          {% if vals | length > 0 %}
-            {{ (vals | sum / (vals | length)) | round(1) }}
-          {% else %}
-            unknown
-          {% endif %}
-
-  # ==================================================================
-  # 3) Перевод состояний погоды Open Meteo (weather.kvartira_133)
+  # 2) Перевод состояний погоды Open Meteo (weather.kvartira_133)
   # ==================================================================
   - platform: template
     sensors:
@@ -183,23 +129,3 @@ sensor:
             неопределенные погодные условия
           {% endif %}
 
-  # ==================================================================
-  # 4) Корректировка атмосферного давления (компенсация высоты)
-  # ==================================================================
-  - platform: template
-    sensors:
-      livingroom_corrected_pressure:
-        unique_id: "livingroom_corrected_pressure"
-        friendly_name: "Скорректированное атмосферное давление"
-        unit_of_measurement: "мм рт.ст."
-        icon_template: "mdi:gauge"
-        value_template: >-
-          {% set raw_pressure = states('sensor.livingroom_climat_sensor_pressure') | float(0) %}
-          {% set correction  = states('input_number.pressure_correction_value') | float(6) %}
-          {% if raw_pressure > 0 %}
-            {{ (raw_pressure + correction) | round(1) }}
-          {% else %}
-            0
-          {% endif %}
-        availability_template: >-
-          {{ states('sensor.livingroom_climat_sensor_pressure') not in ['unknown','unavailable',''] }}

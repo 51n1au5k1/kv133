@@ -226,7 +226,7 @@ automation:
         entity_id: input_boolean.silent_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.someone_is_home
+        entity_id: binary_sensor.someone_is_home_2
         state: "on"
       - condition: state
         entity_id: input_boolean.washing_machine_running
@@ -270,7 +270,7 @@ automation:
         entity_id: input_boolean.silent_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.someone_is_home
+        entity_id: binary_sensor.someone_is_home_2
         state: "on"
       - condition: state
         entity_id: binary_sensor.bathroom_motions

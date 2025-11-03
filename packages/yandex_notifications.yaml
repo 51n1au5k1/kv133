@@ -103,7 +103,7 @@ automation:
         entity_id: input_boolean.silent_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.someone_is_home
+        entity_id: binary_sensor.someone_is_home_2
         state: "on"
     actions:
       - action: script.yandex_tts_generic
@@ -124,7 +124,7 @@ automation:
         entity_id: input_boolean.silent_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.someone_is_home
+        entity_id: binary_sensor.someone_is_home_2
         state: "on"
     actions:
       - action: script.yandex_tts_generic
@@ -143,7 +143,7 @@ automation:
         entity_id: input_boolean.silent_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.someone_is_home
+        entity_id: binary_sensor.someone_is_home_2
         state: "on"
       - condition: state
         entity_id: input_boolean.system_startup_phase

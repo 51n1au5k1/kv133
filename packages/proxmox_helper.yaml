@@ -143,14 +143,14 @@ template:
           {% set cpus = states('input_number.cpu_105') | float(1) %}
           {{ (raw / cpus) | round(2) }}
 
-      - name: "CPU LXC Lyrion Music Server Normalized"
-        unique_id: cpu_lxc_lms_106_normalized
-        unit_of_measurement: "%"
-        icon: mdi:percent-outline
-        state: >-
-          {% set raw = states('sensor.lxc_lyrionmusicserver_106_cpu_used') | float(0) %}
-          {% set cpus = states('input_number.cpu_106') | float(1) %}
-          {{ (raw / cpus) | round(2) }}
+      # - name: "CPU LXC Lyrion Music Server Normalized"
+      #   unique_id: cpu_lxc_lms_106_normalized
+      #   unit_of_measurement: "%"
+      #   icon: mdi:percent-outline
+      #   state: >-
+      #     {% set raw = states('sensor.lxc_lyrionmusicserver_106_cpu_used') | float(0) %}
+      #     {% set cpus = states('input_number.cpu_106') | float(1) %}
+      #     {{ (raw / cpus) | round(2) }}
 
       - name: "CPU LXC Minim Music Server Normalized"
         unique_id: cpu_lxc_lms_107_normalized
@@ -217,14 +217,14 @@ template:
           {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
           {{ (raw / host_threads) | round(2) }}
 
-      - name: "CPU LXC Lyrion Music Server Host Percent"
-        unique_id: cpu_lxc_lyrion_106_host_percent
-        unit_of_measurement: "%"
-        icon: mdi:chart-pie
-        state: >-
-          {% set raw = states('sensor.lxc_lyrionmusicserver_106_cpu_used') | float(0) %}
-          {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
-          {{ (raw / host_threads) | round(2) }}
+      # - name: "CPU LXC Lyrion Music Server Host Percent"
+      #   unique_id: cpu_lxc_lyrion_106_host_percent
+      #   unit_of_measurement: "%"
+      #   icon: mdi:chart-pie
+      #   state: >-
+      #     {% set raw = states('sensor.lxc_lyrionmusicserver_106_cpu_used') | float(0) %}
+      #     {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+      #     {{ (raw / host_threads) | round(2) }}
 
       - name: "CPU LXC Minim Server Host Percent"
         unique_id: cpu_lxc_minim_107_host_percent
