@@ -37,8 +37,9 @@
     - `telegram_bot.yaml` — сценарии бота (команды, инлайн-кнопки, меню, управление устройствами).
 - `plant_euphorbia_leuconeura.yaml`, `plant_ficus_lyrata.yaml`: Конфигурация для мониторинга растений.  
 - Комнаты и доменные пакеты
-    - `room_bathroom.yaml`, `room_hallway.yaml`, `room_livingroom.yaml`, `room_workroom.yaml`, `room_bedroom.yaml`, `room_kitchen.yaml`, `room_server.yaml`: Автоматизации для различных комнат.  
+    - `room_bathroom.yaml`, `room_hallway.yaml`, `room_livingroom.yaml`, `room_workroom.yaml`, `room_bedroom.yaml`, `room_kitchen.yaml`, `room_server.yaml` — автоматизации для различных комнат.  
     - `room_bathroom_light.yaml` — светильники Philips Zhirui (philips.light.downlight) через Xiaomi Philips Lights.
+    - *Новое:* `helper_climate_common.yaml` — общие механизмы для автоматизации климата, используемые в пакетах комнат (`room_livingroom_*.yaml`).
     - *Новое:* `room_livingroom_humidifier.yaml` — авто-режим увлажнителя по гистерезису (влажность < низкого/ > высокого порогов, антидребезг, мин. время).
     - *Новое:* `room_livingroom_air_purifier.yaml` — авто-режим очистителя по PM2.5 (сглаживание statistics, гистерезис, антидребезг, мин. время).
     - *Обновлено:* `room_kitchen.yaml` — вытяжка по сравнительным дельтам T/RH кухни к гостиной, переход на усреднённые сенсоры гостиной, задержка выключения, антиспам.

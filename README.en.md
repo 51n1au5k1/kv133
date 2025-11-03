@@ -38,6 +38,7 @@ This repository contains my Home Assistant configuration, designed to automate s
 - Rooms and domain packages
     - `room_bathroom.yaml`, `room_hallway.yaml`, `room_livingroom.yaml`, `room_workroom.yaml`, `room_bedroom.yaml`, `room_kitchen.yaml`, `room_server.yaml`: Automations for various rooms.
     - `room_bathroom_light.yaml` — Philips Zhirui (philips.light.downlight) lights via Xiaomi Philips Lights.
+    - *New:* `helper_climate_common.yaml` — common climate automation mechanisms used in room packages (`room_livingroom_*.yaml`).
     - *New:* `room_livingroom_humidifier.yaml` — auto-mode humidifier by hysteresis (humidity < low / > high thresholds, anti-chatter, min. time).
     - *New:* `room_livingroom_air_purifier.yaml` — auto-mode purifier by PM2.5 (statistics smoothing, hysteresis, anti-chatter, min. time).
     - *Updated:* `room_kitchen.yaml` — exhaust fan by comparative T/RH deltas of kitchen to living room, transition to averaged living room sensors, delayed shutdown, anti-spam.
