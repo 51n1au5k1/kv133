@@ -28,13 +28,16 @@ This repository contains my Home Assistant configuration, designed to automate s
 
 ## Configuration Files
 
-- `configuration.yaml`: The main configuration file, linking all components together.
-- `helper.yaml`, `variables.yaml`: Helper functions and entities for smart home monitoring and control.
-- `notifications_telegram.yaml` and `notifications_yandex.yaml`: Notification settings via Telegram and Yandex.
+- `configuration.yaml` — the main configuration file, linking all components together.
+- `helper.yaml`, `variables.yaml` — helper functions and entities for smart home monitoring and control.
+- `notifications_telegram.yaml` and `notifications_yandex.yaml`  — notification settings via Telegram and Yandex.
 - Telegram (UI integration):
-    - `telegram_helper.yaml`, `telegram_notifications.yaml` — `notify.*` services, recipient groups.
-    - `telegram_bot.yaml` — bot scenarios (commands, inline buttons, menu, device control).
-- `plant_euphorbia_leuconeura.yaml`, `plant_ficus_lyrata.yaml`: Plant monitoring configuration.
+    - `telegram_helper.yaml` — starting with version 2026.5.0, configuration via UI, old service configurations: Telegram, `notify.*`, recipient groups.
+    - `telegram_notifications.yaml` — notifications via Telegram.    
+    - `telegram_bot.yaml` — bot scripts (commands, inline buttons, menus, device control).
+- Plant monitoring:
+    - `plant_common.yaml` — configuration for plant monitoring.  
+    - `plant_euphorbia_leuconeura.yaml`, `plant_ficus_lyrata.yaml` — plant monitoring configuration.
 - Rooms and domain packages
     - `room_bathroom.yaml`, `room_hallway.yaml`, `room_livingroom.yaml`, `room_workroom.yaml`, `room_bedroom.yaml`, `room_kitchen.yaml`, `room_server.yaml`: Automations for various rooms.
     - `room_bathroom_light.yaml` — Philips Zhirui (philips.light.downlight) lights via Xiaomi Philips Lights.

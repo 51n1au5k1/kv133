@@ -29,13 +29,16 @@
 
 ## Конфигурационные Файлы
 
-- `configuration.yaml`: Основной конфигурационный файл, связывающий все компоненты вместе.  
-- `helper.yaml`, `variables.yaml`: Вспомогательные функции и сущности для мониторинга и управления умным домом.  
-- `notifications_telegram.yaml` и `notifications_yandex.yaml`: Настройки уведомлений через Telegram и Яндекс.  
+- `configuration.yaml` — основной конфигурационный файл, связывающий все компоненты вместе.  
+- `helper.yaml`, `variables.yaml` — вспомогательные функции и сущности для мониторинга и управления умным домом.  
+- `notifications_telegram.yaml` и `notifications_yandex.yaml` — настройки уведомлений через Telegram и Яндекс.  
 - Telegram (UI-интеграция):
-    - `telegram_helper.yaml`, `telegram_notifications.yaml` — сервисы `notify.*`, группы получателей.
+    - `telegram_helper.yaml` — с версии 2026.5.0 настраивайка через UI, старые конфигурации сервисов: Telegram, `notify.*`, группы получателей.
+    - `telegram_notifications.yaml` - уведомления через Telegram.
     - `telegram_bot.yaml` — сценарии бота (команды, инлайн-кнопки, меню, управление устройствами).
-- `plant_euphorbia_leuconeura.yaml`, `plant_ficus_lyrata.yaml`: Конфигурация для мониторинга растений.  
+- Контроль за растениями:
+    - `plant_common.yaml` — конфигурация для мониторинга растений. 
+- `plant_euphorbia_leuconeura.yaml`, `plant_ficus_lyrata.yaml` — настройки для конректного растения.
 - Комнаты и доменные пакеты
     - `room_bathroom.yaml`, `room_hallway.yaml`, `room_livingroom.yaml`, `room_workroom.yaml`, `room_bedroom.yaml`, `room_kitchen.yaml`, `room_server.yaml` — автоматизации для различных комнат.  
     - `room_bathroom_light.yaml` — светильники Philips Zhirui (philips.light.downlight) через Xiaomi Philips Lights.

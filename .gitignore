@@ -4,6 +4,7 @@
 /blueprints
 /custom_components
 /deps
+/home-assistant.log.old
 /home-assistant.log
 /home-assistant.log.1
 /home-assistant.log.fault
