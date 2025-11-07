@@ -259,6 +259,7 @@ script:
             <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
           inline_keyboard: >
             {{ [
+                [ ["🔴 Вытяжка" if is_state("switch.sonoff_10024c81be", "off") else "🟢 Вытяжка", "/toggle_kitchen_fan"] ],
                 [ ["🔴 Основной" if is_state("light.kitchen_main_light", "off") else "🟢 Основной", "/toggle_kitchen_main_light"],
                   ["🔴 Подсветка" if is_state("switch.kitchen_fartuh", "off") else "🟢 Подсветка", "/toggle_kitchen_fartuh"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/kitchen_control"] ]
@@ -1032,6 +1033,28 @@ automation:
       - service: script.toggle_device
         data:
           entity: switch.kitchen_fartuh
+          domain: switch
+          menu_script: script.send_kitchen_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_kitchen_fan"
+    alias: "Telegram Bot Toggle Kitchen Fan"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_kitchen_fan"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: switch.sonoff_10024c81be
           domain: switch
           menu_script: script.send_kitchen_status
           message_id: "{{ trigger.event.data.message.message_id }}"

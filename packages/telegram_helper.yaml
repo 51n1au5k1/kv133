@@ -25,21 +25,21 @@
 #     parse_mode: html
 #     allowed_chat_ids:
 #       - !secret chat_id_andrei
+# Уходит с версии версии 2026.5.0
+# notify:
+#   # ----------------------------------------------------------------------------
+#   # Настройки сервисов уведомлений для конкретных получателей.
+#   # notify.master   -> отправляет сообщения в Telegram Andrei
+#   # group_notifications -> группа для отправки для уведомлений обоим пользователям
+#   # ----------------------------------------------------------------------------
 
-notify:
-  # ----------------------------------------------------------------------------
-  # Настройки сервисов уведомлений для конкретных получателей.
-  # notify.master   -> отправляет сообщения в Telegram Andrei
-  # group_notifications -> группа для отправки для уведомлений обоим пользователям
-  # ----------------------------------------------------------------------------
-
-  - name: master
-    platform: telegram
-    chat_id: !secret chat_id_andrei
-  - platform: group
-    name: group_notifications
-    services:
-      - service: master
+#   - name: master
+#     platform: telegram
+#     chat_id: !secret chat_id_andrei
+#   - platform: group
+#     name: group_notifications
+#     services:
+#       - service: master
 # Отладочная автоматизация
 automation:
   - id: "debug_telegram_trigger"

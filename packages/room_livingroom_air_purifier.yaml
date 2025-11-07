@@ -158,7 +158,8 @@ binary_sensor:
           {% endif %}
 
         availability_template: >-
-          {{ states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') not in ['unknown','unavailable',''] }}
+          {{ states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') not in ['unknown','unavailable','']
+             or states('sensor.living_room_pm2_5_avg') not in ['unknown','unavailable',''] }}
 
         value_template: >-
           {% set pm_raw = states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') | float(default=none) %}
@@ -190,7 +191,7 @@ automation:
   # --------------------------------------------------------------------------
   # Включение очистителя при загрязнении воздуха
   # --------------------------------------------------------------------------
-  - id: "7b7b1b1a-2f7a-4c67-8ccf-7c3b0c5f2d11"
+  - id: "402b23de-3d40-4019-a3ac-cd40c134511c"
     alias: "Гостиная: включить очиститель"
     description: >
       Включает очиститель воздуха при превышении порога PM2.5.
@@ -224,12 +225,18 @@ automation:
         state: "on"
       - condition: template
         value_template: >-
-          {% set last_off = states('input_datetime.air_purifier_last_off') %}
-          {% if last_off in ['unknown','unavailable'] %}
+          {% set last_off_state = states('input_datetime.air_purifier_last_off') %}
+          {% if last_off_state in ['unknown','unavailable',''] %}
             true
           {% else %}
-            {% set minutes_off = (as_timestamp(now()) - as_timestamp(last_off)) / 60 %}
-            {{ minutes_off >= states('input_number.livingroom_air_min_off_min') | int }}
+            {% set last_off = last_off_state | as_timestamp %}
+            {% set min_off = states('input_number.livingroom_air_min_off_min') | int(0) %}
+            {% if last_off is none %}
+              true
+            {% else %}
+              {% set minutes_off = (as_timestamp(now()) - last_off) / 60 %}
+              {{ minutes_off >= min_off }}
+            {% endif %}
           {% endif %}
     action:
       - service: fan.turn_on
@@ -239,7 +246,7 @@ automation:
   # --------------------------------------------------------------------------
   # Выключение очистителя при улучшении качества воздуха
   # --------------------------------------------------------------------------
-  - id: "e0d6d9f3-0c1c-4822-9b05-ea2e7e2f0b5c"
+  - id: "3f68b2a5-7119-4c61-85b0-67d4c87be962"
     alias: "Гостиная: выключить очиститель"
     description: >
       Выключает очиститель воздуха при нормализации PM2.5.
@@ -272,20 +279,39 @@ automation:
         to: "off"
         for:
           minutes: 5
+
+    # Авто-режим должен быть включён
     condition:
       - condition: state
         entity_id: input_boolean.livingroom_air_purifier_auto
         state: "on"
-      - condition: template
-        value_template: >-
-          {% set last_on = states('input_datetime.air_purifier_last_on') %}
-          {% if last_on in ['unknown','unavailable'] %}
+    action:
+      # 1. Ждём, пока истечёт минимальное время работы
+      - wait_template: >-
+          {% set last_on_state = states('input_datetime.air_purifier_last_on') %}
+          {% if last_on_state in ['unknown','unavailable',''] %}
             true
           {% else %}
-            {% set minutes_on = (as_timestamp(now()) - as_timestamp(last_on)) / 60 %}
-            {{ minutes_on >= states('input_number.livingroom_air_min_on_min') | int }}
+            {% set last_on = last_on_state | as_timestamp %}
+            {% set min_on = states('input_number.livingroom_air_min_on_min') | int(0) %}
+            {% if last_on is none %}
+              true
+            {% else %}
+              {% set minutes_on = (as_timestamp(now()) - last_on) / 60 %}
+              {{ minutes_on >= min_on }}
+            {% endif %}
           {% endif %}
-    action:
+        timeout: "03:00:00"
+        continue_on_timeout: true
+      # 2. Проверяем, что авто-режим всё ещё включён
+      - condition: state
+        entity_id: input_boolean.livingroom_air_purifier_auto
+        state: "on"
+      # 3. И что по PM2.5 по-прежнему "очистка не нужна"
+      - condition: state
+        entity_id: binary_sensor.livingroom_need_air_purify
+        state: "off"
+      # 4. Только теперь выключаем очиститель
       - service: fan.turn_off
         target:
           entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier

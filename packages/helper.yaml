@@ -247,6 +247,13 @@ input_boolean:
   doorbell_spam_guard:
     name: Doorbell spam guard
     icon: mdi:bell-badge
+  # --------------------------------------------------------------------------
+  # Хелпер-флаг стабильности работы интеграции Xiaomi Home
+  # --
+  xiaomi_home_integration_unstable:
+    name: "Xiaomi Home: интеграция нестабильна"
+    initial: off
+    icon: mdi:alert-circle
 
 ##############################################################################
 #  ВХОДНЫЕ ТЕКСТОВЫЕ (INPUT_TEXT)
@@ -317,6 +324,34 @@ group:
 ##############################################################################
 
 automation:
+  # --------------------------------------------------------------------------
+  # HELPER: Xiaomi Home — интеграция упала (по MQTT offline)
+  # --------------------------------------------------------------------------
+  - id: "3626d8f6-8b1b-45ac-913e-bbacea4ed5b6"
+    alias: "HELPER: Xiaomi Home — интеграция нестабильна"
+    mode: single
+    trigger:
+      - platform: mqtt
+        topic: "xiaomi/your_doorbell/status" # ← сюда реальный топик
+        payload: "offline"
+    action:
+      # Включаем флаг "нестабильно"
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.xiaomi_home_integration_unstable
+
+      # Логируем для отладки
+      - service: system_log.write
+        data:
+          message: "Xiaomi Home: получен MQTT offline, флаг unstable = on (на 30 секунд)."
+          level: warning
+
+      # Через 30 секунд считаем, что система восстановилась
+      - delay: "00:00:30"
+
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.xiaomi_home_integration_unstable
   # ----------------------------------------------------------------------------
   # Обновление списка пользователей, находящихся дома
   # ----------------------------------------------------------------------------

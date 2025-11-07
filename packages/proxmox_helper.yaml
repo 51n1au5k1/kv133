@@ -67,12 +67,12 @@ input_number:
     step: 1
     initial: 1
 
-  cpu_106:
-    name: "CPU 106 (LMS)"
-    min: 1
-    max: 16
-    step: 1
-    initial: 1
+  # cpu_106:
+  #   name: "CPU 106 (LMS)"
+  #   min: 1
+  #   max: 16
+  #   step: 1
+  #   initial: 1
 
   cpu_107:
     name: "CPU 107 (Minim)"

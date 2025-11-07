@@ -1032,6 +1032,9 @@ automation:
       - condition: state
         entity_id: binary_sensor.someone_is_home_2
         state: "on"
+      - condition: state
+        entity_id: input_boolean.xiaomi_home_integration_unstable
+        state: "off"
     action:
       # Сохраняем состояние светодиодной ленты
       - variables:
@@ -1180,7 +1183,7 @@ automation:
         entity_id: binary_sensor.strongbox_mold_risk
         to: "on"
         for:
-          minutes: "{{ states('input_number.strongbox_confirm_min') | int(10) }}"
+          minutes: 10
     condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase

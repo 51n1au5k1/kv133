@@ -48,7 +48,7 @@ input_number:
     min: 20
     max: 60
     step: 1
-    initial: 45
+    initial: 47
     unit_of_measurement: "%"
 
   # --------------------------------------------------------------------------
@@ -128,16 +128,14 @@ binary_sensor:
           {% else %}
             mdi:water-check
           {% endif %}
-
         availability_template: >-
           {{ states('sensor.livingroom_average_humidity') not in ['unknown','unavailable',''] }}
-
         value_template: >-
           {% set rh = states('sensor.livingroom_average_humidity') | float(default=none) %}
           {% if rh is none %}
             {{ states('binary_sensor.livingroom_need_humidify') }}
           {% else %}
-            {% set low  = states('input_number.livingroom_hum_low')  | float(45) %}
+            {% set low = states('input_number.livingroom_hum_low') | float(45) %}
             {% set high = states('input_number.livingroom_hum_high') | float(50) %}
             {% if low >= high %}{% set high = low + 1 %}{% endif %}
             {% set was_on = is_state('binary_sensor.livingroom_need_humidify','on') %}
@@ -160,7 +158,7 @@ automation:
   # --------------------------------------------------------------------------
   # Включение увлажнителя при низкой влажности
   # --------------------------------------------------------------------------
-  - id: "95170174-7e11-4acc-9dae-b575eaede9c8"
+  - id: "53de443d-bfb8-44ce-b576-50caa4197722"
     alias: "Гостиная: включить увлажнитель"
     description: >
       Включает увлажнитель при снижении влажности ниже порога.
@@ -180,7 +178,7 @@ automation:
 
       ДЕЙСТВИЕ:
       • Включает humidifier.xiaomi_cn_823407205_p3
-      • Обновляет input_datetime.humidifier_last_on (через helper_climate_common)
+      • Обновляет input_datetime.humidifier_last_on
 
       ВЗАИМОДЕЙСТВИЕ С ДРУГИМИ АВТОМАТИЗАЦИЯМИ:
       • При открытии балконных дверей → выключится (helper_climate_common)
@@ -199,12 +197,19 @@ automation:
         state: "on"
       - condition: template
         value_template: >-
-          {% set last_off = states('input_datetime.humidifier_last_off') %}
-          {% if last_off in ['unknown','unavailable'] %}
+          {% set last_off_state = states('input_datetime.humidifier_last_off') %}
+          {# если таймер ещё ни разу не записывался — пропускаем проверку #}
+          {% if last_off_state in ['unknown','unavailable',''] %}
             true
           {% else %}
-            {% set minutes_off = (as_timestamp(now()) - as_timestamp(last_off)) / 60 %}
-            {{ minutes_off >= states('input_number.livingroom_hum_min_off_min') | int }}
+            {% set ts_last_off = last_off_state | as_timestamp %}
+            {% if ts_last_off is none %}
+              true
+            {% else %}
+              {% set min_off = states('input_number.livingroom_hum_min_off_min') | int(0) %}
+              {% set minutes_off = (as_timestamp(now()) - ts_last_off) / 60 %}
+              {{ minutes_off >= min_off }}
+            {% endif %}
           {% endif %}
     action:
       - service: humidifier.turn_on
@@ -214,7 +219,7 @@ automation:
   # --------------------------------------------------------------------------
   # Выключение увлажнителя при достижении целевой влажности
   # --------------------------------------------------------------------------
-  - id: "feb01173-2f87-4aec-8bba-877b685d4bf2"
+  - id: "60173f23-e7be-4b15-be34-c1258096d0ef"
     alias: "Гостиная: выключить увлажнитель"
     description: >
       Выключает увлажнитель при достижении целевой влажности.
@@ -238,7 +243,7 @@ automation:
 
       ДЕЙСТВИЕ:
       • Выключает humidifier.xiaomi_cn_823407205_p3
-      • Обновляет input_datetime.humidifier_last_off (через helper_climate_common)
+      • Обновляет input_datetime.humidifier_last_off
 
       ВЗАИМОДЕЙСТВИЕ С ДРУГИМИ АВТОМАТИЗАЦИЯМИ:
       • Сохраняет состояние при shutdown HA (helper_climate_common)
@@ -251,20 +256,36 @@ automation:
         to: "off"
         for:
           minutes: 3
+
+    # Авто-режим должен быть включён
     condition:
       - condition: state
         entity_id: input_boolean.livingroom_humidifier_auto
         state: "on"
-      - condition: template
-        value_template: >-
-          {% set last_on = states('input_datetime.humidifier_last_on') %}
-          {% if last_on in ['unknown','unavailable'] %}
+
+    action:
+      - wait_template: >-
+          {% set last_on_state = states('input_datetime.humidifier_last_on') %}
+          {% if last_on_state in ['unknown','unavailable',''] %}
             true
           {% else %}
-            {% set minutes_on = (as_timestamp(now()) - as_timestamp(last_on)) / 60 %}
-            {{ minutes_on >= states('input_number.livingroom_hum_min_on_min') | int }}
+            {% set last_on = last_on_state | as_timestamp %}
+            {% set min_on = states('input_number.livingroom_hum_min_on_min') | int(0) %}
+            {% if last_on is none %}
+              true
+            {% else %}
+              {% set minutes_on = (as_timestamp(now()) - last_on) / 60 %}
+              {{ minutes_on >= min_on }}
+            {% endif %}
           {% endif %}
-    action:
+        timeout: "03:00:00"
+        continue_on_timeout: true
+      - condition: state
+        entity_id: input_boolean.livingroom_humidifier_auto
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.livingroom_need_humidify
+        state: "off"
       - service: humidifier.turn_off
         target:
           entity_id: humidifier.xiaomi_cn_823407205_p3
@@ -364,7 +385,16 @@ automation:
       АВТОМАТИЧЕСКИЙ СБРОС:
       • Когда вода доливается → устройство продолжает работу
       • Флаг humidifier_low_water_notified сбрасывается автоматически
+
+      ЗАЩИТА ОТ ЛОЖНЫХ СРАБАТЫВАНИЙ:
+      • Проверяет флаг xiaomi_home_integration_unstable
+      • Если интеграция нестабильна → игнорирует событие
+      • Предотвращает спам-уведомления при проблемах с соединением
     triggers:
       - trigger: state
         entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
+    conditions:
+      - condition: state
+        entity_id: input_boolean.xiaomi_home_integration_unstable
+        state: "off"
     actions: []

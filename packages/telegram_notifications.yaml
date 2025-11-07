@@ -23,6 +23,10 @@
 #    • Доступных обновлениях компонентов/плагинов.
 #    • Необходимости замены фильтра в кондиционере.
 #
+# ВАЖНО:
+# Везде ниже используется notify-сущность notify.telegram_user_id.
+# ЗАМЕНИТЕ её на фактическую сущность, созданную интеграцией Telegram Bot
+# (Инструменты разработчика → Состояния → фильтр notify.*).
 ################################################################################
 
 ##############################################################################
@@ -38,8 +42,8 @@ script:
     description: "Формирует и отправляет прогноз погоды указанному получателю"
     fields:
       recipient:
-        description: "Получатель (например, notify.master)"
-        example: "notify.master"
+        description: "Сущность notify.* (например, notify.telegram_bot_5861567452_382517)"
+        example: "notify.telegram_bot_5861567452_382517"
         required: true
     sequence:
       # Сначала получаем прогноз через сервис
@@ -102,8 +106,10 @@ script:
             {% elif cond == 'lightning' or current_condition == 'гроза' %}⚡
             {% else %}🌈{% endif %}
 
-      # Отправляем сообщение
-      - service: "{{ recipient }}"
+      # Отправляем сообщение через новый универсальный сервис notify.send_message
+      - action: notify.send_message
+        target:
+          entity_id: "{{ recipient }}"
         data:
           title: "{{ title }}"
           message: >-
@@ -156,7 +162,7 @@ automation:
     actions:
       - action: script.telegram_send_weather_forecast
         data:
-          recipient: notify.master
+          recipient: notify.telegram_bot_5861567452_382517
 
   # ----------------------------------------------------------------------------
   # Уведомление: Открытие входной двери
@@ -179,7 +185,9 @@ automation:
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: "⚠️ <b>Открытие входной двери!</b> 🔓"
 
@@ -211,7 +219,9 @@ automation:
         entity_id: input_boolean.doorbell_spam_guard
         state: "off"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: "⚠️ <b>Кто-то звонит в дверь</b>"
       - action: input_boolean.turn_on
@@ -233,14 +243,19 @@ automation:
       - trigger: homeassistant
         event: start
     actions:
-      - action: notify.master
+      - variables:
+          ha_start_text: >
+            {{ ["Home assistant запущена!", "Home assistant теперь работает!", "Home assistant has begun!", "HA запущен!"] | random }}
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
-          message: >
-            {{ ["Home assistant started!", "Home assistant is running now!", "Home assistant has begun!", "HA has started!"] | random }}
-          data:
-            photo:
-              - file: "/config/www/images/notify_alert/ha_wakeup.png"
-                caption: "{{ ['Home assistant started!', 'Home assistant is running now!', 'Home assistant has begun!', 'HA has started!'] | random }}"
+          message: "⚠️ {{ ha_start_text }}"
+      # - action: telegram_bot.send_photo
+      #   data:
+      #     file: "/config/www/images/notify_alert/ha_wakeup.png"
+      #     caption: "{{ ha_start_text }}"
+      # при необходимости можно добавить parse_mode: html
 
   # ----------------------------------------------------------------------------
   # Уведомление: Сервер отключён
@@ -253,14 +268,18 @@ automation:
       - trigger: homeassistant
         event: shutdown
     actions:
-      - action: notify.master
+      - variables:
+          ha_shutdown_text: >
+            {{ ['Home Assistant выключен', 'Выключение Home Assistant', 'HA будет отключён'] | random }}
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
-          message: >
-            {{ ['Home Assistant shutdown', 'Shutdown of Home Assistant', 'HA has been shut down'] | random }}
-          data:
-            photo:
-              - file: "/config/www/images/notify_alert/ha_shutdown.png"
-                caption: "{{ ['Home Assistant shutdown', 'Shutdown of Home Assistant', 'HA has been shut down'] | random }}"
+          message: "⚠️ {{ ha_shutdown_text }}"
+      # - action: telegram_bot.send_photo
+      #   data:
+      #     file: "/config/www/images/notify_alert/ha_shutdown.png"
+      #     caption: "{{ ha_shutdown_text }}"
 
   # ----------------------------------------------------------------------------
   # Уведомление: Возможны обновления компонентов
@@ -285,7 +304,9 @@ automation:
           - update.ps5_mqtt_update
         to: "on"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: >
             {% set entity = trigger.to_state %}
@@ -316,7 +337,9 @@ automation:
         entity_id: input_boolean.system_startup_phase
         state: "off"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: "⚠️ <b>Массажёр нуждается в зарядке!</b>"
 
@@ -338,7 +361,9 @@ automation:
         entity_id: input_boolean.system_startup_phase
         state: "off"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: >-
             ⚠️ <b>Обнаружена проблема с жестким диском Proxmox!</b>
@@ -363,7 +388,9 @@ automation:
         entity_id: input_boolean.system_startup_phase
         state: "off"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: >-
             ⚠️ <b>Предупреждение: Высокая загрузка диска на Proxmox!</b>
@@ -387,7 +414,9 @@ automation:
         entity_id: input_boolean.system_startup_phase
         state: "off"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: >-
             🔄 <b>Доступны обновления для Proxmox!</b>
@@ -414,7 +443,9 @@ automation:
           t: "{{ states('sensor.strongbox_th_temperature') | float(0) | round(1) }}"
           dp: "{{ states('sensor.seif_tochka_rosy_c') | default(states('sensor.strongbox_th_temperature')) | float(0) | round(1) }}"
           ah: "{{ states('sensor.seif_absolyutnaya_vlazhnost_g_m3') | default(0) | float(0) | round(2) }}"
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: >-
             ⚠️ <b>Сейф: риск плесени</b>
@@ -444,7 +475,9 @@ automation:
       - variables:
           rh: "{{ states('sensor.strongbox_th_humidity') | float(0) | round(1) }}"
           t: "{{ states('sensor.strongbox_th_temperature') | float(0) | round(1) }}"
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: >-
             ✅ <b>Сейф: условия нормализованы</b>
@@ -469,7 +502,9 @@ automation:
         entity_id: input_boolean.air_filter_replace_notified
         state: "off"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: "⚠️ Очиститель воздуха: ресурс фильтра &lt; 10%."
       - action: input_boolean.turn_on
@@ -495,7 +530,9 @@ automation:
         entity_id: input_boolean.humidifier_filter_replace_notified
         state: "off"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: "⚠️ Увлажнитель: ресурс фильтра &lt; 10%."
       - action: input_boolean.turn_on
@@ -519,7 +556,9 @@ automation:
         entity_id: input_boolean.humidifier_low_water_notified
         state: "off"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_bot_5861567452_382517
         data:
           message: "💧 Увлажнитель: низкий уровень воды. Пожалуйста, долейте воду."
       - action: input_boolean.turn_on

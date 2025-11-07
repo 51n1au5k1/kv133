@@ -44,15 +44,27 @@
 
 # === ОБЩИЕ ТАЙМЕРЫ ===
 input_datetime:
-  # УВЛАЖНИТЕЛЬ
+  # --------------------------------------------------------------------------
+  # Время последнего включения увлажнителя
+  # --------------------------------------------------------------------------
+  # Используется для проверки минимального времени работы.
+  # Обновляется автоматически при каждом включении устройства.
   humidifier_last_on:
-    name: "Увлажнитель: последнее включение"
+    name: "Время последнего включения увлажнителя"
     has_date: true
     has_time: true
+    icon: mdi:clock-start
+
+  # --------------------------------------------------------------------------
+  # Время последнего выключения увлажнителя
+  # --------------------------------------------------------------------------
+  # Используется для проверки минимального времени простоя.
+  # Обновляется автоматически при каждом выключении устройства.
   humidifier_last_off:
-    name: "Увлажнитель: последнее выключение"
+    name: "Время последнего выключения увлажнителя"
     has_date: true
     has_time: true
+    icon: mdi:clock-end
 
   # ОЧИСТИТЕЛЬ
   air_purifier_last_on:
@@ -367,24 +379,34 @@ script:
       last_off_entity:
         description: "input_datetime последнего выключения"
         required: true
+      force_update:
+        description: "Перезаписать время даже если там уже есть значение"
+        required: false
     sequence:
       - variables:
           dev: "{{ device_on_entity }}"
           last_on: "{{ last_on_entity }}"
           last_off: "{{ last_off_entity }}"
+          force: "{{ force_update | default(false) }}"
       - choose:
+          # Устройство ВКЛЮЧЕНО → обновляем last_on
           - conditions:
               - condition: template
-                value_template: "{{ is_state(dev, 'on') }}"
+                value_template: >-
+                  {{ is_state(dev, 'on')
+                     and (force or states(last_on) in ['unknown','unavailable','']) }}
             sequence:
               - service: input_datetime.set_datetime
                 target:
                   entity_id: "{{ last_on }}"
                 data:
                   datetime: "{{ now().isoformat() }}"
+          # Устройство ВЫКЛЮЧЕНО → обновляем last_off
           - conditions:
               - condition: template
-                value_template: "{{ is_state(dev, 'off') }}"
+                value_template: >-
+                  {{ is_state(dev, 'off')
+                     and (force or states(last_off) in ['unknown','unavailable','']) }}
             sequence:
               - service: input_datetime.set_datetime
                 target:
@@ -422,6 +444,7 @@ automation:
           device_on_entity: humidifier.xiaomi_cn_823407205_p3
           last_on_entity: input_datetime.humidifier_last_on
           last_off_entity: input_datetime.humidifier_last_off
+          force_update: true
 
   # --------------------------------------------------------------------------
   # Очиститель: обновление таймеров
@@ -445,6 +468,7 @@ automation:
           device_on_entity: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
           last_on_entity: input_datetime.air_purifier_last_on
           last_off_entity: input_datetime.air_purifier_last_off
+          force_update: true
 
   # --------------------------------------------------------------------------
   # Инициализация таймеров при старте
@@ -464,11 +488,16 @@ automation:
         event: start
     action:
       - delay: "00:00:05"
+
+      # Увлажнитель: инициализировать таймеры, если они ещё пустые
       - service: script.climate_update_timers
         data:
           device_on_entity: humidifier.xiaomi_cn_823407205_p3
           last_on_entity: input_datetime.humidifier_last_on
           last_off_entity: input_datetime.humidifier_last_off
+          # force_update НЕ указываем → сохранённые значения не трогаем
+
+      # Очиститель: аналогично
       - service: script.climate_update_timers
         data:
           device_on_entity: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
