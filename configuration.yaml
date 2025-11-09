@@ -26,9 +26,10 @@ recorder: !include includes/recorder.yaml
 logger:
   default: error
   logs:
-    homeassistant.components.automation: warning
-    homeassistant.components.telegram_bot: info
-    homeassistant.components.notify: info
+    homeassistant.components.mqtt: error
+    homeassistant.components.automation: error
+    homeassistant.components.telegram_bot: error
+    homeassistant.components.notify: error
     homeassistant.components.sql: info
 # # Для мониторинга
 # influxdb:

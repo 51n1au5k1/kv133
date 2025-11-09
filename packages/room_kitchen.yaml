@@ -360,7 +360,25 @@ automation:
                   entity_id: light.kitchen_main_light
                   # АЛЬТЕРНАТИВА: если кнопка 2 управляет фартуком
                   # entity_id: light.kitchen_fartuh
-
+      # Логирование
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Кухня: переключение освещения выключателем."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            trigger_id={{ trigger.id | default('') }};
+            main={{ states('light.kitchen_main_light') }};
+            fartuh={{ states('light.kitchen_fartuh') }}
   # ==========================================================================
   # УПРАВЛЕНИЕ МИКРОКЛИМАТОМ И ВЫТЯЖКОЙ
   # ==========================================================================
@@ -436,7 +454,27 @@ automation:
           entity_id: timer.kitchen_notification_cooldown_timer
         data:
           duration: "{{ (states('input_number.kitchen_notification_cooldown_min') | float(30) * 60) | int }}"
-
+      # Логирование
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Кухня: голосовое уведомление о необходимости включить вытяжку."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            t_k={{ states('sensor.kitchen_th_temperature') }};
+            h_k={{ states('sensor.kitchen_th_humidity') }};
+            t_l={{ states('sensor.livingroom_average_temperature') }};
+            h_l={{ states('sensor.livingroom_average_humidity') }};
+            cooldown_min={{ states('input_number.kitchen_notification_cooldown_min') }}
   # --------------------------------------------------------------------------
   # Сброс флага антиспама при нормализации условий
   # --------------------------------------------------------------------------
@@ -470,9 +508,19 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.kitchen_fan_cool_down
-
+      # Логирование
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Кухня: сброшен флаг антиспама (условия нормализовались)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: "on"
+          trigger_to: "off"
+          extra: >-
+            fan_cool_down={{ states('input_boolean.kitchen_fan_cool_down') }}
   # --------------------------------------------------------------------------
-  # Гигиена: сброс флага при старте Home Assistant
+  # HELPER: сброс флага при старте Home Assistant
   # --------------------------------------------------------------------------
   - id: "10f4f44c-a559-4281-9a1b-18aac1fd845b"
     alias: "Кухня: сброс флага антиспама при старте HA"
@@ -504,7 +552,17 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.kitchen_fan_cool_down
-
+      # Логирование
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Кухня: сброс флага антиспама при старте HA (условия нормальные)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "homeassistant.start"
+          trigger_from: ""
+          trigger_to: "start"
+          extra: >-
+            need_vent={{ states('binary_sensor.kitchen_need_ventilation') }}
   # --------------------------------------------------------------------------
   # Автоматическое включение вытяжки
   # --------------------------------------------------------------------------
@@ -556,7 +614,21 @@ automation:
       - action: switch.turn_on
         target:
           entity_id: switch.sonoff_10024c81be
-
+      # Логирование
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Кухня: вытяжка включена автоматически (устойчивое превышение порогов)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: "off"
+          trigger_to: "on"
+          extra: >-
+            t_k={{ states('sensor.kitchen_th_temperature') }};
+            h_k={{ states('sensor.kitchen_th_humidity') }};
+            t_l={{ states('sensor.livingroom_average_temperature') }};
+            h_l={{ states('sensor.livingroom_average_humidity') }};
+            fan={{ states('switch.sonoff_10024c81be') }}
   # --------------------------------------------------------------------------
   # Запуск таймера задержки выключения вытяжки
   # --------------------------------------------------------------------------
@@ -608,7 +680,18 @@ automation:
           entity_id: timer.kitchen_fan_delay_timer
         data:
           duration: "{{ (states('input_number.kitchen_fan_delay_min') | float(1) * 60) | int }}"
-
+      # Логирование
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Кухня: запущен таймер задержки выключения вытяжки."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: "on"
+          trigger_to: "off"
+          extra: >-
+            delay_min={{ states('input_number.kitchen_fan_delay_min') }};
+            fan={{ states('switch.sonoff_10024c81be') }}
   # --------------------------------------------------------------------------
   # Выключение вытяжки по таймеру
   # --------------------------------------------------------------------------
@@ -661,3 +744,15 @@ automation:
       - action: switch.turn_off
         target:
           entity_id: switch.sonoff_10024c81be
+      # Логирование
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Кухня: вытяжка выключена по таймеру задержки."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: ""
+          trigger_to: "finished"
+          extra: >-
+            fan={{ states('switch.sonoff_10024c81be') }};
+            need_vent={{ states('binary_sensor.kitchen_need_ventilation') }}

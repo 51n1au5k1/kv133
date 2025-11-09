@@ -50,7 +50,7 @@ input_number:
   # ==========================================================================
   # ТЕМПЕРАТУРНЫЕ ПОРОГИ (ГИСТЕРЕЗИС)
   # ==========================================================================
-  
+
   server_temp_high_threshold:
     name: "Порог высокой температуры сервера (°C)"
     min: 25
@@ -70,7 +70,7 @@ input_number:
   # ==========================================================================
   # ТАЙМЕРЫ УПРАВЛЕНИЯ ВЕНТИЛЯТОРОМ
   # ==========================================================================
-  
+
   server_temp_off_persist_min:
     name: "Сервер: подтверждение низкой температуры (мин)"
     min: 5
@@ -97,7 +97,7 @@ binary_sensor:
       # ======================================================================
       # МОНИТОРИНГ ПРОФИЛАКТИКИ ИБП
       # ======================================================================
-      
+
       # ----------------------------------------------------------------------
       # Роутер на профилактике ИБП
       # ----------------------------------------------------------------------
@@ -137,7 +137,7 @@ binary_sensor:
       # ======================================================================
       # КОНТРОЛЬ ТЕМПЕРАТУРЫ С ГИСТЕРЕЗИСОМ
       # ======================================================================
-      
+
       # ----------------------------------------------------------------------
       # Высокая температура сервера (с гистерезисом)
       # ----------------------------------------------------------------------
@@ -244,27 +244,27 @@ automation:
     alias: "Сервер: недоступность розетки (отключение электричества)"
     description: >
       Отправляет уведомление при недоступности розеток ИБП.
-      
+
       ТРИГГЕР:
       • Розетка становится недоступной (unavailable) более 1 минуты
       • switch.my_multi_outlet_left (роутер)
       • switch.my_multi_outlet_right (Mini-PC)
-      
+
       УСЛОВИЯ:
       • Фаза запуска завершена (система инициализирована)
       • Режим тишины выключен (уведомления разрешены)
       • Кто-то дома (есть кому получить уведомление)
-      
+
       ДЕЙСТВИЯ:
       • Отправка уведомления мастеру
       • Запись в системный лог
-      
+
       ВОЗМОЖНЫЕ ПРИЧИНЫ НЕДОСТУПНОСТИ:
       • Отключение электричества
       • Разряд ИБП
       • Неисправность ИБП
       • Проблемы с сетевым подключением
-      
+
       ПРИМЕЧАНИЕ:
       • Задержка 1 минута защищает от ложных срабатываний
       • При восстановлении питания розетки автоматически станут доступны
@@ -288,26 +288,37 @@ automation:
         entity_id: binary_sensor.someone_is_home_2
         state: "on"
     actions:
-      - action: notify.master
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_master
         data:
           message: >
             ⚠️ Серверная: розетка недоступна!
-            
+
             Устройство: {{ state_attr(trigger.entity_id, 'friendly_name') }}
             Розетка: {{ trigger.entity_id }}
-            
-            Возможные причины:
-            • Отключение электричества
-            • Разряд ИБП
-            • Неисправность оборудования
-            
-            Проверьте состояние серверной!
       - action: system_log.write
         data:
           message: >
             Розетка {{ trigger.entity_id }} недоступна — уведомление отправлено.
           level: warning
-
+      # Логирование через универсальный скрипт
+      - action: script.log_helper_event
+        data:
+          level: warning
+          message: "Сервер: розетка недоступна — уведомление отправлено."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            friendly_name={{ state_attr(trigger.entity_id, 'friendly_name') | default('') }}
   # ==========================================================================
   # УПРАВЛЕНИЕ ТЕМПЕРАТУРОЙ И ВЕНТИЛЯТОРОМ
   # ==========================================================================
@@ -319,29 +330,29 @@ automation:
     alias: "Сервер: управление вентилятором по температуре"
     description: >
       Основная логика управления вентилятором серверной.
-      
+
       ТРИГГЕРЫ:
       • Температура поднялась выше порога (30°C, 2 мин)
       • Температура опустилась ниже порога (28°C)
-      
+
       УСЛОВИЯ:
       • Фаза запуска завершена
       • Датчик температуры доступен
-      
+
       ДЕЙСТВИЯ (при перегреве):
       • Немедленное включение вентилятора
       • Отмена всех таймеров (подтверждения и задержки)
       • Запись в лог
-      
+
       ДЕЙСТВИЯ (при охлаждении):
       • Запуск таймера подтверждения (30 мин)
       • Вентилятор продолжает работать
       • Запись в лог
-      
+
       РЕЖИМ:
       • restart — при повторном срабатывании перезапускается
       • Защищает от конфликтов при быстрых изменениях температуры
-      
+
       ЛОГИКА ГИСТЕРЕЗИСА:
       ┌────────────────────────────────────────┐
       │ 30°C ─────────────────────────────────│ ← Включение (ON)
@@ -385,20 +396,30 @@ automation:
                   entity_id:
                     - timer.server_temp_off_persist
                     - timer.server_fan_delay
-              
+
               # Включаем вентилятор немедленно
               - action: fan.turn_on
                 target:
                   entity_id: fan.server_fan
-              
+
               # Логирование
-              - action: system_log.write
+              - action: script.log_helper_event
                 data:
-                  message: >
-                    Вентилятор сервера включён
-                    (температура: {{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
-                    порог: {{ states('input_number.server_temp_high_threshold') }}°C).
                   level: info
+                  message: "Сервер: вентилятор включён (высокая температура)."
+                  source: "{{ this.entity_id }}"
+                  trigger_entity: "{{ trigger.entity_id | default('') }}"
+                  trigger_from: >-
+                    {{ trigger.from_state.state
+                       if trigger is defined and trigger.from_state is not none
+                       else '' }}
+                  trigger_to: >-
+                    {{ trigger.to_state.state
+                       if trigger is defined and trigger.to_state is not none
+                       else '' }}
+                  extra: >-
+                    temp={{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
+                    high={{ states('input_number.server_temp_high_threshold') }}°C
 
           # ====================================================================
           # СЦЕНАРИЙ 2: ТЕМПЕРАТУРА НИЗКАЯ → ЗАПУСТИТЬ ТАЙМЕР ПОДТВЕРЖДЕНИЯ
@@ -417,16 +438,26 @@ automation:
                 data:
                   duration: >
                     {{ (states('input_number.server_temp_off_persist_min') | float(30) * 60) | int }}
-              
+
               # Логирование
-              - action: system_log.write
+              - action: script.log_helper_event
                 data:
-                  message: >
-                    Запущен таймер подтверждения низкой температуры сервера
-                    (температура: {{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
-                    порог: {{ states('input_number.server_temp_low_threshold') }}°C,
-                    длительность: {{ states('input_number.server_temp_off_persist_min') }} мин).
                   level: info
+                  message: "Сервер: запущен таймер подтверждения низкой температуры."
+                  source: "{{ this.entity_id }}"
+                  trigger_entity: "{{ trigger.entity_id | default('') }}"
+                  trigger_from: >-
+                    {{ trigger.from_state.state
+                       if trigger is defined and trigger.from_state is not none
+                       else '' }}
+                  trigger_to: >-
+                    {{ trigger.to_state.state
+                       if trigger is defined and trigger.to_state is not none
+                       else '' }}
+                  extra: >-
+                    temp={{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
+                    low={{ states('input_number.server_temp_low_threshold') }}°C,
+                    duration_min={{ states('input_number.server_temp_off_persist_min') }}
 
   # --------------------------------------------------------------------------
   # Стабильная низкая температура → запуск задержки выключения
@@ -436,28 +467,28 @@ automation:
     description: >
       Таймер подтверждения завершён — температура стабильно низкая.
       Запускается финальный таймер задержки (grace period).
-      
+
       ТРИГГЕР:
       • Завершение таймера timer.server_temp_off_persist
-      
+
       УСЛОВИЯ:
       • Температура всё ещё низкая (binary_sensor.server_temp_high = off)
       • Вентилятор включён
-      
+
       ДЕЙСТВИЯ:
       • Запуск таймера задержки выключения (5 мин)
       • Запись в лог
-      
+
       НАЗНАЧЕНИЕ ЗАДЕРЖКИ:
       • Дополнительное охлаждение серверной
       • Защита от быстрого повторного нагрева
       • "Запас прочности" перед выключением вентилятора
-      
+
       ПОСЛЕДОВАТЕЛЬНОСТЬ ТАЙМЕРОВ:
       1. Температура падает → таймер подтверждения (30 мин)
       2. Таймер завершён → таймер задержки (5 мин)
       3. Задержка завершена → выключение вентилятора
-      
+
       Итого: 35 минут от начала охлаждения до выключения вентилятора
     mode: single
     triggers:
@@ -480,15 +511,19 @@ automation:
         data:
           duration: >
             {{ (states('input_number.server_fan_delay_min') | float(5) * 60) | int }}
-      
+
       # Логирование
-      - action: system_log.write
+      - action: script.log_helper_event
         data:
-          message: >
-            Запущен таймер задержки выключения вентилятора сервера
-            (температура: {{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
-            длительность: {{ states('input_number.server_fan_delay_min') }} мин).
           level: info
+          message: "Сервер: запущен таймер задержки выключения вентилятора."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.event.entity_id if trigger is defined and trigger.event is defined else '' }}"
+          trigger_from: ""
+          trigger_to: ""
+          extra: >-
+            temp={{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
+            delay_min={{ states('input_number.server_fan_delay_min') }}
 
   # --------------------------------------------------------------------------
   # Финал: выключение вентилятора после задержки
@@ -497,17 +532,17 @@ automation:
     alias: "Сервер: выключение вентилятора по таймеру"
     description: >
       Финальное выключение вентилятора после полного цикла охлаждения.
-      
+
       ТРИГГЕР:
       • Завершение таймера timer.server_fan_delay
-      
+
       УСЛОВИЯ:
       • Температура всё ещё низкая (финальная проверка)
-      
+
       ДЕЙСТВИЯ:
       • Выключение вентилятора
       • Запись в лог с указанием текущей температуры
-      
+
       ПОЛНЫЙ ЦИКЛ ОХЛАЖДЕНИЯ:
       ┌────────────────────────────────────────────────────────────┐
       │ 1. Температура > 30°C (2 мин устойчиво)                   │
@@ -522,7 +557,7 @@ automation:
       │    ↓                                                       │
       │ 6. Выключение вентилятора ← ВЫ ЗДЕСЬ                      │
       └────────────────────────────────────────────────────────────┘
-      
+
       ЗАЩИТА ОТ ПРЕЖДЕВРЕМЕННОГО ВЫКЛЮЧЕНИЯ:
       • Если температура поднялась на любом этапе — таймеры отменяются
       • Вентилятор продолжает работать до нового цикла охлаждения
@@ -541,14 +576,20 @@ automation:
       - action: fan.turn_off
         target:
           entity_id: fan.server_fan
-      
+
       # Логирование с детальной информацией
-      - action: system_log.write
+      - action: script.log_helper_event
         data:
-          message: >
-            Вентилятор сервера выключен по таймеру.
-            Текущая температура: {{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C.
-            Порог выключения: {{ states('input_number.server_temp_low_threshold') }}°C.
-            Общее время работы: ~{{ (states('input_number.server_temp_off_persist_min') | float(30) 
-            + states('input_number.server_fan_delay_min') | float(5)) | int }} мин.
           level: info
+          message: "Сервер: вентилятор выключен по таймеру."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.event.entity_id if trigger is defined and trigger.event is defined else '' }}"
+          trigger_from: ""
+          trigger_to: ""
+          extra: >-
+            temp={{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
+            low={{ states('input_number.server_temp_low_threshold') }}°C,
+            total_min={{ (
+              (states('input_number.server_temp_off_persist_min') | float(30))
+              + (states('input_number.server_fan_delay_min') | float(5))
+            ) | round(1) }}

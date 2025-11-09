@@ -134,7 +134,7 @@ script:
           target: "{{ chat_id }}"
       - service: system_log.write
         data:
-          message: "Toggle {{ entity }} через Telegram (user: {{ user_id | default('unknown') }})"
+          message: "Telegram Bot: Toggle {{ entity }} by user: {{ user_id | default('unknown') }}"
           level: info
 
   send_main_menu:
@@ -153,7 +153,10 @@ script:
                 [ ["🛁 Ванная", "/bathroom_control"], ["🚪 Коридор", "/hallway_control"] ],
                 [ ["🖥 Система", "/system_control"] ]
               ] | tojson }}
-
+      - service: system_log.write
+        data:
+          message: "Telegram Bot: Send Main Menu to {{ user_id | default('unknown') }}"
+          level: info
   send_livingroom_status:
     alias: "Send Living Room Status"
     sequence:
@@ -181,7 +184,10 @@ script:
                   ["🔴 Правая розетка" if is_state("switch.livingroom_socket_r", "off") else "🟢 Правая розетка", "/toggle_livingroom_socket_r"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/livingroom_control"] ]
               ] | tojson }}
-
+      - service: system_log.write
+        data:
+          message: "Telegram Bot: Send Living Room Status to {{ user_id | default('unknown') }}"
+          level: info
   send_workroom_status:
     alias: "Send Workroom Status"
     sequence:
@@ -201,7 +207,10 @@ script:
                 [ ["🔴 Розетка отпаривателя" if is_state("switch.smart_plug_in_unit_vykliuchatel", "off") else "🟢 Розетка отпаривателя", "/toggle_workroom_plug"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/workroom_control"] ]
               ] | tojson }}
-
+      - service: system_log.write
+        data:
+          message: "Telegram Bot: Send Workroom Status to {{ user_id | default('unknown') }}"
+          level: info
   send_bedroom_status:
     alias: "Send Bedroom Status"
     sequence:
@@ -224,7 +233,10 @@ script:
                   ["🔴 Розетка Справа" if is_state("switch.0x00158d0002530ba3", "off") else "🟢 Розетка Справа", "/toggle_bedroom_plug_right"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/bedroom_control"] ]
               ] | tojson }}
-
+      - service: system_log.write
+        data:
+          message: "Telegram Bot: Send Bedroom Status to {{ user_id | default('unknown') }}"
+          level: info
   send_bathroom_status:
     alias: "Send Bathroom Status"
     sequence:
@@ -244,7 +256,10 @@ script:
                 [ ["🔴 Вытяжка" if is_state("fan.bathroom_relay_l1", "off") else "🟢 Вытяжка", "/toggle_bathroom_fan"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/bathroom_control"] ]
               ] | tojson }}
-
+      - service: system_log.write
+        data:
+          message: "Telegram Bot: Send Bathroom Status to {{ user_id | default('unknown') }}"
+          level: info
   send_kitchen_status:
     alias: "Send Kitchen Status"
     sequence:
@@ -264,7 +279,10 @@ script:
                   ["🔴 Подсветка" if is_state("switch.kitchen_fartuh", "off") else "🟢 Подсветка", "/toggle_kitchen_fartuh"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/kitchen_control"] ]
               ] | tojson }}
-
+      - service: system_log.write
+        data:
+          message: "Telegram Bot: Send Kitchen Status to {{ user_id | default('unknown') }}"
+          level: info
   send_hallway_status:
     alias: "Send Hallway Status"
     sequence:
@@ -281,7 +299,10 @@ script:
                   ["🔴 Шлюз" if is_state("light.gateway_light_04cf8c977cdd", "off") else "🟢 Шлюз", "/toggle_hallway_gateway_light"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/hallway_control"] ]
               ] | tojson }}
-
+      - service: system_log.write
+        data:
+          message: "Telegram Bot: Send Hallway Status to {{ user_id | default('unknown') }}"
+          level: info
   send_system_status:
     alias: "Send System Status"
     sequence:
@@ -310,7 +331,10 @@ script:
                 [ ["⚠️ Перезагрузить систему", "/confirm_reboot"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/system_control"] ]
               ] | tojson }}
-
+      - service: system_log.write
+        data:
+          message: "Telegram Bot: Send System Status to {{ user_id | default('unknown') }}"
+          level: info
   send_pve_status:
     alias: "Отправить статус PVE"
     sequence:
@@ -324,14 +348,14 @@ script:
             <b>📊 Запущенные ВМ:</b> {{ states('sensor.node_pve_virtual_machines_running') | default('N/A') }}
             <b>📊 Запущенные контейнеры:</b> {{ states('sensor.node_pve_containers_running') | default('N/A') }}
 
-            <b>🔥 Нагрузка CPU:</b>
-            <b>VM HAOS12:</b> {{ states('sensor.qemu_haos12_3_100_cpu_used_normalized') | float(0) | round(0) }}% | {{ states('sensor.qemu_haos12_3_100_cpu_used') | float(0) | round(0) }}%
-            <b>LXC MariaDB:</b> {{ states('sensor.lxc_mariadb_101_cpu_used_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_mariadb_101_cpu_used') | float(0) | round(0) }}%
-            <b>LXC Jackett:</b> {{ states('sensor.lxc_jackett_102_cpu_used_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_jackett_102_cpu_used') | float(0) | round(0) }}%
-            <b>LXC Jellyfin:</b> {{ states('sensor.lxc_jellyfin_103_cpu_used_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_jellyfin_103_cpu_used') | float(0) | round(0) }}%
-            <b>LXC Deluge:</b> {{ states('sensor.lxc_deluge_104_cpu_used_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_deluge_104_cpu_used') | float(0) | round(0) }}%
-            <b>LXC TorrServer:</b> {{ states('sensor.lxc_debian_105_cpu_used_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_debian_105_cpu_used') | float(0) | round(0) }}%
-            <b>LXC Minim Server:</b> {{ states('sensor.lxc_minim_107_cpu_used_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_minim_107_cpu_used') | float(0) | round(0) }}%
+            <b>🔥 Нагрузка CPU (нормализовано | сырое):</b>
+            <b>VM HAOS12:</b> {{ states('sensor.cpu_vm_haos12_normalized') | float(0) | round(0) }}% | {{ states('sensor.qemu_haos12_3_100_cpu_used') | float(0) | round(0) }}%
+            <b>LXC MariaDB:</b> {{ states('sensor.cpu_lxc_mariadb_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_mariadb_101_cpu_used') | float(0) | round(0) }}%
+            <b>LXC Jackett:</b> {{ states('sensor.cpu_lxc_jackett_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_jackett_102_cpu_used') | float(0) | round(0) }}%
+            <b>LXC Jellyfin:</b> {{ states('sensor.cpu_lxc_jellyfin_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_jellyfin_103_cpu_used') | float(0) | round(0) }}%
+            <b>LXC Deluge:</b> {{ states('sensor.cpu_lxc_deluge_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_deluge_104_cpu_used') | float(0) | round(0) }}%
+            <b>LXC TorrServer:</b> {{ states('sensor.cpu_lxc_torrserver_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_debian_105_cpu_used') | float(0) | round(0) }}%
+            <b>LXC Minim Server:</b> {{ states('sensor.cpu_lxc_minim_music_server_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_minim_107_cpu_used') | float(0) | round(0) }}%
 
           inline_keyboard: >
             {{ [
@@ -345,7 +369,10 @@ script:
                 [ ["🟢 MinimServer", "/start_minimserver"], ["🔴 Остановить", "/stop_minimserver"], ["🔄 Перезагрузка", "/reboot_minimserver"] ],
                 [ ["👈 В меню", "/menu_back"] ]
               ] | tojson }}
-
+      - service: system_log.write
+        data:
+          message: "Telegram Bot: Send PVE Status to {{ user_id | default('unknown') }}"
+          level: info
   pve_action:
     alias: "PVE Action with Delay"
     fields:
@@ -360,7 +387,10 @@ script:
       - service: script.send_pve_status
         data:
           target: "{{ chat_id }}"
-
+      - service: system_log.write
+        data:
+          message: "Telegram Bot: PVE Action with {{ button }} by {{ user_id | default('unknown') }}"
+          level: info
 automation:
   # Приветственное сообщение (при вводе команды /start)
   - id: "telegram_bot_start"

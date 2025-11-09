@@ -489,10 +489,24 @@ automation:
               entity_id: timer.timer_hallway
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Прихожая: свет переключён кнопкой."
           level: info
+          message: "Прихожая: свет переключён кнопкой."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            timer={{ states('input_number.hallway_timer_duration') }}min;
+            light_main={{ states('light.hallway_switch') }};
+            gateway={{ states('light.gateway_light_04cf8c977cdd') }}
 
   # --------------------------------------------------------------------------
   # Автоматическое включение света при открытии двери
@@ -555,10 +569,23 @@ automation:
           duration: "{{ (states('input_number.hallway_timer_duration') | float(1.5) * 60) | int }}"
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Прихожая: свет включён при открытии двери."
           level: info
+          message: "Прихожая: свет включён при открытии двери."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            door={{ states('binary_sensor.hallway_door_contact') }};
+            timer={{ states('input_number.hallway_timer_duration') }}min
 
   # --------------------------------------------------------------------------
   # Включение подсветки при движении и низкой освещённости
@@ -627,10 +654,24 @@ automation:
           duration: "{{ (states('input_number.hallway_timer_duration') | float(1.5) * 60) | int }}"
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Прихожая: подсветка включена при движении (низкая освещённость)."
           level: info
+          message: "Прихожая: подсветка включена при движении (низкая освещённость)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            lux={{ states('sensor.illumination_04cf8c977cdd') }};
+            timer={{ states('input_number.hallway_timer_duration') }}min;
+            cleaning={{ states('input_boolean.bathroom_cleaning_mode') }}
 
   # --------------------------------------------------------------------------
   # Запуск таймера при отсутствии движения
@@ -689,10 +730,25 @@ automation:
           duration: "{{ (states('input_number.hallway_timer_duration') | float(1.5) * 60) | int }}"
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Прихожая: таймер запущен (отсутствие движения)."
           level: info
+          message: "Прихожая: таймер запущен (отсутствие движения)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            timer={{ states('input_number.hallway_timer_duration') }}min;
+            light_main={{ states('light.hallway_switch') }};
+            gateway={{ states('light.gateway_light_04cf8c977cdd') }};
+            cleaning={{ states('input_boolean.bathroom_cleaning_mode') }}
 
   # --------------------------------------------------------------------------
   # Перезапуск таймера при обнаружении движения
@@ -763,10 +819,25 @@ automation:
           duration: "{{ (states('input_number.hallway_timer_duration') | float(1.5) * 60) | int }}"
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Прихожая: таймер перезапущен (новое движение)."
           level: info
+          message: "Прихожая: таймер перезапущен (новое движение)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            timer={{ states('input_number.hallway_timer_duration') }}min;
+            light_main={{ states('light.hallway_switch') }};
+            gateway={{ states('light.gateway_light_04cf8c977cdd') }};
+            cleaning={{ states('input_boolean.bathroom_cleaning_mode') }}
 
   # --------------------------------------------------------------------------
   # Выключение света по таймеру
@@ -807,10 +878,16 @@ automation:
             - light.gateway_light_04cf8c977cdd
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Прихожая: свет выключен по таймеру."
           level: info
+          message: "Прихожая: свет выключен по таймеру."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: ""
+          trigger_to: "finished"
+          extra: >-
+            cleaning={{ states('input_boolean.bathroom_cleaning_mode') }}
 
   # ==========================================================================
   # "ОКНО ПРИБЫТИЯ" — УМНОЕ ВКЛЮЧЕНИЕ СВЕТА ПРИ ВОЗВРАЩЕНИИ ДОМОЙ
@@ -923,10 +1000,23 @@ automation:
           duration: "{{ (states('input_number.hallway_timer_duration') | float(1.5) * 60) | int }}"
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Прихожая: первый вход/присутствие после прибытия домой (полное освещение)."
           level: info
+          message: "Прихожая: первый вход/присутствие после прибытия домой (полное освещение)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            arrival_window={{ states('timer.timer_arrival_window') }};
+            timer={{ states('input_number.hallway_timer_duration') }}min
 
   # --------------------------------------------------------------------------
   # Открытие "окна прибытия" при возвращении домой
@@ -968,11 +1058,21 @@ automation:
           entity_id: timer.timer_arrival_window
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Прихожая: прибытие домой — открыто окно 10 минут."
           level: info
-
+          message: "Прихожая: прибытие домой — открыто окно 10 минут."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: "arrival_window_duration=10min"
   # ==========================================================================
   # УВЕДОМЛЕНИЯ
   # ==========================================================================
@@ -1078,21 +1178,34 @@ automation:
               entity_id: light.working_room_led
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Прихожая: обработан звонок в дверь (мигание выполнено)."
           level: info
+          message: "Прихожая: обработан звонок в дверь (мигание выполнено)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            blink_count={{ states('input_number.hallway_blink_count') }};
+            led_prev={{ 'on' if was_on_led else 'off' }}
 
   # --------------------------------------------------------------------------
   # Попытка снятия уличной кнопки
   # --------------------------------------------------------------------------
   - id: "26345165-2c00-489c-af7b-c4b92110c937"
-    alias: "Прихожая: попытка снятия уличной кнопки"
+    alias: "Прихожая: попытка снятия наружной кнопки"
     description: >
       Отправляет уведомления при обнаружении попытки снять кнопку.
 
       ТРИГГЕР:
-      • Уличная кнопка (device_id: d2c3001cdc59660c456de45aec09da91)
+      • Наружная кнопка (device_id: d2c3001cdc59660c456de45aec09da91)
       • Действие: встряхивание (shake)
 
       УСЛОВИЯ:
@@ -1126,15 +1239,28 @@ automation:
       - service: script.yandex_tts_shaking_outdoor_button
 
       # Telegram-уведомление
-      - service: notify.master
+      - service: notify.send_message
+        target:
+          entity_id: notify.telegram_master
         data:
-          message: "⚠️ ВНИМАНИЕ! Кто-то пытается снять уличную кнопку! 🛑"
+          message: "⚠️ ВНИМАНИЕ! Кто-то пытается снять наружную кнопку! 🛑"
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Обнаружена попытка снятия уличной кнопки."
           level: warning
+          message: "Обнаружена попытка снятия наружной кнопки."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: ""
 
   # ==========================================================================
   # МОНИТОРИНГ МИКРОКЛИМАТА СЕЙФА
@@ -1198,14 +1324,24 @@ automation:
           entity_id: input_boolean.strongbox_hum_text_notified
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: >
-            Сейф: подтверждён риск плесени.
-            RH: {{ states('sensor.strongbox_humidity_smoothed') }}%,
-            T: {{ states('sensor.strongbox_temperature_smoothed') }}°C,
-            DP: {{ states('sensor.strongbox_dew_point_c') }}°C.
           level: warning
+          message: "Сейф: подтверждён риск плесени."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            RH={{ states('sensor.strongbox_humidity_smoothed') }}%;
+            T={{ states('sensor.strongbox_temperature_smoothed') }}°C;
+            DP={{ states('sensor.strongbox_dew_point_c') }}°C
 
   # --------------------------------------------------------------------------
   # Подтверждение нормализации условий в сейфе
@@ -1269,10 +1405,21 @@ automation:
           entity_id: input_boolean.strongbox_hum_text_notified
 
       # Логирование
-      - service: system_log.write
+      - action: script.log_helper_event
         data:
-          message: >
-            Сейф: условия нормализованы.
-            RH: {{ states('sensor.strongbox_humidity_smoothed') }}%,
-            T: {{ states('sensor.strongbox_temperature_smoothed') }}°C.
           level: info
+          message: "Сейф: условия нормализованы."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            RH={{ states('sensor.strongbox_humidity_smoothed') }}%;
+            T={{ states('sensor.strongbox_temperature_smoothed') }}°C;
+            resolve_min={{ states('input_number.strongbox_resolve_min') }}

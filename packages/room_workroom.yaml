@@ -58,7 +58,22 @@ automation:
       - action: light.toggle
         target:
           entity_id: light.working_room_led
-
+      # Логирование через универсальный скрипт
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Кабинет: подсветка рабочей зоны переключена кнопкой."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: ""
   # ----------------------------------------------------------------------------
   # 2) Уведомление: Температура в мастерской ниже 20° (усреднённое значение)
   # ----------------------------------------------------------------------------
@@ -125,7 +140,9 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - action: notify.master
+              - action: notify.send_message
+                target:
+                  entity_id: notify.telegram_master
                 data:
                   message: "{{ telegram_message }}"
 
@@ -134,11 +151,26 @@ automation:
         target:
           entity_id: input_boolean.workroom_th_notice
 
-      # лог
-      - action: system_log.write
+      # логирование через универсальный скрипт
+      - action: script.log_helper_event
         data:
-          message: "Отправлено уведомление о низкой температуре в мастерской (<20°C)."
           level: info
+          message: "Мастерская: отправлено уведомление о низкой температуре (<20°C)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            temp={{ states('sensor.srednee_znachenie_temperatury_v_masterskoi_2') }}°C,
+            door={{ states('binary_sensor.masterskaia_balkon_contact') }},
+            silent_mode={{ states('input_boolean.silent_mode') }},
+            master={{ states('person.master') }}
 
   # ----------------------------------------------------------------------------
   # 3) HELPER: Сброс уведомлений о температуре в мастерской
@@ -155,3 +187,20 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.workroom_th_notice
+      # логирование сброса антиспам-флага
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Мастерская: флаг антиспама уведомлений о температуре сброшен."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            reset_delay_min={{ states('input_number.low_th_notification_reset_period') | default('') }}

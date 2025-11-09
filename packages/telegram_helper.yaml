@@ -51,7 +51,7 @@ automation:
     actions:
       - service: system_log.write
         data:
-          level: warning
+          level: debug
           message: >
             DEBUG telegram_command trigger keys:
             platform={{ trigger.platform }}

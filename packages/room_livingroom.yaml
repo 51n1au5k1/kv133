@@ -65,7 +65,23 @@ automation:
       - action: light.toggle
         target:
           entity_id: light.livingroom_scone_dimmer
-
+      # Логирование
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Гостиная: переключение бра (кнопка 4, одиночное нажатие)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            bra={{ states('light.livingroom_scone_dimmer') }}
   # --------------------------------------------------------------------------
   # Переключение люстры (кнопка 3, одиночное нажатие)
   # --------------------------------------------------------------------------
@@ -100,7 +116,23 @@ automation:
       - action: light.toggle
         target:
           entity_id: light.livingroom_main_switch_left
-
+      # Логирование
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Гостиная: переключение люстры (кнопка 3, одиночное нажатие)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            chandelier={{ states('light.livingroom_main_switch_left') }}
   # --------------------------------------------------------------------------
   # Переключение правого света (кнопка 4, двойное нажатие)
   # --------------------------------------------------------------------------
@@ -139,3 +171,20 @@ automation:
       - action: light.toggle
         target:
           entity_id: light.livingroom_main_switch_right
+      # Логирование
+      - action: script.log_helper_event
+        data:
+          level: info
+          message: "Гостиная: переключение правого света (кнопка 4, двойное нажатие)."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            right={{ states('light.livingroom_main_switch_right') }}

@@ -202,46 +202,50 @@ automation:
           minutes: 1
 
     conditions:
-      # Телефон реально заряжается
       - condition: state
         entity_id: sensor.pixel_8_pro_battery_state
         state: "charging"
 
-      # Только ночной интервал
       - condition: time
         after: "01:00:00"
         before: "07:00:00"
 
-      # Home Assistant полностью загружен
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
 
-      # Валидные данные по батарее
       - condition: template
         value_template: >-
           {{ states('sensor.pixel_8_pro_battery_level') not in ['unknown', 'unavailable', ''] }}
 
-      # Розетка включена
       - condition: state
         entity_id: switch.0x00158d0002530ba3
         state: "on"
 
     actions:
-      # Отключаем розетку
       - action: switch.turn_off
         target:
           entity_id: switch.0x00158d0002530ba3
 
-      # Логирование
-      - action: system_log.write
+      - action: script.log_helper_event
         data:
+          level: info
           message: >-
             Спальня: розетка зарядки отключена (полная батарея ночью).
-            Заряд: {{ states('sensor.pixel_8_pro_battery_level') }}%.
-            Состояние: {{ states('sensor.pixel_8_pro_battery_state') }}.
-            Время: {{ now().strftime('%H:%M:%S') }}.
-          level: info
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            battery={{ states('sensor.pixel_8_pro_battery_level') }}%;
+            state={{ states('sensor.pixel_8_pro_battery_state') }};
+            time={{ now().strftime('%H:%M:%S') }}
 
   # ==========================================================================
   # КОНТРОЛЬ ТЕМПЕРАТУРЫ
@@ -307,46 +311,39 @@ automation:
     mode: single
     triggers:
       - trigger: numeric_state
-        entity_id: sensor.bedroom_temperatura_sglazhennaia
+        entity_id: sensor.temperatura_v_spalne_sglazhennaia
         below: 20
         for:
           minutes: 1
 
     conditions:
-      # Home Assistant полностью загружен
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
 
-      # Не в тихом режиме
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
 
-      # Балкон/окно открыто
       - condition: state
         entity_id: binary_sensor.0x00158d00044d5d11_contact
         state: "on"
 
-      # Кто-то дома
       - condition: state
         entity_id: binary_sensor.someone_is_home_2
         state: "on"
 
-      # Сенсор доступен
       - condition: template
         value_template: >-
-          {{ states('sensor.bedroom_temperatura_sglazhennaia') not in ['unknown', 'unavailable', ''] }}
+          {{ states('sensor.temperatura_v_spalne_sglazhennaia') not in ['unknown', 'unavailable', ''] }}
 
-      # Антиспам
       - condition: state
         entity_id: input_boolean.bedroom_th_notice
         state: "off"
 
     actions:
-      # Формируем текст
       - variables:
-          current_temp: "{{ states('sensor.bedroom_temperatura_sglazhennaia') }}"
+          current_temp: "{{ states('sensor.temperatura_v_spalne_sglazhennaia') }}"
           message: >-
             ❄️ Низкая температура в спальне!
 
@@ -355,41 +352,48 @@ automation:
 
             Рекомендация: закройте балкон/окно в спальне.
 
-      # Telegram + голос (если мастер дома)
       - choose:
           - conditions:
               - condition: state
                 entity_id: person.master
                 state: "home"
             sequence:
-              # Telegram
-              - action: notify.master
+              - action: notify.send_message
+                target:
+                  entity_id: notify.telegram_master
                 data:
                   message: "{{ message }}"
 
-              # Голос
               - action: script.yandex_tts_temp_status
 
-      # Флаг антиспама
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.bedroom_th_notice
 
-      # Таймер сброса
       - action: timer.start
         target:
           entity_id: timer.bedroom_th_notice_reset
         data:
           duration: "00:{{ states('input_number.bedroom_low_th_notification_reset_period') | int(20) }}:00"
 
-      # Логирование
-      - action: system_log.write
+      - action: script.log_helper_event
         data:
-          message: >-
-            Спальня: уведомление о низкой температуре отправлено.
-            Температура: {{ current_temp }}°C.
-            Балкон: {{ states('binary_sensor.0x00158d00044d5d11_contact') }}.
           level: info
+          message: "Спальня: уведомление о низкой температуре отправлено."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            temp={{ current_temp }}°C;
+            balcony={{ states('binary_sensor.0x00158d00044d5d11_contact') }};
+            cooldown={{ states('input_number.bedroom_low_th_notification_reset_period') }}min
 
   # ==========================================================================
   # ВСПОМОГАТЕЛЬНЫЕ АВТОМАТИЗАЦИИ
@@ -425,13 +429,16 @@ automation:
           entity_id: timer.bedroom_th_notice_reset
 
     actions:
-      # Сбрасываем флаг
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.bedroom_th_notice
 
-      # Логирование
-      - action: system_log.write
+      - action: script.log_helper_event
         data:
-          message: "Спальня: флаг антиспама уведомлений о температуре сброшен."
           level: info
+          message: "Спальня: флаг антиспама уведомлений о температуре сброшен."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "timer.bedroom_th_notice_reset"
+          trigger_from: "active"
+          trigger_to: "finished"
+          extra: ""

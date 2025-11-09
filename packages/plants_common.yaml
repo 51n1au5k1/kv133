@@ -19,6 +19,7 @@ input_number:
 ##############################################################################
 #                                  СКРИПТЫ
 ##############################################################################
+
 script:
   plant_notify:
     description: "Отправляет уведомление о состоянии растения"
@@ -39,61 +40,69 @@ script:
         description: "Единица измерения"
         example: "%"
     sequence:
+      # Основное уведомление (фото + подпись по типу)
       - choose:
           # Уведомление о поливе
           - conditions:
               - condition: template
                 value_template: "{{ notification_type == 'watering' }}"
             sequence:
-              - service: notify.master
+              - service: telegram_bot.send_photo
                 data:
-                  message: "Необходимо полить {{ plant_name }}: влажность почвы {{ value }}{{ unit }}."
-                  data:
-                    photo:
-                      - file: "/config/www/images/plants_alerts/{{ plant_name_latin }}_soil.webp"
-                        caption: "Необходимо полить {{ plant_name }}!"
+                  file: "/config/www/images/plants_alerts/{{ plant_name_latin }}_soil.webp"
+                  caption: "Необходимо полить {{ plant_name }}: влажность почвы {{ value }}{{ unit }}."
           # Уведомление о температуре
           - conditions:
               - condition: template
                 value_template: "{{ notification_type == 'temperature' }}"
             sequence:
-              - service: notify.master
+              - service: telegram_bot.send_photo
                 data:
-                  message: "{{ plant_name }} необходимо поставить в тёплое место, температура почвы {{ value }}{{ unit }}."
-                  data:
-                    photo:
-                      - file: "/config/www/images/plants_alerts/{{ plant_name_latin }}_cold.webp"
-                        caption: "{{ plant_name }} необходимо поставить в тёплое место!"
+                  file: "/config/www/images/plants_alerts/{{ plant_name_latin }}_cold.webp"
+                  caption: "{{ plant_name }} необходимо поставить в тёплое место, температура {{ value }}{{ unit }}."
           # Уведомление об освещенности
           - conditions:
               - condition: template
                 value_template: "{{ notification_type == 'illuminance' }}"
             sequence:
-              - service: notify.master
+              - service: telegram_bot.send_photo
                 data:
-                  message: "{{ plant_name }} необходимо переместить в более освещенное место, освещенность {{ value }}{{ unit }}."
-                  data:
-                    photo:
-                      - file: "/config/www/images/plants_alerts/{{ plant_name_latin }}_light.webp"
-                        caption: "{{ plant_name }} нуждается в лучшем освещении!"
+                  file: "/config/www/images/plants_alerts/{{ plant_name_latin }}_light.webp"
+                  caption: "{{ plant_name }} необходимо переместить в более освещенное место, освещенность {{ value }}{{ unit }}."
+
       # Запись в историю уведомлений (храним последние 5)
       - variables:
           existing_history: >-
             {% set hist = states('input_text.notification_history_' ~ plant_name_latin) %}
             {{ '' if hist in ['unknown','unavailable', None] else hist }}
+
       - service: input_text.set_value
         data:
           entity_id: "input_text.notification_history_{{ plant_name_latin }}"
           value: >-
             {% set lines = existing_history.splitlines() if existing_history else [] %}
-            {% set type_ru =
-              'поливе' if notification_type == 'watering'
+            {% set type_ru = 'поливе' if notification_type == 'watering'
               else 'температуре' if notification_type == 'temperature'
-              else 'освещенности' %}
-            {% set new_entry = "Уведомление о " ~ type_ru ~
-                               " (" ~ plant_name ~ "): " ~ now().strftime('%Y-%m-%d %H:%M:%S') %}
+              else 'освещенности' if notification_type == 'illuminance'
+              else 'неизвестном типе' %}
+            {% set new_entry = "Уведомление о " ~ type_ru ~ " (" ~ plant_name ~ "): " ~ now().strftime('%Y-%m-%d %H:%M:%S') %}
             {% set keep = (lines[-4:] if lines|length >= 4 else lines) %}
             {{ (keep + [new_entry]) | join('\n') }}
+
+      # Логируем факт отправки / попытки отправки уведомления
+      - service: script.log_helper_event
+        data:
+          level: >-
+            {% set allowed = ['watering','temperature','illuminance'] %}
+            {{ 'info' if notification_type in allowed else 'error' }}
+          message: >-
+            plant_notify: обработано уведомление для {{ plant_name }} (тип={{ notification_type }}).
+          source: "{{ this.entity_id }}"
+          trigger_entity: ""
+          trigger_from: ""
+          trigger_to: ""
+          extra: >-
+            plant_latin={{ plant_name_latin }}; type={{ notification_type }}; value={{ value }}{{ unit }}; history_entity=input_text.notification_history_{{ plant_name_latin }}
 
   plant_check_conditions:
     description: "Проверяет условия ухода за растением и отправляет уведомления при необходимости"
@@ -117,113 +126,222 @@ script:
           temperature_notification: "input_datetime.last_{{ plant_name_latin }}_temperature_notification"
           illuminance_notification: "input_datetime.last_{{ plant_name_latin }}_illuminance_notification"
           cooldown_sec: "{{ (states('input_number.plants_notification_cooldown_hours') | float(3) * 3600) | int }}"
+
       # Полив
       - if:
-          condition: template
-          value_template: >-
-            {% set last = states(soil_notification) %}
-            {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
-            {{ is_state(soil_entity,'on') and (now().timestamp() - last_ts) > cooldown_sec }}
+          - condition: template
+            value_template: >-
+              {% set last = states(soil_notification) %}
+              {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
+              {{ is_state(soil_entity,'on') and (now().timestamp() - last_ts) > cooldown_sec }}
         then:
-          - service: script.plant_notify
-            data:
-              plant_name: "{{ plant_name }}"
-              plant_name_latin: "{{ plant_name_latin }}"
-              notification_type: "watering"
-              value: "{{ states(soil_sensor) }}"
-              unit: "%"
-          - service: input_datetime.set_datetime
-            data:
-              entity_id: "{{ soil_notification }}"
-              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - choose:
+              # Ошибка: сенсор влажности недоступен/некорректен
+              - conditions:
+                  - condition: template
+                    value_template: >-
+                      {{ states(soil_sensor) in ['unknown','unavailable','none',''] }}
+                sequence:
+                  - service: script.log_helper_event
+                    data:
+                      level: error
+                      message: >-
+                        plant_check_conditions: невозможно отправить уведомление о поливе — {{ soil_sensor }} имеет некорректное состояние.
+                      source: "{{ this.entity_id }}"
+                      trigger_entity: "{{ soil_entity }}"
+                      trigger_from: ""
+                      trigger_to: "{{ states(soil_entity) }}"
+                      extra: >-
+                        plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ soil_sensor }}; value={{ states(soil_sensor) }}
+            default:
+              # Нормальный кейс: отправляем уведомление
+              - service: script.plant_notify
+                data:
+                  plant_name: "{{ plant_name }}"
+                  plant_name_latin: "{{ plant_name_latin }}"
+                  notification_type: "watering"
+                  value: "{{ states(soil_sensor) }}"
+                  unit: "%"
+              - service: input_datetime.set_datetime
+                data:
+                  entity_id: "{{ soil_notification }}"
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - service: script.log_helper_event
+                data:
+                  level: info
+                  message: "plant_check_conditions: отправлено уведомление о поливе."
+                  source: "{{ this.entity_id }}"
+                  trigger_entity: "{{ soil_entity }}"
+                  trigger_from: "off"
+                  trigger_to: "on"
+                  extra: >-
+                    plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ soil_sensor }}; value={{ states(soil_sensor) }}%
+
       # Температура
       - if:
-          condition: template
-          value_template: >-
-            {% set last = states(temperature_notification) %}
-            {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
-            {{ is_state(temperature_entity,'on') and (now().timestamp() - last_ts) > cooldown_sec }}
+          - condition: template
+            value_template: >-
+              {% set last = states(temperature_notification) %}
+              {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
+              {{ is_state(temperature_entity,'on') and (now().timestamp() - last_ts) > cooldown_sec }}
         then:
-          - service: script.plant_notify
-            data:
-              plant_name: "{{ plant_name }}"
-              plant_name_latin: "{{ plant_name_latin }}"
-              notification_type: "temperature"
-              value: "{{ states(temperature_sensor) }}"
-              unit: "°C"
-          - service: input_datetime.set_datetime
-            data:
-              entity_id: "{{ temperature_notification }}"
-              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - choose:
+              # Ошибка: температурный сенсор недоступен/некорректен
+              - conditions:
+                  - condition: template
+                    value_template: >-
+                      {{ states(temperature_sensor) in ['unknown','unavailable','none',''] }}
+                sequence:
+                  - service: script.log_helper_event
+                    data:
+                      level: error
+                      message: >-
+                        plant_check_conditions: невозможно отправить уведомление о температуре — {{ temperature_sensor }} имеет некорректное состояние.
+                      source: "{{ this.entity_id }}"
+                      trigger_entity: "{{ temperature_entity }}"
+                      trigger_from: ""
+                      trigger_to: "{{ states(temperature_entity) }}"
+                      extra: >-
+                        plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ temperature_sensor }}; value={{ states(temperature_sensor) }}
+            default:
+              # Нормальный кейс: отправляем уведомление
+              - service: script.plant_notify
+                data:
+                  plant_name: "{{ plant_name }}"
+                  plant_name_latin: "{{ plant_name_latin }}"
+                  notification_type: "temperature"
+                  value: "{{ states(temperature_sensor) }}"
+                  unit: "°C"
+              - service: input_datetime.set_datetime
+                data:
+                  entity_id: "{{ temperature_notification }}"
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - service: script.log_helper_event
+                data:
+                  level: info
+                  message: "plant_check_conditions: отправлено уведомление о температуре."
+                  source: "{{ this.entity_id }}"
+                  trigger_entity: "{{ temperature_entity }}"
+                  trigger_from: "off"
+                  trigger_to: "on"
+                  extra: >-
+                    plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ temperature_sensor }}; value={{ states(temperature_sensor) }}°C
+
       # Освещенность (если сенсор поддерживается)
       - if:
-          condition: template
-          value_template: >-
-            {% set last = states(illuminance_notification) %}
-            {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
-            {{ is_state(illuminance_entity,'on')
-               and states(illuminance_sensor) not in ['unknown','unavailable','none']
-               and (now().timestamp() - last_ts) > cooldown_sec }}
+          - condition: template
+            value_template: >-
+              {% set last = states(illuminance_notification) %}
+              {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
+              {{ is_state(illuminance_entity,'on') and (now().timestamp() - last_ts) > cooldown_sec }}
         then:
-          - service: script.plant_notify
-            data:
-              plant_name: "{{ plant_name }}"
-              plant_name_latin: "{{ plant_name_latin }}"
-              notification_type: "illuminance"
-              value: "{{ states(illuminance_sensor) }}"
-              unit: "лк"
-          - service: input_datetime.set_datetime
-            data:
-              entity_id: "{{ illuminance_notification }}"
-              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - choose:
+              # Ошибка: сенсор освещённости недоступен/некорректен
+              - conditions:
+                  - condition: template
+                    value_template: >-
+                      {{ states(illuminance_sensor) in ['unknown','unavailable','none',''] }}
+                sequence:
+                  - service: script.log_helper_event
+                    data:
+                      level: error
+                      message: >-
+                        plant_check_conditions: невозможно отправить уведомление об освещённости — {{ illuminance_sensor }} имеет некорректное состояние.
+                      source: "{{ this.entity_id }}"
+                      trigger_entity: "{{ illuminance_entity }}"
+                      trigger_from: ""
+                      trigger_to: "{{ states(illuminance_entity) }}"
+                      extra: >-
+                        plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ illuminance_sensor }}; value={{ states(illuminance_sensor) }}
+            default:
+              # Нормальный кейс: отправляем уведомление
+              - service: script.plant_notify
+                data:
+                  plant_name: "{{ plant_name }}"
+                  plant_name_latin: "{{ plant_name_latin }}"
+                  notification_type: "illuminance"
+                  value: "{{ states(illuminance_sensor) }}"
+                  unit: "лк"
+              - service: input_datetime.set_datetime
+                data:
+                  entity_id: "{{ illuminance_notification }}"
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - service: script.log_helper_event
+                data:
+                  level: info
+                  message: "plant_check_conditions: отправлено уведомление об освещённости."
+                  source: "{{ this.entity_id }}"
+                  trigger_entity: "{{ illuminance_entity }}"
+                  trigger_from: "off"
+                  trigger_to: "on"
+                  extra: >-
+                    plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ illuminance_sensor }}; value={{ states(illuminance_sensor) }}лк
 
   check_all_plants:
     description: "Проверяет состояние всех растений и отправляет уведомления при необходимости"
     sequence:
       - variables:
           cooldown_sec: "{{ (states('input_number.plants_notification_cooldown_hours') | float(3) * 3600) | int }}"
+
       # Фикус (если есть хотя бы одно условие и кулдаун истёк — запускаем общий чек)
       - if:
-          condition: template
-          value_template: >-
-            {% set soil = is_state('binary_sensor.plant_alert_ficus_lyrata_soil','on') %}
-            {% set temp = is_state('binary_sensor.plant_alert_ficus_lyrata_temperature','on') %}
-            {% set last_soil = states('input_datetime.last_ficus_lyrata_soil_notification') %}
-            {% set last_temp = states('input_datetime.last_ficus_lyrata_temperature_notification') %}
-            {% set lts = as_timestamp(last_soil) if last_soil not in ['unknown','unavailable','none'] else 0 %}
-            {% set ltt = as_timestamp(last_temp) if last_temp not in ['unknown','unavailable','none'] else 0 %}
-            {{ (soil and (now().timestamp()-lts) > cooldown_sec) or
-               (temp and (now().timestamp()-ltt) > cooldown_sec) }}
+          - condition: template
+            value_template: >-
+              {% set soil = is_state('binary_sensor.plant_alert_ficus_lyrata_soil','on') %}
+              {% set temp = is_state('binary_sensor.plant_alert_ficus_lyrata_temperature','on') %}
+              {% set last_soil = states('input_datetime.last_ficus_lyrata_soil_notification') %}
+              {% set last_temp = states('input_datetime.last_ficus_lyrata_temperature_notification') %}
+              {% set lts = as_timestamp(last_soil) if last_soil not in ['unknown','unavailable','none'] else 0 %}
+              {% set ltt = as_timestamp(last_temp) if last_temp not in ['unknown','unavailable','none'] else 0 %}
+              {{ (soil and (now().timestamp()-lts) > cooldown_sec) or (temp and (now().timestamp()-ltt) > cooldown_sec) }}
         then:
           - service: script.plant_check_conditions
             data:
               plant_name: "Фикус лировидный"
               plant_name_latin: "ficus_lyrata"
+
       # Молочай (почва/температура/освещённость)
       - if:
-          condition: template
-          value_template: >-
-            {% set soil = is_state('binary_sensor.plant_alert_euphorbia_leuconeura_soil','on') %}
-            {% set temp = is_state('binary_sensor.plant_alert_euphorbia_leuconeura_temperature','on') %}
-            {% set lux  = is_state('binary_sensor.plant_alert_euphorbia_leuconeura_illuminance','on') %}
-            {% set ls = states('input_datetime.last_euphorbia_leuconeura_soil_notification') %}
-            {% set lt = states('input_datetime.last_euphorbia_leuconeura_temperature_notification') %}
-            {% set ll = states('input_datetime.last_euphorbia_leuconeura_illuminance_notification') %}
-            {% set lss = as_timestamp(ls) if ls not in ['unknown','unavailable','none'] else 0 %}
-            {% set ltt = as_timestamp(lt) if lt not in ['unknown','unavailable','none'] else 0 %}
-            {% set lll = as_timestamp(ll) if ll not in ['unknown','unavailable','none'] else 0 %}
-            {{ (soil and (now().timestamp()-lss) > cooldown_sec) or
-               (temp and (now().timestamp()-ltt) > cooldown_sec) or
-               (lux  and (now().timestamp()-lll) > cooldown_sec) }}
+          - condition: template
+            value_template: >-
+              {% set soil = is_state('binary_sensor.plant_alert_euphorbia_leuconeura_soil','on') %}
+              {% set temp = is_state('binary_sensor.plant_alert_euphorbia_leuconeura_temperature','on') %}
+              {% set lux = is_state('binary_sensor.plant_alert_euphorbia_leuconeura_illuminance','on') %}
+              {% set ls = states('input_datetime.last_euphorbia_leuconeura_soil_notification') %}
+              {% set lt = states('input_datetime.last_euphorbia_leuconeura_temperature_notification') %}
+              {% set ll = states('input_datetime.last_euphorbia_leuconeura_illuminance_notification') %}
+              {% set lss = as_timestamp(ls) if ls not in ['unknown','unavailable','none'] else 0 %}
+              {% set ltt = as_timestamp(lt) if lt not in ['unknown','unavailable','none'] else 0 %}
+              {% set lll = as_timestamp(ll) if ll not in ['unknown','unavailable','none'] else 0 %}
+              {{ (soil and (now().timestamp()-lss) > cooldown_sec)
+                 or (temp and (now().timestamp()-ltt) > cooldown_sec)
+                 or (lux and (now().timestamp()-lll) > cooldown_sec) }}
         then:
           - service: script.plant_check_conditions
             data:
               plant_name: "Молочай"
               plant_name_latin: "euphorbia_leuconeura"
 
+      # Лог самого общего чека
+      - service: script.log_helper_event
+        data:
+          level: info
+          message: "check_all_plants: выполнена проверка всех растений."
+          source: "{{ this.entity_id }}"
+          trigger_entity: ""
+          trigger_from: ""
+          trigger_to: ""
+          extra: >-
+            ficus_soil_alert={{ is_state('binary_sensor.plant_alert_ficus_lyrata_soil','on') }};
+            ficus_temp_alert={{ is_state('binary_sensor.plant_alert_ficus_lyrata_temperature','on') }};
+            euphorbia_soil_alert={{ is_state('binary_sensor.plant_alert_euphorbia_leuconeura_soil','on') }};
+            euphorbia_temp_alert={{ is_state('binary_sensor.plant_alert_euphorbia_leuconeura_temperature','on') }};
+            euphorbia_lux_alert={{ is_state('binary_sensor.plant_alert_euphorbia_leuconeura_illuminance','on') }}
+
 ##############################################################################
-#                             АВТОМАТИЗАЦИИ
+#                               АВТОМАТИЗАЦИИ
 ##############################################################################
+
 automation:
   - id: "plant-send-pending-notifications"
     alias: "Растения: Отправка отложенных уведомлений при возвращении домой"
@@ -240,3 +358,12 @@ automation:
     action:
       - delay: "00:01:00" # даём сенсорам обновиться
       - service: script.check_all_plants
+      - service: script.log_helper_event
+        data:
+          level: info
+          message: "Растения: выполнен чек отложенных уведомлений при возвращении домой."
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: "{{ trigger.from_state.state | default('') }}"
+          trigger_to: "{{ trigger.to_state.state | default('') }}"
+          extra: "context=return_home"

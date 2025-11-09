@@ -64,6 +64,7 @@ include:
     # Системные и специфические сенсоры
     - sensor.maria_db_size
     # Климатические кастомные (точные имена)
+    - sensor.vlazhnost_vannoi_usrednennaia_za_1_minutu
     - sensor.uroven_co2_sglazhennyi
     - sensor.bathroom_filtered_humidity
     - sensor.temperatura_v_gostinnoi_sglazhennaia
@@ -86,6 +87,8 @@ include:
     - input_number.livingroom_pm25_low
     - input_number.livingroom_air_min_on_min
     - input_number.livingroom_air_min_off_min
+    # Тестирование
+    - sensor.vremia_raboty_televizora_segodnia
 
 # --- Теперь определяем, что мы ТОЧНО НЕ хотим хранить ---
 exclude:
