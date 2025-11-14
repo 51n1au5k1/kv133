@@ -227,26 +227,6 @@ automation:
         target:
           entity_id: switch.0x00158d0002530ba3
 
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: >-
-            Спальня: розетка зарядки отключена (полная батарея ночью).
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: >-
-            {{ trigger.from_state.state
-               if trigger is defined and trigger.from_state is not none
-               else '' }}
-          trigger_to: >-
-            {{ trigger.to_state.state
-               if trigger is defined and trigger.to_state is not none
-               else '' }}
-          extra: >-
-            battery={{ states('sensor.pixel_8_pro_battery_level') }}%;
-            state={{ states('sensor.pixel_8_pro_battery_state') }};
-            time={{ now().strftime('%H:%M:%S') }}
-
   # ==========================================================================
   # КОНТРОЛЬ ТЕМПЕРАТУРЫ
   # ==========================================================================
@@ -376,25 +356,6 @@ automation:
         data:
           duration: "00:{{ states('input_number.bedroom_low_th_notification_reset_period') | int(20) }}:00"
 
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Спальня: уведомление о низкой температуре отправлено."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: >-
-            {{ trigger.from_state.state
-               if trigger is defined and trigger.from_state is not none
-               else '' }}
-          trigger_to: >-
-            {{ trigger.to_state.state
-               if trigger is defined and trigger.to_state is not none
-               else '' }}
-          extra: >-
-            temp={{ current_temp }}°C;
-            balcony={{ states('binary_sensor.0x00158d00044d5d11_contact') }};
-            cooldown={{ states('input_number.bedroom_low_th_notification_reset_period') }}min
-
   # ==========================================================================
   # ВСПОМОГАТЕЛЬНЫЕ АВТОМАТИЗАЦИИ
   # ==========================================================================
@@ -432,13 +393,3 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.bedroom_th_notice
-
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Спальня: флаг антиспама уведомлений о температуре сброшен."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "timer.bedroom_th_notice_reset"
-          trigger_from: "active"
-          trigger_to: "finished"
-          extra: ""

@@ -89,21 +89,6 @@ script:
             {% set keep = (lines[-4:] if lines|length >= 4 else lines) %}
             {{ (keep + [new_entry]) | join('\n') }}
 
-      # Логируем факт отправки / попытки отправки уведомления
-      - service: script.log_helper_event
-        data:
-          level: >-
-            {% set allowed = ['watering','temperature','illuminance'] %}
-            {{ 'info' if notification_type in allowed else 'error' }}
-          message: >-
-            plant_notify: обработано уведомление для {{ plant_name }} (тип={{ notification_type }}).
-          source: "{{ this.entity_id }}"
-          trigger_entity: ""
-          trigger_from: ""
-          trigger_to: ""
-          extra: >-
-            plant_latin={{ plant_name_latin }}; type={{ notification_type }}; value={{ value }}{{ unit }}; history_entity=input_text.notification_history_{{ plant_name_latin }}
-
   plant_check_conditions:
     description: "Проверяет условия ухода за растением и отправляет уведомления при необходимости"
     fields:
@@ -142,17 +127,12 @@ script:
                     value_template: >-
                       {{ states(soil_sensor) in ['unknown','unavailable','none',''] }}
                 sequence:
-                  - service: script.log_helper_event
+                  - service: system_log.write
                     data:
-                      level: error
+                      level: warning
+                      logger: "plants.soil"
                       message: >-
-                        plant_check_conditions: невозможно отправить уведомление о поливе — {{ soil_sensor }} имеет некорректное состояние.
-                      source: "{{ this.entity_id }}"
-                      trigger_entity: "{{ soil_entity }}"
-                      trigger_from: ""
-                      trigger_to: "{{ states(soil_entity) }}"
-                      extra: >-
-                        plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ soil_sensor }}; value={{ states(soil_sensor) }}
+                        "Растения: {{ plant_name }} — сенсор влажности {{ soil_sensor }} недоступен или имеет некорректное значение"
             default:
               # Нормальный кейс: отправляем уведомление
               - service: script.plant_notify
@@ -166,16 +146,6 @@ script:
                 data:
                   entity_id: "{{ soil_notification }}"
                   datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
-              - service: script.log_helper_event
-                data:
-                  level: info
-                  message: "plant_check_conditions: отправлено уведомление о поливе."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ soil_entity }}"
-                  trigger_from: "off"
-                  trigger_to: "on"
-                  extra: >-
-                    plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ soil_sensor }}; value={{ states(soil_sensor) }}%
 
       # Температура
       - if:
@@ -192,17 +162,12 @@ script:
                     value_template: >-
                       {{ states(temperature_sensor) in ['unknown','unavailable','none',''] }}
                 sequence:
-                  - service: script.log_helper_event
+                  - service: system_log.write
                     data:
-                      level: error
+                      level: warning
+                      logger: "plants.temperature"
                       message: >-
-                        plant_check_conditions: невозможно отправить уведомление о температуре — {{ temperature_sensor }} имеет некорректное состояние.
-                      source: "{{ this.entity_id }}"
-                      trigger_entity: "{{ temperature_entity }}"
-                      trigger_from: ""
-                      trigger_to: "{{ states(temperature_entity) }}"
-                      extra: >-
-                        plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ temperature_sensor }}; value={{ states(temperature_sensor) }}
+                        "Растения: {{ plant_name }} — температурный сенсор {{ temperature_sensor }} недоступен или имеет некорректное значение"
             default:
               # Нормальный кейс: отправляем уведомление
               - service: script.plant_notify
@@ -216,16 +181,6 @@ script:
                 data:
                   entity_id: "{{ temperature_notification }}"
                   datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
-              - service: script.log_helper_event
-                data:
-                  level: info
-                  message: "plant_check_conditions: отправлено уведомление о температуре."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ temperature_entity }}"
-                  trigger_from: "off"
-                  trigger_to: "on"
-                  extra: >-
-                    plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ temperature_sensor }}; value={{ states(temperature_sensor) }}°C
 
       # Освещенность (если сенсор поддерживается)
       - if:
@@ -242,17 +197,12 @@ script:
                     value_template: >-
                       {{ states(illuminance_sensor) in ['unknown','unavailable','none',''] }}
                 sequence:
-                  - service: script.log_helper_event
+                  - service: system_log.write
                     data:
-                      level: error
+                      level: warning
+                      logger: "plants.illuminance"
                       message: >-
-                        plant_check_conditions: невозможно отправить уведомление об освещённости — {{ illuminance_sensor }} имеет некорректное состояние.
-                      source: "{{ this.entity_id }}"
-                      trigger_entity: "{{ illuminance_entity }}"
-                      trigger_from: ""
-                      trigger_to: "{{ states(illuminance_entity) }}"
-                      extra: >-
-                        plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ illuminance_sensor }}; value={{ states(illuminance_sensor) }}
+                        "Растения: {{ plant_name }} — сенсор освещённости {{ illuminance_sensor }} недоступен или имеет некорректное значение"
             default:
               # Нормальный кейс: отправляем уведомление
               - service: script.plant_notify
@@ -266,16 +216,6 @@ script:
                 data:
                   entity_id: "{{ illuminance_notification }}"
                   datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
-              - service: script.log_helper_event
-                data:
-                  level: info
-                  message: "plant_check_conditions: отправлено уведомление об освещённости."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ illuminance_entity }}"
-                  trigger_from: "off"
-                  trigger_to: "on"
-                  extra: >-
-                    plant={{ plant_name }}; plant_latin={{ plant_name_latin }}; sensor={{ illuminance_sensor }}; value={{ states(illuminance_sensor) }}лк
 
   check_all_plants:
     description: "Проверяет состояние всех растений и отправляет уведомления при необходимости"
@@ -322,22 +262,6 @@ script:
               plant_name: "Молочай"
               plant_name_latin: "euphorbia_leuconeura"
 
-      # Лог самого общего чека
-      - service: script.log_helper_event
-        data:
-          level: info
-          message: "check_all_plants: выполнена проверка всех растений."
-          source: "{{ this.entity_id }}"
-          trigger_entity: ""
-          trigger_from: ""
-          trigger_to: ""
-          extra: >-
-            ficus_soil_alert={{ is_state('binary_sensor.plant_alert_ficus_lyrata_soil','on') }};
-            ficus_temp_alert={{ is_state('binary_sensor.plant_alert_ficus_lyrata_temperature','on') }};
-            euphorbia_soil_alert={{ is_state('binary_sensor.plant_alert_euphorbia_leuconeura_soil','on') }};
-            euphorbia_temp_alert={{ is_state('binary_sensor.plant_alert_euphorbia_leuconeura_temperature','on') }};
-            euphorbia_lux_alert={{ is_state('binary_sensor.plant_alert_euphorbia_leuconeura_illuminance','on') }}
-
 ##############################################################################
 #                               АВТОМАТИЗАЦИИ
 ##############################################################################
@@ -358,12 +282,3 @@ automation:
     action:
       - delay: "00:01:00" # даём сенсорам обновиться
       - service: script.check_all_plants
-      - service: script.log_helper_event
-        data:
-          level: info
-          message: "Растения: выполнен чек отложенных уведомлений при возвращении домой."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
-          extra: "context=return_home"

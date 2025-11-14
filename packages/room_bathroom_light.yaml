@@ -68,19 +68,6 @@ input_number:
   # ==========================================================================
   # Длительность таймера автоматического выключения
   # ==========================================================================
-  # НАЗНАЧЕНИЕ:
-  # • Настройка времени до автовыключения после прекращения движения
-  # • Можно регулировать из интерфейса HA
-  #
-  # ДИАПАЗОН:
-  # • От 0.5 минуты (30 секунд) до 10 минут
-  # • Шаг: 0.5 минуты
-  # • По умолчанию: 3 минуты
-  #
-  # ИСПОЛЬЗОВАНИЕ:
-  # • В скриптах: динамическое вычисление длительности таймера
-  # • Позволяет адаптировать работу под свои привычки
-  # ==========================================================================
   bathroom_timer_duration:
     name: "Ванная: таймер автовыключения света (мин)"
     min: 0.5
@@ -95,24 +82,6 @@ input_number:
 ##############################################################################
 
 light:
-  # ==========================================================================
-  # Точечные светильники Philips Downlight (5 штук)
-  # ==========================================================================
-  # НАЗНАЧЕНИЕ:
-  # • Основное точечное освещение ванной
-  # • Регулируемая яркость (0-100%)
-  # • Интеграция через Xiaomi Miio (локальное управление)
-  #
-  # РАСПОЛОЖЕНИЕ:
-  # • R1, R2: правая сторона
-  # • L1: левая сторона (используется для ночного режима)
-  # • C1, C2: центральная зона
-  #
-  # РЕЖИМЫ:
-  # • Дневной: 100% яркости (все 5 спотов)
-  # • Ночной: 10% яркости (только L1)
-  # ==========================================================================
-
   - platform: xiaomi_miio_philipslight
     name: Bathroom_spot_r1_philips
     host: !secret bathroom_spot_r1_ip
@@ -148,18 +117,6 @@ light:
 ##############################################################################
 
 group:
-  # ==========================================================================
-  # Группа: ВСЕ светильники ванной
-  # ==========================================================================
-  # ВКЛЮЧАЕТ:
-  # • 5 точечных спотов Philips
-  # • 1 основной потолочный свет (relay L2)
-  #
-  # НАЗНАЧЕНИЕ:
-  # • Массовое управление всем освещением
-  # • Проверка состояния "хотя бы один свет включён"
-  # • Выключение всего освещения одной командой
-  # ==========================================================================
   bathroom_all_lights:
     name: "Ванная: все светильники"
     entities:
@@ -170,13 +127,6 @@ group:
       - light.bathroom_spot_c2_philips
       - light.bathroom_relay_l2
 
-  # ==========================================================================
-  # Группа: Точечные светильники
-  # ==========================================================================
-  # НАЗНАЧЕНИЕ:
-  # • Управление только спотами (без основного света)
-  # • Используется в дневном режиме
-  # ==========================================================================
   bathroom_spots:
     name: "Ванная: точечные светильники"
     entities:
@@ -186,13 +136,6 @@ group:
       - light.bathroom_spot_c1_philips
       - light.bathroom_spot_c2_philips
 
-  # ==========================================================================
-  # Группа: Ночное освещение
-  # ==========================================================================
-  # НАЗНАЧЕНИЕ:
-  # • Мягкий свет для ночного режима
-  # • Только спот L1 на 10% яркости
-  # ==========================================================================
   bathroom_night_lights:
     name: "Ванная: ночное освещение"
     entities:
@@ -205,22 +148,6 @@ group:
 binary_sensor:
   - platform: template
     sensors:
-      # ======================================================================
-      # Ночной режим освещения
-      # ======================================================================
-      # ЛОГИКА:
-      # • ON: время между 00:30 и 06:00
-      # • OFF: остальное время
-      #
-      # НАЗНАЧЕНИЕ:
-      # • Автоматический выбор режима освещения
-      # • Мягкий свет ночью (10% яркости, 1 спот)
-      # • Яркий свет днём (100% яркости, все споты + основной свет)
-      #
-      # ИСПОЛЬЗОВАНИЕ:
-      # • В автоматизациях включения света
-      # • В скриптах переключения режимов
-      # ======================================================================
       is_night_mode:
         unique_id: bathroom_is_night_mode
         friendly_name: "Ванная: ночной режим освещения"
@@ -240,30 +167,9 @@ binary_sensor:
 ##############################################################################
 
 timer:
-  # ==========================================================================
-  # Таймер автоматического выключения света
-  # ==========================================================================
-  # НАЗНАЧЕНИЕ:
-  # • Автоматическое выключение света при отсутствии движения
-  # • Экономия электроэнергии
-  # • Комфорт (не нужно помнить о выключении света)
-  #
-  # ДЛИТЕЛЬНОСТЬ:
-  # • По умолчанию: 3 минуты
-  # • Настраивается через input_number.bathroom_timer_duration
-  # • Динамически устанавливается в скриптах
-  #
-  # ЛОГИКА РАБОТЫ:
-  # 1. Движение прекратилось более 1 минуты → Запуск таймера
-  # 2. Новое движение обнаружено → Отмена таймера
-  # 3. Таймер истёк → Выключение света
-  #
-  # ИСКЛЮЧЕНИЯ:
-  # • Режим уборки активен → Таймер не запускается
-  # ==========================================================================
   timer_bathroom:
     name: "Ванная: таймер автовыключения"
-    duration: "00:03:00" # Базовое значение, переопределяется динамически
+    duration: "00:03:00"
     icon: mdi:timer-off-outline
 
 ##############################################################################
@@ -271,28 +177,11 @@ timer:
 ##############################################################################
 
 script:
-  # ==========================================================================
-  # Переключение ночного режима (toggle)
-  # ==========================================================================
-  # НАЗНАЧЕНИЕ:
-  # • Ручное переключение ночного освещения с выключателя
-  # • Если свет включён → выключить
-  # • Если свет выключен → включить ночной режим (1 спот, 10%)
-  #
-  # ЛОГИКА:
-  # • Проверка: горит ли ночной спот (L1) ИЛИ основной свет (L2)
-  # • Если да → выключаем ВСЁ
-  # • Если нет → включаем ночной режим + запускаем таймер
-  #
-  # ИСПОЛЬЗОВАНИЕ:
-  # • MQTT-выключатель (левая кнопка) в ночное время
-  # ==========================================================================
   bathroom_toggle_night_mode:
     alias: "Ванная: переключение ночного режима"
     icon: mdi:weather-night
     sequence:
       - choose:
-          # УСЛОВИЕ: Хотя бы один свет включён
           - conditions:
               - condition: or
                 conditions:
@@ -303,144 +192,54 @@ script:
                     entity_id: light.bathroom_relay_l2
                     state: "on"
             sequence:
-              # → ВЫКЛЮЧАЕМ ВСЁ
               - action: light.turn_off
                 target:
                   entity_id: group.bathroom_all_lights
 
-              # Логирование через универсальный скрипт
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Ванная: ночной режим выключен (toggle с выключателя)."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: ""
-                  trigger_from: ""
-                  trigger_to: ""
-                  extra: "mode=night;action=toggle;result=off"
-
-        # ИНАЧЕ: Всё выключено
         default:
-          # → ВКЛЮЧАЕМ НОЧНОЙ РЕЖИМ
           - action: light.turn_on
             target:
               entity_id: light.bathroom_spot_l1_philips
             data:
               brightness_pct: 10
 
-          # Запускаем таймер автовыключения
           - action: timer.start
             target:
               entity_id: timer.timer_bathroom
             data:
               duration: "{{ (states('input_number.bathroom_timer_duration') | float(3) * 60) | int }}"
 
-          # Логирование через универсальный скрипт
-          - action: script.log_helper_event
-            data:
-              level: info
-              message: >-
-                Ванная: ночной режим включён (toggle с выключателя).
-              source: "{{ this.entity_id }}"
-              trigger_entity: ""
-              trigger_from: ""
-              trigger_to: ""
-              extra: >-
-                mode=night;action=toggle;result=on;
-                timer={{ states('input_number.bathroom_timer_duration') }}min
-
-  # ==========================================================================
-  # Переключение дневного режима (toggle)
-  # ==========================================================================
-  # НАЗНАЧЕНИЕ:
-  # • Ручное переключение дневного освещения с выключателя
-  # • Если свет включён → выключить
-  # • Если свет выключен → включить дневной режим (все споты + основной)
-  #
-  # ЛОГИКА:
-  # • Проверка: включён ли хотя бы один светильник
-  # • Если да → выключаем ВСЁ
-  # • Если нет → включаем дневной режим + запускаем таймер
-  #
-  # ИСПОЛЬЗОВАНИЕ:
-  # • MQTT-выключатель (левая кнопка) в дневное время
-  # ==========================================================================
   bathroom_toggle_day_mode:
     alias: "Ванная: переключение дневного режима"
     icon: mdi:weather-sunny
     sequence:
       - choose:
-          # УСЛОВИЕ: Хотя бы один свет включён
           - conditions:
               - condition: state
                 entity_id: group.bathroom_all_lights
                 state: "on"
             sequence:
-              # → ВЫКЛЮЧАЕМ ВСЁ
               - action: light.turn_off
                 target:
                   entity_id: group.bathroom_all_lights
 
-              # Логирование
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Ванная: дневной режим выключен (toggle с выключателя)."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: ""
-                  trigger_from: ""
-                  trigger_to: ""
-                  extra: "mode=day;action=toggle;result=off"
-
-        # ИНАЧЕ: Всё выключено
         default:
-          # → ВКЛЮЧАЕМ ДНЕВНОЙ РЕЖИМ
-          # Основной потолочный свет
           - action: light.turn_on
             target:
               entity_id: light.bathroom_relay_l2
 
-          # Все точечные споты на 100%
           - action: light.turn_on
             target:
               entity_id: group.bathroom_spots
             data:
               brightness_pct: 100
 
-          # Запускаем таймер автовыключения
           - action: timer.start
             target:
               entity_id: timer.timer_bathroom
             data:
               duration: "{{ (states('input_number.bathroom_timer_duration') | float(3) * 60) | int }}"
 
-          # Логирование
-          - action: script.log_helper_event
-            data:
-              level: info
-              message: >-
-                Ванная: дневной режим включён (toggle с выключателя).
-              source: "{{ this.entity_id }}"
-              trigger_entity: ""
-              trigger_from: ""
-              trigger_to: ""
-              extra: >-
-                mode=day;action=toggle;result=on;
-                timer={{ states('input_number.bathroom_timer_duration') }}min
-
-  # ==========================================================================
-  # Включение ночного режима (без toggle)
-  # ==========================================================================
-  # НАЗНАЧЕНИЕ:
-  # • Прямое включение ночного освещения
-  # • Используется в автоматизациях по движению
-  #
-  # ДЕЙСТВИЯ:
-  # • Включение спота L1 на 10% яркости
-  #
-  # ПРИМЕЧАНИЕ:
-  # • НЕ включает таймер (это делается отдельно в автоматизациях)
-  # ==========================================================================
   bathroom_turn_on_night_mode:
     alias: "Ванная: включение ночного освещения"
     icon: mdi:lightbulb-night-outline
@@ -451,90 +250,30 @@ script:
         data:
           brightness_pct: 10
 
-      # Логирование
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Ванная: ночной режим включён (автоматически по движению)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: ""
-          trigger_from: ""
-          trigger_to: ""
-          extra: "mode=night;source=auto_motion"
-
-  # ==========================================================================
-  # Включение дневного режима (без toggle)
-  # ==========================================================================
-  # НАЗНАЧЕНИЕ:
-  # • Прямое включение дневного освещения
-  # • Используется в автоматизациях по движению
-  #
-  # ДЕЙСТВИЯ:
-  # • Включение основного света (relay L2)
-  # • Включение всех точечных спотов на 100%
-  #
-  # ПРИМЕЧАНИЕ:
-  # • НЕ включает таймер (это делается отдельно в автоматизациях)
-  # ==========================================================================
   bathroom_turn_on_day_mode:
     alias: "Ванная: включение дневного освещения"
     icon: mdi:lightbulb-on-outline
     sequence:
-      # Основной потолочный свет
       - action: light.turn_on
         target:
           entity_id: light.bathroom_relay_l2
 
-      # Все точечные споты на 100%
       - action: light.turn_on
         target:
           entity_id: group.bathroom_spots
         data:
           brightness_pct: 100
 
-      # Логирование
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Ванная: дневной режим включён (автоматически по движению)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: ""
-          trigger_from: ""
-          trigger_to: ""
-          extra: "mode=day;source=auto_motion"
-
 ##############################################################################
 #                             АВТОМАТИЗАЦИИ
 ##############################################################################
 
 automation:
-  # ==========================================================================
-  # РУЧНОЕ УПРАВЛЕНИЕ С ВЫКЛЮЧАТЕЛЯ
-  # ==========================================================================
-
-  # --------------------------------------------------------------------------
-  # Переключение режима с MQTT-выключателя
-  # --------------------------------------------------------------------------
-
   - id: "5525cbdc-3a8d-4464-908e-795c8205b40c"
     alias: "Ванная: переключение света с выключателя"
+    mode: restart
     description: >
       Управление освещением через настенный MQTT-выключатель (левая кнопка).
-
-      ТРИГГЕР:
-      • MQTT Device Action: single_left (одинарное нажатие левой кнопки)
-
-      УСЛОВИЯ:
-      • Фаза запуска HA завершена
-
-      ЛОГИКА:
-      • Ночное время (00:30-06:00) → Toggle ночного режима
-      • Дневное время → Toggle дневного режима
-
-      РЕЖИМЫ:
-      • Ночной: 1 спот (L1) на 10%
-      • Дневной: все споты + основной свет
-    mode: restart
     triggers:
       - trigger: device
         domain: mqtt
@@ -549,7 +288,6 @@ automation:
 
     actions:
       - choose:
-          # НОЧНОЕ ВРЕМЯ: Toggle ночного режима
           - conditions:
               - condition: state
                 entity_id: binary_sensor.is_night_mode
@@ -558,69 +296,19 @@ automation:
               - action: script.turn_on
                 target:
                   entity_id: script.bathroom_toggle_night_mode
-
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Ванная: обработано нажатие выключателя — ночной toggle."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') if trigger is defined and trigger.from_state is not none else '' }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') if trigger is defined and trigger.to_state is not none else '' }}"
-                  extra: "mode=night;source=mqtt_switch"
-
-        # ДНЕВНОЕ ВРЕМЯ: Toggle дневного режима
         default:
           - action: script.turn_on
             target:
               entity_id: script.bathroom_toggle_day_mode
 
-          - action: script.log_helper_event
-            data:
-              level: info
-              message: "Ванная: обработано нажатие выключателя — дневной toggle."
-              source: "{{ this.entity_id }}"
-              trigger_entity: "{{ trigger.entity_id | default('') }}"
-              trigger_from: "{{ trigger.from_state.state | default('') if trigger is defined and trigger.from_state is not none else '' }}"
-              trigger_to: "{{ trigger.to_state.state | default('') if trigger is defined and trigger.to_state is not none else '' }}"
-              extra: "mode=day;source=mqtt_switch"
-
-  # ==========================================================================
-  # АВТОМАТИЧЕСКОЕ УПРАВЛЕНИЕ ПО ДАТЧИКАМ
-  # ==========================================================================
-
-  # --------------------------------------------------------------------------
-  # Включение света по движению / открытию двери
-  # --------------------------------------------------------------------------
   - id: "0007279c-13b5-402b-9aef-bf264273fa90"
     alias: "Ванная: автовключение света по движению"
-    description: >
-      Автоматически включает свет при обнаружении движения или открытии двери.
-
-      ТРИГГЕРЫ:
-      • binary_sensor.bathroom_open_door: off → on
-      • binary_sensor.bathroom_motions: off → on
-
-      УСЛОВИЯ:
-      • Фаза запуска HA завершена
-      • Защита от ложных срабатываний выключена (5 мин после старта)
-      • В доме кто-то есть ИЛИ активен режим уборки
-
-      ЛОГИКА:
-      • Ночное время → Ночной режим (1 спот, 10%)
-      • Дневное время → Дневной режим (все споты + основной свет, 100%)
-
-      ПРИМЕРЫ:
-      1. Движение в 03:00 → Спот L1 на 10%
-      2. Открыли дверь в 14:00 → Все споты + основной свет
-      3. Дом пустой, движение → Свет НЕ включится (кроме режима уборки)
     mode: restart
     triggers:
       - trigger: state
         entity_id: binary_sensor.bathroom_open_door
         from: "off"
         to: "on"
-
       - trigger: state
         entity_id: binary_sensor.bathroom_motions
         from: "off"
@@ -630,11 +318,9 @@ automation:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-
       - condition: state
         entity_id: input_boolean.bathroom_lights_startup_protection
         state: "off"
-
       - condition: or
         conditions:
           - condition: state
@@ -654,128 +340,39 @@ automation:
               - action: script.turn_on
                 target:
                   entity_id: script.bathroom_turn_on_night_mode
-
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Ванная: свет включён (автовключение, ночной режим)."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') if trigger is defined and trigger.from_state is not none else '' }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') if trigger is defined and trigger.to_state is not none else '' }}"
-                  extra: "mode=night;reason=motion_or_door"
-
         default:
           - action: script.turn_on
             target:
               entity_id: script.bathroom_turn_on_day_mode
 
-          - action: script.log_helper_event
-            data:
-              level: info
-              message: "Ванная: свет включён (автовключение, дневной режим)."
-              source: "{{ this.entity_id }}"
-              trigger_entity: "{{ trigger.entity_id | default('') }}"
-              trigger_from: "{{ trigger.from_state.state | default('') if trigger is defined and trigger.from_state is not none else '' }}"
-              trigger_to: "{{ trigger.to_state.state | default('') if trigger is defined and trigger.to_state is not none else '' }}"
-              extra: "mode=day;reason=motion_or_door"
-
-  # ==========================================================================
-  # УПРАВЛЕНИЕ ТАЙМЕРОМ АВТОВЫКЛЮЧЕНИЯ
-  # ==========================================================================
-
-  # --------------------------------------------------------------------------
-  # Отмена таймера при новом движении
-  # --------------------------------------------------------------------------
   - id: "50323f55-c6dd-483a-8799-af3c57e3e363"
     alias: "Ванная: отмена таймера (новое движение)"
-    description: >
-      Отменяет таймер автовыключения при обнаружении нового движения.
-
-      ТРИГГЕР:
-      • binary_sensor.bathroom_motions → on
-
-      УСЛОВИЯ:
-      • Таймер активен (идёт обратный отсчёт)
-      • Режим уборки выключен
-
-      ДЕЙСТВИЯ:
-      • Отмена таймера
-
-      НАЗНАЧЕНИЕ:
-      • Предотвращение выключения света при активном использовании ванной
-      • Продление работы света автоматически
-
-      ПРИМЕР:
-      1. Свет включён, таймер 3 мин → Осталось 1 мин
-      2. Обнаружено движение → Таймер отменён
-      3. Свет продолжает гореть
-      4. Движение прекратилось 1 мин → Новый таймер 3 мин
     mode: single
     triggers:
       - trigger: state
         entity_id: binary_sensor.bathroom_motions
         to: "on"
-
     conditions:
-      # Таймер активен (идёт обратный отсчёт)
       - condition: state
         entity_id: timer.timer_bathroom
         state: "active"
-
-      # Режим уборки выключен
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-
     actions:
-      # Отменяем таймер
       - action: timer.cancel
         target:
           entity_id: timer.timer_bathroom
+      - variables:
+          tr_ent: >-
+            {{ trigger.entity_id if trigger is defined and 'entity_id' in trigger else '' }}
+          tr_from: >-
+            {{ trigger.from_state.state if trigger is defined and 'from_state' in trigger and trigger.from_state is not none else '' }}
+          tr_to: >-
+            {{ trigger.to_state.state if trigger is defined and 'to_state' in trigger and trigger.to_state is not none else '' }}
 
-      # Логирование
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Ванная: таймер автовыключения отменён (обнаружено движение)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') if trigger is defined and trigger.from_state is not none else '' }}"
-          trigger_to: "{{ trigger.to_state.state | default('') if trigger is defined and trigger.to_state is not none else '' }}"
-          extra: "timer=timer.timer_bathroom;action=cancel"
-
-  # --------------------------------------------------------------------------
-  # Запуск таймера при прекращении движения
-  # --------------------------------------------------------------------------
   - id: "e519fa4c-bbad-4b0d-b06c-8521b3b10131"
     alias: "Ванная: запуск таймера (нет движения 1 мин)"
-    description: >
-      Запускает таймер автовыключения через 1 минуту отсутствия движения.
-
-      ТРИГГЕР:
-      • binary_sensor.bathroom_motions: on → off (задержка 1 мин)
-
-      УСЛОВИЯ:
-      • Хотя бы один свет включён
-      • Режим уборки выключен
-
-      ДЕЙСТВИЯ:
-      • Запуск таймера с динамической длительностью
-
-      НАЗНАЧЕНИЕ:
-      • Задержка перед выключением света
-      • Защита от преждевременного выключения
-      • Гибкая настройка времени через input_number
-
-      ПОСЛЕДОВАТЕЛЬНОСТЬ:
-      1. Движение прекратилось
-      2. Ожидание 1 минута (защита от ложных срабатываний)
-      3. Запуск таймера (по умолчанию 3 минуты)
-      4. Таймер истёк → Выключение света
-
-      ИСКЛЮЧЕНИЯ:
-      • Режим уборки → Таймер не запускается (свет горит бесконечно)
     mode: restart
     triggers:
       - trigger: state
@@ -783,75 +380,29 @@ automation:
         to: "off"
         for:
           minutes: 1
-
     conditions:
-      # Хотя бы один свет включён
       - condition: state
         entity_id: group.bathroom_all_lights
         state: "on"
-
-      # Режим уборки выключен
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-
     actions:
-      # Запускаем таймер с динамической длительностью
       - action: timer.start
         target:
           entity_id: timer.timer_bathroom
         data:
           duration: "{{ (states('input_number.bathroom_timer_duration') | float(3) * 60) | int }}"
+      - variables:
+          tr_ent: >-
+            {{ trigger.entity_id if trigger is defined and 'entity_id' in trigger else '' }}
+          tr_from: >-
+            {{ trigger.from_state.state if trigger is defined and 'from_state' in trigger and trigger.from_state is not none else '' }}
+          tr_to: >-
+            {{ trigger.to_state.state if trigger is defined and 'to_state' in trigger and trigger.to_state is not none else '' }}
 
-      # Логирование
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Ванная: запущен таймер автовыключения."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') if trigger is defined and trigger.from_state is not none else '' }}"
-          trigger_to: "{{ trigger.to_state.state | default('') if trigger is defined and trigger.to_state is not none else '' }}"
-          extra: >-
-            timer=timer.timer_bathroom;
-            duration={{ states('input_number.bathroom_timer_duration') }}min
-
-  # --------------------------------------------------------------------------
-  # Выключение света по истечении таймера
-  # --------------------------------------------------------------------------
   - id: "b30b7ad8-6563-4279-a78f-1a113f9cb252"
     alias: "Ванная: выключение света по таймеру"
-    description: >
-      Выключает все светильники после истечения таймера.
-
-      ТРИГГЕР:
-      • Событие: timer.finished (timer.timer_bathroom)
-
-      УСЛОВИЯ:
-      • Режим уборки выключен
-
-      ДЕЙСТВИЯ:
-      • Выключение всех светильников
-
-      НАЗНАЧЕНИЕ:
-      • Экономия электроэнергии
-      • Автоматическое выключение света при отсутствии активности
-
-      ПОЛНАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ:
-      ┌──────────────────────────────────────────────────────────┐
-      │ 1. Движение прекратилось                                │
-      │    ↓                                                     │
-      │ 2. Ожидание 1 минута                                    │
-      │    ↓                                                     │
-      │ 3. Запуск таймера (3 мин)                               │
-      │    ↓                                                     │
-      │ 4. Таймер истёк                                         │
-      │    ↓                                                     │
-      │ 5. Выключение света ← ВЫ ЗДЕСЬ                          │
-      └──────────────────────────────────────────────────────────┘
-
-      ИСКЛЮЧЕНИЯ:
-      • Режим уборки → Выключение НЕ произойдёт
     mode: single
     triggers:
       - trigger: event
@@ -860,13 +411,11 @@ automation:
           entity_id: timer.timer_bathroom
 
     conditions:
-      # Режим уборки выключен
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
 
     actions:
-      # Выключаем все светильники
       - action: light.turn_off
         target:
           entity_id: group.bathroom_all_lights
@@ -881,47 +430,10 @@ automation:
           trigger_to: "finished"
           extra: "action=timer_off;group=group.bathroom_all_lights"
 
-  # ==========================================================================
-  # РЕЗЕРВНОЕ ОСВЕЩЕНИЕ И ЗАЩИТА
-  # ==========================================================================
-
-  # --------------------------------------------------------------------------
-  # Включение резервного света при недоступности спотов
-  # --------------------------------------------------------------------------
   - id: "0c5020c3-e674-4789-8086-38dbc07253d7"
     alias: "Ванная: резервный свет (споты недоступны)"
-    description: >
-      Автоматически включает основной потолочный свет при массовой недоступности точечных спотов.
-
-      ТРИГГЕР:
-      • Любой из 5 спотов → unavailable (задержка 30 сек)
-
-      УСЛОВИЯ:
-      • Фаза запуска HA завершена
-      • Защита от ложных срабатываний выключена
-      • Основной свет (relay L2) сейчас выключен
-      • Минимум 2 спота недоступны
-
-      ДЕЙСТВИЯ:
-      • Включение основного света (light.bathroom_relay_l2)
-      • Отправка уведомления о проблеме
-
-      НАЗНАЧЕНИЕ:
-      • Резервное освещение при отказе спотов
-      • Предотвращение темноты в ванной
-      • Уведомление о необходимости ремонта
-
-      ПРИМЕРЫ ПРОБЛЕМ:
-      1. Сбой Wi-Fi у спотов
-      2. Отключение питания спотов
-      3. Программная ошибка интеграции
-
-      ПОРОГИ:
-      • 2+ спота unavailable → Включение резервного света
-      • Задержка 30 сек → Защита от кратковременных сбоев
     mode: single
     triggers:
-      # Любой спот стал недоступен
       - trigger: state
         entity_id:
           - light.bathroom_spot_r1_philips
@@ -934,22 +446,15 @@ automation:
           seconds: 30
 
     conditions:
-      # Home Assistant полностью загружен
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-
-      # Защита от ложных срабатываний выключена
       - condition: state
         entity_id: input_boolean.bathroom_lights_startup_protection
         state: "off"
-
-      # Основной свет сейчас выключен (иначе нет смысла)
       - condition: state
         entity_id: light.bathroom_relay_l2
         state: "off"
-
-      # Минимум 2 спота недоступны
       - condition: template
         value_template: >-
           {% set unavailable_count =
@@ -963,183 +468,82 @@ automation:
           {{ unavailable_count >= 2 }}
 
     actions:
-      # Включаем резервный свет
       - action: light.turn_on
         target:
           entity_id: light.bathroom_relay_l2
 
-      # Отправляем уведомление
       - action: notify.send_message
         target:
           entity_id: notify.telegram_master
         data:
           message: >-
             ⚠️ Ванная: резервный свет включён автоматически.
-            Причина: {{ 
+            Причина: {{
               [ states.light.bathroom_spot_r1_philips,
                 states.light.bathroom_spot_r2_philips,
                 states.light.bathroom_spot_l1_philips,
                 states.light.bathroom_spot_c1_philips,
                 states.light.bathroom_spot_c2_philips ]
               | selectattr('state', 'eq', 'unavailable')
-              | list | length 
+              | list | length
             }} точечных спотов недоступны.
 
-      # Логирование
-      - action: script.log_helper_event
-        data:
-          level: warning
-          message: >-
-            Ванная: резервный свет включён (недоступность точечных спотов).
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') if trigger is defined and trigger.from_state is not none else '' }}"
-          trigger_to: "{{ trigger.to_state.state | default('') if trigger is defined and trigger.to_state is not none else '' }}"
-          extra: >-
-            unavailable_count={{ unavailable_count }};
-            unavailable_list={{ unavailable_list }}
+      - variables:
+          tr_ent: >-
+            {{ trigger.entity_id if trigger is defined and 'entity_id' in trigger else '' }}
+          tr_from: >-
+            {{ trigger.from_state.state if trigger is defined and 'from_state' in trigger and trigger.from_state is not none else '' }}
+          tr_to: >-
+            {{ trigger.to_state.state if trigger is defined and 'to_state' in trigger and trigger.to_state is not none else '' }}
+          unavailable_list: >-
+            {{
+              [ states.light.bathroom_spot_r1_philips,
+                states.light.bathroom_spot_r2_philips,
+                states.light.bathroom_spot_l1_philips,
+                states.light.bathroom_spot_c1_philips,
+                states.light.bathroom_spot_c2_philips ]
+              | selectattr('state', 'eq', 'unavailable')
+              | map(attribute='entity_id')
+              | list
+            }}
+          unavailable_count: "{{ unavailable_list | length }}"
 
-  # ==========================================================================
-  # ЗАЩИТА ПРИ ЗАПУСКЕ HOME ASSISTANT
-  # ==========================================================================
-
-  # --------------------------------------------------------------------------
-  # Выключение света после перезагрузки HA
-  # --------------------------------------------------------------------------
   - id: "14a6f0ef-8217-4fc6-8dca-067875b950a7"
     alias: "Ванная: сброс света после рестарта HA"
-    description: >
-      Выключает все светильники после перезагрузки HA, если реально никого нет в ванной.
-
-      ТРИГГЕР:
-      • Событие: homeassistant.start
-
-      УСЛОВИЯ (после задержки):
-      • Нет движения в ванной
-      • Режим уборки выключен
-
-      ДЕЙСТВИЯ:
-      • Задержка 90 секунд (стабилизация датчиков)
-      • Выключение всех светильников
-
-      НАЗНАЧЕНИЕ:
-      • Защита от "зависшего" света после рестарта
-      • Приведение освещения в корректное состояние
-      • Экономия электроэнергии
-
-      СЦЕНАРИЙ:
-      1. HA перезагрузился (свет был включён)
-      2. Ожидание 90 секунд (датчики стабилизировались)
-      3. Проверка: есть ли движение?
-      4. Если нет → Выключение света
-
-      ЗАДЕРЖКА 90 СЕКУНД:
-      • 30 сек: инициализация датчиков
-      • 60 сек: дополнительная проверка отсутствия движения
-      • ИТОГО: 90 сек (достаточно для стабилизации)
     mode: single
     triggers:
       - trigger: homeassistant
         event: start
 
     actions:
-      # Ожидание стабилизации датчиков
       - delay: "00:01:30"
 
-      # Проверяем условия перед выключением
       - condition: and
         conditions:
-          # Нет движения
           - condition: state
             entity_id: binary_sensor.bathroom_motions
             state: "off"
-
-          # Режим уборки выключен
           - condition: state
             entity_id: input_boolean.bathroom_cleaning_mode
             state: "off"
 
-      # Выключаем все светильники
       - action: light.turn_off
         target:
           entity_id:
             - group.bathroom_all_lights
-            - light.bathroom_relay_l2 # На всякий случай дублируем
+            - light.bathroom_relay_l2
 
-      # Логирование
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Ванная: свет выключен после рестарта HA (отсутствие активности)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "homeassistant.start"
-          trigger_from: ""
-          trigger_to: ""
-          extra: "context=post_restart_cleanup"
-
-  # --------------------------------------------------------------------------
-  # Таймер защиты от ложных срабатываний при запуске
-  # --------------------------------------------------------------------------
   - id: "048bc34f-9e6d-475c-84ed-0af54dedeed9"
     alias: "Ванная: защита от ложных срабатываний (5 мин после старта)"
-    description: >
-      Включает защиту от автоматического включения света на 5 минут после рестарта HA.
-
-      ТРИГГЕР:
-      • Событие: homeassistant.start
-
-      ДЕЙСТВИЯ:
-      • Включение флага bathroom_lights_startup_protection
-      • Задержка 5 минут
-      • Выключение флага
-
-      НАЗНАЧЕНИЕ:
-      • Предотвращение ложных автовключений при старте HA
-      • Стабилизация датчиков движения
-      • Защита от "антифликера" (быстрые вкл/выкл)
-
-      ПРОБЛЕМА БЕЗ ЗАЩИТЫ:
-      1. HA рестартует
-      2. Датчики движения показывают случайные значения
-      3. Автоматизация включает свет
-      4. Через секунду свет выключается
-      5. Повторные включения/выключения (мерцание)
-
-      РЕШЕНИЕ:
-      • 5 минут защиты → Датчики стабилизируются
-      • Автоматизации не срабатывают → Нет ложных включений
     mode: single
     triggers:
       - trigger: homeassistant
         event: start
-
     actions:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.bathroom_lights_startup_protection
-
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Ванная: активирована защита от ложных срабатываний (5 минут)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "homeassistant.start"
-          trigger_from: ""
-          trigger_to: ""
-          extra: "protection=on;duration=5min"
-
       - delay: "00:05:00"
-
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.bathroom_lights_startup_protection
-      # Логирование
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Ванная: защита от ложных срабатываний деактивирована."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "homeassistant.start"
-          trigger_from: ""
-          trigger_to: ""
-          extra: "protection=off"

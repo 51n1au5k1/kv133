@@ -413,48 +413,123 @@ automation:
   # --------------------------------------------------------------------------
   # HELPER: Xiaomi Home — интеграция упала (по MQTT offline)
   # --------------------------------------------------------------------------
-  - id: "3626d8f6-8b1b-45ac-913e-bbacea4ed5b6"
-    alias: "HELPER: Xiaomi Home — интеграция нестабильна"
-    mode: single
+
+  - id: "2674efa1-8470-45f4-842a-fcabebc5ea20"
+    alias: "HELPER: Xiaomi Home — интеграция нестабильна (простой вариант, большинство устройств)"
+    mode: restart
     trigger:
-      - platform: mqtt
-        topic: "xiaomi/your_doorbell/status" # ← сюда реальный топик
-        payload: "offline"
+      - platform: state
+        entity_id:
+          - fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+          - humidifier.xiaomi_cn_823407205_p3
+          - light.lumi_cn_132386223_v3_s_4_light
+          - switch.chuangmi_cn_309825146_ipc019_on_p_2_1
+          - switch.chuangmi_cn_311366982_ipc019_on_p_2_1
+          - vacuum.dreame_cn_332835372_mc1808
+        to: "unavailable"
+
+    condition:
+      # 1) Флаг ещё не поднят — чтобы не спамить
+      - condition: state
+        entity_id: input_boolean.xiaomi_home_integration_unstable
+        state: "off"
+
+      # 2) Проверяем, что НЕДОСТУПНО БОЛЬШЕ ПОЛОВИНЫ устройств из списка
+      - condition: template
+        value_template: >
+          {% set devices = [
+            'fan.zhimi_cn_271517251_mb3_s_2_air_purifier',
+            'humidifier.xiaomi_cn_823407205_p3',
+            'light.lumi_cn_132386223_v3_s_4_light',
+            'switch.chuangmi_cn_309825146_ipc019_on_p_2_1',
+            'switch.chuangmi_cn_311366982_ipc019_on_p_2_1',
+            'vacuum.dreame_cn_332835372_mc1808'
+          ] %}
+          {% set total = devices | count %}
+          {% set unavailable = devices
+             | map('states')
+             | select('eq', 'unavailable')
+             | list
+             | count %}
+          {% set threshold = (total // 2) + 1 %}
+          {{ unavailable >= threshold }}
+
     action:
-      # Включаем флаг "нестабильно"
       - service: input_boolean.turn_on
         target:
           entity_id: input_boolean.xiaomi_home_integration_unstable
 
-      # Логируем для отладки + уведомление (warning + notify)
-      - action: script.log_helper_event
+      - service: script.log_helper_event
         data:
           level: warning
-          message: "Xiaomi Home: получен MQTT offline, флаг unstable = on (на 30 секунд)."
+          message: >-
+            Xiaomi Home: у большинства ключевых устройств состояние unavailable,
+            считаем интеграцию нестабильной, флаг unstable = on (на 30 секунд).
           source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.topic | default('') }}"
-          trigger_from: ""
-          trigger_to: "{{ trigger.payload | default('offline') }}"
-          extra: "action=set_unstable_flag;duration=30s"
+          trigger_entity: "{{ trigger.entity_id | default('') }}"
+          trigger_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is not none
+               else '' }}
+          trigger_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is not none
+               else '' }}
+          extra: >-
+            action=set_unstable_flag;
+            duration=30s;
+            triggered_by={{ trigger.entity_id }}
           notify: true
 
-      # Через 30 секунд считаем, что система восстановилась
       - delay: "00:00:30"
 
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.xiaomi_home_integration_unstable
 
-      # Логируем сброс флага (без уведомления)
-      - action: script.log_helper_event
+  - id: "e7e8a3b0-1f1c-4f2d-9e13-4f3a2b1165b1"
+    alias: "HELPER: Xiaomi Home — mips disconnect по system_log"
+    mode: restart
+
+    trigger:
+      - platform: event
+        event_type: system_log_event
+
+    condition:
+      - condition: template
+        value_template: >-
+          {% set logger = trigger.event.data.get('logger', '') %}
+          {% set message = trigger.event.data.get('message', '') %}
+          {{ 'custom_components.xiaomi_home.miot.miot_client' in logger
+             and 'mips disconnect' in message }}
+
+    action:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.xiaomi_home_integration_unstable
+
+      - service: script.log_helper_event
         data:
-          level: info
-          message: "Xiaomi Home: unstable flag reset to off после 30 секунд."
+          level: error
+          message: >-
+            Xiaomi Home: mips disconnect пойман через system_log_event,
+            флаг unstable = on (на 30 секунд).
           source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.topic | default('') }}"
-          trigger_from: "offline"
-          trigger_to: "online?"
-          extra: "action=clear_unstable_flag"
+          trigger_entity: "system_log_event"
+          trigger_from: ""
+          trigger_to: >-
+            {{ trigger.event.data.get('message', '') }}
+          extra: >-
+            action=set_unstable_flag_from_system_log;
+            level={{ trigger.event.data.get('level', '') }};
+            logger={{ trigger.event.data.get('logger', '') }}
+          notify: true
+
+      - delay: "00:00:30"
+
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.xiaomi_home_integration_unstable
 
   # ----------------------------------------------------------------------------
   # Обновление списка пользователей, находящихся дома
@@ -478,16 +553,6 @@ automation:
               {% set home_users = home_users + ['Andrei'] %}
             {% endif %}
             {{ home_users | join(', ') }}
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: >
-            currently_home обновлён до '{{ states('input_text.currently_home') }}'.
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
-          extra: ""
 
   # --------------------------------------------------------------------------
   # Фаза загрузки: включение флага при старте HA
@@ -503,15 +568,6 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.system_startup_phase
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "system_startup_phase = ON (Home Assistant start)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "homeassistant.start"
-          trigger_from: ""
-          trigger_to: ""
-          extra: ""
 
   # --------------------------------------------------------------------------
   # Фаза загрузки: автоотключение флага через 2 мин после старта HA
@@ -547,15 +603,6 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.silent_mode
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Silent mode включён по расписанию 23:00."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
-          extra: "silent_mode=on"
 
   # --------------------------------------------------------------------------
   # Режим тишины (09:00 снять silent_mode)
@@ -575,15 +622,6 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.silent_mode
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Silent mode выключен по расписанию 09:00."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
-          extra: "silent_mode=off"
 
   # ----------------------------------------------------------------------------
   # Управление камерами в зависимости от присутствия
@@ -629,15 +667,7 @@ automation:
                   entity_id: notify.telegram_master
                 data:
                   message: "Камеры включены: Никого нет дома."
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Камеры включены (никого нет дома ≥ 2 минуты)."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') }}"
-                  extra: "action=cameras_on;reason=away_state"
+
           - conditions:
               - condition: trigger
                 id: home
@@ -653,15 +683,6 @@ automation:
                   entity_id: notify.telegram_master
                 data:
                   message: "Камеры выключены: Кто-то дома."
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Камеры выключены (кто-то дома ≥ 2 минуты)."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') }}"
-                  extra: "action=cameras_off;reason=home_state"
 
   # --------------------------------------------------------------------------
   # Блокировка включения камер при force_camera_off
@@ -692,15 +713,6 @@ automation:
           entity_id: notify.telegram_master
         data:
           message: "Попытка включения камер заблокирована (форсированное отключение)."
-      - action: script.log_helper_event
-        data:
-          level: warning
-          message: "Попытка включения камер заблокирована (force_camera_off=on)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
-          extra: "action=block_cameras"
 
   # --------------------------------------------------------------------------
   # Очистка базы данных MariaDB в 03:40
@@ -723,9 +735,6 @@ automation:
           level: info
           message: "MariaDB: очистка истории завершена."
           source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
           extra: "keep_days=90"
 
   ##############################################################################
@@ -768,18 +777,7 @@ automation:
                 value_template: >
                   {{ states('binary_sensor.someone_is_home_2') in ['unknown', 'unavailable'] }}
             sequence:
-              - action: script.log_helper_event
-                data:
-                  level: error
-                  message: >
-                    binary_sensor.someone_is_home_2 имеет состояние
-                    '{{ states("binary_sensor.someone_is_home_2") }}', автоматика прервана.
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') }}"
-                  extra: "reason=invalid_presence_sensor_state"
-              - stop: "Сенсор присутствия недоступен, дальнейшие действия не выполняются."
+              - stop: "Сенсор присутствия в неизвестном состоянии, действия не выполняем."
         default:
           - action: homeassistant.turn_off
             target:
@@ -790,17 +788,6 @@ automation:
           - action: homeassistant.turn_off
             target:
               entity_id: group.living_room_tv
-          - action: script.log_helper_event
-            data:
-              level: info
-              message: >
-                Рабочие дни: свет, отпариватель и ТВ выключены
-                (никого нет дома в рабочее время).
-              source: "{{ this.entity_id }}"
-              trigger_entity: "{{ trigger.entity_id | default('') }}"
-              trigger_from: "{{ trigger.from_state.state | default('') }}"
-              trigger_to: "{{ trigger.to_state.state | default('') }}"
-              extra: "action=workday_poweroff"
 
   ################################################################################
   # Отключение отпаривателя при отсутствии дома
@@ -819,15 +806,6 @@ automation:
       - action: switch.turn_off
         target:
           entity_id: switch.smart_plug_in_unit_vykliuchatel
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Отпариватель выключен, так как никого нет дома."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
-          extra: "action=steamer_off_on_away"
 
   ################################################################################
   # Сброс флагов стирки при старте HA
@@ -845,14 +823,3 @@ automation:
             - input_boolean.wm_cycle_seen_start
             - input_boolean.washing_machine_running
             - input_boolean.wm_socket_outage_active
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: >
-            Сброс флагов стирки при старте HA:
-            wm_cycle_seen_start, washing_machine_running, wm_socket_outage_active = OFF.
-          source: "{{ this.entity_id }}"
-          trigger_entity: "homeassistant.start"
-          trigger_from: ""
-          trigger_to: ""
-          extra: "action=reset_wm_flags"

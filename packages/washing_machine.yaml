@@ -83,6 +83,7 @@ automation:
         id: start
     actions:
       - choose:
+          # --- ВЕТКА SHUTDOWN: запоминаем, шла ли стирка ---
           - conditions:
               - condition: trigger
                 id: shutdown
@@ -100,6 +101,8 @@ automation:
                   - action: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.washing_machine_pre_restart_state
+
+          # --- ВЕТКА START: при старте восстанавливаем состояние при необходимости ---
           - conditions:
               - condition: trigger
                 id: start
@@ -110,27 +113,22 @@ automation:
                         entity_id: input_boolean.washing_machine_pre_restart_state
                         state: "on"
                     sequence:
-                      - action: script.log_helper_event
-                        data:
-                          level: warning
-                          message: "System start: стиральная машина была активна до перезагрузки."
-                          source: "{{ this.entity_id }}"
-                          trigger_entity: "{{ trigger.platform | default('homeassistant') }}"
-                          trigger_from: >-
-                            {{ trigger.from_state.state
-                               if trigger is defined and trigger.from_state is not none
-                               else '' }}
-                          trigger_to: >-
-                            {{ trigger.to_state.state
-                               if trigger is defined and trigger.to_state is not none
-                               else '' }}
-                          extra: >-
-                            event={{ trigger.event if trigger is defined and trigger.event is not none else 'start' }}
+                      # Если до рестарта стирка шла — считаем, что цикл активен
+                      - action: input_boolean.turn_on
+                        target:
+                          entity_id:
+                            - input_boolean.washing_machine_running
+                            - input_boolean.wm_cycle_seen_start
+                default:
+                  # Если флаг не был установлен — просто убеждаемся, что running=off
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.washing_machine_running
+
+              # В любом случае после старта сбрасываем pre_restart_state
               - action: input_boolean.turn_off
                 target:
-                  entity_id:
-                    - input_boolean.washing_machine_running
-                    - input_boolean.washing_machine_pre_restart_state
+                  entity_id: input_boolean.washing_machine_pre_restart_state
 
   ##############################################################################
   # СТАТУС СТИРКИ: СТАРТ/ОКОНЧАНИЕ
@@ -170,24 +168,6 @@ automation:
                   entity_id: input_datetime.washing_machine_started_at
                 data:
                   datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Стиральная машина запущена."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('sensor.bathroom_washing_machine_power') }}"
-                  trigger_from: >-
-                    {{ trigger.from_state.state
-                       if trigger is defined and trigger.from_state is not none
-                       else '' }}
-                  trigger_to: >-
-                    {{ trigger.to_state.state
-                       if trigger is defined and trigger.to_state is not none
-                       else '' }}
-                  extra: >-
-                    power={{ states('sensor.bathroom_washing_machine_power') }}W,
-                    started_at={{ states('input_datetime.washing_machine_started_at') }},
-                    min_cycle_min={{ states('input_number.wm_min_cycle_min') }}
 
           # --- FINISH ---
           - conditions:
@@ -210,51 +190,6 @@ automation:
                   entity_id:
                     - input_boolean.washing_machine_running
                     - input_boolean.wm_cycle_seen_start
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Стиральная машина выключена."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('sensor.bathroom_washing_machine_power') }}"
-                  trigger_from: >-
-                    {{ trigger.from_state.state
-                       if trigger is defined and trigger.from_state is not none
-                       else '' }}
-                  trigger_to: >-
-                    {{ trigger.to_state.state
-                       if trigger is defined and trigger.to_state is not none
-                       else '' }}
-                  extra: >-
-                    power={{ states('sensor.bathroom_washing_machine_power') }}W,
-                    started_at={{ states('input_datetime.washing_machine_started_at') }},
-                    min_cycle_min={{ states('input_number.wm_min_cycle_min') }}
-        default:
-          - choose:
-              - conditions:
-                  - condition: trigger
-                    id: finish
-                  - condition: state
-                    entity_id: input_boolean.washing_machine_running
-                    state: "on"
-                sequence:
-                  - action: script.log_helper_event
-                    data:
-                      level: info
-                      message: "Низкая мощность, но цикл короче минимума — игнорируем."
-                      source: "{{ this.entity_id }}"
-                      trigger_entity: "{{ trigger.entity_id | default('sensor.bathroom_washing_machine_power') }}"
-                      trigger_from: >-
-                        {{ trigger.from_state.state
-                           if trigger is defined and trigger.from_state is not none
-                           else '' }}
-                      trigger_to: >-
-                        {{ trigger.to_state.state
-                           if trigger is defined and trigger.to_state is not none
-                           else '' }}
-                      extra: >-
-                        power={{ states('sensor.bathroom_washing_machine_power') }}W,
-                        started_at={{ states('input_datetime.washing_machine_started_at') }},
-                        min_cycle_min={{ states('input_number.wm_min_cycle_min') }}
 
   ##############################################################################
   # УВЕДОМЛЕНИЕ О ЗАВЕРШЕНИИ СТИРКИ (TTS + TELEGRAM)
@@ -297,25 +232,6 @@ automation:
           entity_id: notify.telegram_master
         data:
           message: "🏠 Стирка закончена! 🧼"
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Уведомление о завершении стирки отправлено."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('binary_sensor.washing_machine_finished') }}"
-          trigger_from: >-
-            {{ trigger.from_state.state
-               if trigger is defined and trigger.from_state is not none
-               else '' }}
-          trigger_to: >-
-            {{ trigger.to_state.state
-               if trigger is defined and trigger.to_state is not none
-               else '' }}
-          extra: >-
-            started_at={{ states('input_datetime.washing_machine_started_at') }},
-            min_cycle_min={{ states('input_number.wm_min_cycle_min') }},
-            silent_mode={{ states('input_boolean.silent_mode') }},
-            someone_is_home={{ states('binary_sensor.someone_is_home_2') }}
 
   ##############################################################################
   # НАПОМИНАНИЕ О ЗАВЕРШЕНИИ (ЕСЛИ НЕТ ДВИЖЕНИЯ)
@@ -351,23 +267,6 @@ automation:
         state: "off"
     actions:
       - action: script.yandex_tts_washing_machine_reminder
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Напоминание о стирке отправлено (нет движения в ванной)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('binary_sensor.washing_machine_finished') }}"
-          trigger_from: >-
-            {{ trigger.from_state.state
-               if trigger is defined and trigger.from_state is not none
-               else '' }}
-          trigger_to: >-
-            {{ trigger.to_state.state
-               if trigger is defined and trigger.to_state is not none
-               else '' }}
-          extra: >-
-            bathroom_motions={{ states('binary_sensor.bathroom_motions') }},
-            bathroom_open_door={{ states('binary_sensor.bathroom_open_door') }}
 
   ##############################################################################
   # Авария: розетка стала недоступной во время стирки
@@ -421,25 +320,6 @@ automation:
             Проверьте розетку/вилку/автомат.
 
       - action: script.yandex_tts_washing_machine_power_lost
-      - action: script.log_helper_event
-        data:
-          level: warning
-          message: "WM ALERT: розетка стиральной машины недоступна во время стирки."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('switch.bathroom_washing_machine') }}"
-          trigger_from: >-
-            {{ trigger.from_state.state
-               if trigger is defined and trigger.from_state is not none
-               else '' }}
-          trigger_to: >-
-            {{ trigger.to_state.state
-               if trigger is defined and trigger.to_state is not none
-               else '' }}
-          extra: >-
-            started_at={{ started_at }},
-            last_power={{ last_power }},
-            last_voltage={{ last_voltage }},
-            last_current={{ last_current }}
 
   ##############################################################################
   # Восстановление: розетка снова доступна
@@ -479,22 +359,6 @@ automation:
             Розетка снова онлайн (стабильно 45 с). Текущая мощность: {{ cur_power }} Вт.
             Проверьте, требуется ли перезапуск программы стирки.
       - action: script.yandex_tts_washing_machine_power_restored
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "WM INFO: питание стиральной машины восстановлено."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('switch.bathroom_washing_machine') }}"
-          trigger_from: >-
-            {{ trigger.from_state.state
-               if trigger is defined and trigger.from_state is not none
-               else '' }}
-          trigger_to: >-
-            {{ trigger.to_state.state
-               if trigger is defined and trigger.to_state is not none
-               else '' }}
-          extra: >-
-            cur_power={{ cur_power }}
 
   ##############################################################################
   # Гигиена: сброс флага аварии при старте HA
@@ -511,12 +375,3 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.wm_socket_outage_active
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "HELPER: флаг аварии стиралки сброшен при старте HA."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "homeassistant"
-          trigger_from: ""
-          trigger_to: ""
-          extra: "event=start"

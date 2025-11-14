@@ -302,23 +302,7 @@ automation:
           message: >
             Розетка {{ trigger.entity_id }} недоступна — уведомление отправлено.
           level: warning
-      # Логирование через универсальный скрипт
-      - action: script.log_helper_event
-        data:
-          level: warning
-          message: "Сервер: розетка недоступна — уведомление отправлено."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: >-
-            {{ trigger.from_state.state
-               if trigger is defined and trigger.from_state is not none
-               else '' }}
-          trigger_to: >-
-            {{ trigger.to_state.state
-               if trigger is defined and trigger.to_state is not none
-               else '' }}
-          extra: >-
-            friendly_name={{ state_attr(trigger.entity_id, 'friendly_name') | default('') }}
+
   # ==========================================================================
   # УПРАВЛЕНИЕ ТЕМПЕРАТУРОЙ И ВЕНТИЛЯТОРОМ
   # ==========================================================================
@@ -402,25 +386,6 @@ automation:
                 target:
                   entity_id: fan.server_fan
 
-              # Логирование
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Сервер: вентилятор включён (высокая температура)."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: >-
-                    {{ trigger.from_state.state
-                       if trigger is defined and trigger.from_state is not none
-                       else '' }}
-                  trigger_to: >-
-                    {{ trigger.to_state.state
-                       if trigger is defined and trigger.to_state is not none
-                       else '' }}
-                  extra: >-
-                    temp={{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
-                    high={{ states('input_number.server_temp_high_threshold') }}°C
-
           # ====================================================================
           # СЦЕНАРИЙ 2: ТЕМПЕРАТУРА НИЗКАЯ → ЗАПУСТИТЬ ТАЙМЕР ПОДТВЕРЖДЕНИЯ
           # ====================================================================
@@ -438,26 +403,6 @@ automation:
                 data:
                   duration: >
                     {{ (states('input_number.server_temp_off_persist_min') | float(30) * 60) | int }}
-
-              # Логирование
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Сервер: запущен таймер подтверждения низкой температуры."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: >-
-                    {{ trigger.from_state.state
-                       if trigger is defined and trigger.from_state is not none
-                       else '' }}
-                  trigger_to: >-
-                    {{ trigger.to_state.state
-                       if trigger is defined and trigger.to_state is not none
-                       else '' }}
-                  extra: >-
-                    temp={{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
-                    low={{ states('input_number.server_temp_low_threshold') }}°C,
-                    duration_min={{ states('input_number.server_temp_off_persist_min') }}
 
   # --------------------------------------------------------------------------
   # Стабильная низкая температура → запуск задержки выключения
@@ -512,19 +457,6 @@ automation:
           duration: >
             {{ (states('input_number.server_fan_delay_min') | float(5) * 60) | int }}
 
-      # Логирование
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Сервер: запущен таймер задержки выключения вентилятора."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.event.entity_id if trigger is defined and trigger.event is defined else '' }}"
-          trigger_from: ""
-          trigger_to: ""
-          extra: >-
-            temp={{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
-            delay_min={{ states('input_number.server_fan_delay_min') }}
-
   # --------------------------------------------------------------------------
   # Финал: выключение вентилятора после задержки
   # --------------------------------------------------------------------------
@@ -576,20 +508,3 @@ automation:
       - action: fan.turn_off
         target:
           entity_id: fan.server_fan
-
-      # Логирование с детальной информацией
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Сервер: вентилятор выключен по таймеру."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.event.entity_id if trigger is defined and trigger.event is defined else '' }}"
-          trigger_from: ""
-          trigger_to: ""
-          extra: >-
-            temp={{ states('sensor.0xa4c13861a18df7c8_temperature') }}°C,
-            low={{ states('input_number.server_temp_low_threshold') }}°C,
-            total_min={{ (
-              (states('input_number.server_temp_off_persist_min') | float(30))
-              + (states('input_number.server_fan_delay_min') | float(5))
-            ) | round(1) }}

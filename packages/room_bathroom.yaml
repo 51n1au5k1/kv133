@@ -395,15 +395,6 @@ automation:
         target:
           entity_id: fan.bathroom_relay_l1
 
-      # Логирование
-      - action: system_log.write
-        data:
-          message: >-
-            Ванная: вентилятор включён (высокая влажность).
-            Текущая влажность: {{ states('sensor.bathroom_filtered_humidity') }}%.
-            Порог включения: {{ states('input_number.bathroom_humidity_max_threshold') }}%.
-          level: info
-
   # --------------------------------------------------------------------------
   # Запуск таймера продува при снижении влажности
   # --------------------------------------------------------------------------
@@ -465,25 +456,6 @@ automation:
         target:
           entity_id: timer.bathroom_fan_cooldown
 
-      # Логирование
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Ванная: вентилятор включён (высокая влажность)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: >-
-            {{ trigger.from_state.state
-               if trigger is defined and trigger.from_state is not none
-               else '' }}
-          trigger_to: >-
-            {{ trigger.to_state.state
-               if trigger is defined and trigger.to_state is not none
-               else '' }}
-          extra: >-
-            humidity={{ states('sensor.bathroom_filtered_humidity') }}%;
-            max_thr={{ states('input_number.bathroom_humidity_max_threshold') }}%
-
   # --------------------------------------------------------------------------
   # Выключение вентилятора после продува
   # --------------------------------------------------------------------------
@@ -544,16 +516,3 @@ automation:
       - action: fan.turn_off
         target:
           entity_id: fan.bathroom_relay_l1
-
-      # Логирование
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Ванная: вентилятор выключен (после продува)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "timer.bathroom_fan_cooldown"
-          trigger_from: "active"
-          trigger_to: "finished"
-          extra: >-
-            humidity={{ states('sensor.bathroom_filtered_humidity') }}%;
-            min_thr={{ states('input_number.bathroom_humidity_min_threshold') }}%

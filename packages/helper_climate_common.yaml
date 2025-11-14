@@ -420,16 +420,6 @@ script:
                   entity_id: "{{ last_on }}"
                 data:
                   datetime: "{{ now().isoformat() }}"
-              - service: script.log_helper_event
-                data:
-                  level: info
-                  message: >
-                    climate_update_timers: обновлён {{ last_on }} по состоянию {{ dev }} = 'on'.
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ dev }}"
-                  trigger_from: ""
-                  trigger_to: "on"
-                  extra: "force={{ force }}"
 
           # 3) Устройство ВЫКЛЮЧЕНО → обновляем last_off (если пусто или force)
           - conditions:
@@ -499,18 +489,7 @@ automation:
                 entity_id: input_boolean.xiaomi_home_integration_unstable
                 state: "on"
             sequence:
-              - action: script.log_helper_event
-                data:
-                  level: warning
-                  message: >
-                    Увлажнитель: пропуск обновления таймеров —
-                    Xiaomi Home нестабилен (input_boolean.xiaomi_home_integration_unstable = on).
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') }}"
-                  extra: "reason=xiaomi_home_integration_unstable;device=humidifier.xiaomi_cn_823407205_p3"
-              - stop: "Xiaomi Home unstable, skip humidifier timers update"
+              - stop: "Xiaomi Home нестабилен, обновление таймеров увлажнителя пропущено."
 
       # 1. Основное обновление таймеров
       - service: script.climate_update_timers
@@ -519,18 +498,6 @@ automation:
           last_on_entity: input_datetime.humidifier_last_on
           last_off_entity: input_datetime.humidifier_last_off
           force_update: true
-
-      # 2. Лог успешного обновления
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: >
-            Увлажнитель: обновление таймеров выполнено.
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
-          extra: "device=humidifier.xiaomi_cn_823407205_p3"
 
   # --------------------------------------------------------------------------
   # Очиститель: обновление таймеров
@@ -556,18 +523,7 @@ automation:
                 entity_id: input_boolean.xiaomi_home_integration_unstable
                 state: "on"
             sequence:
-              - action: script.log_helper_event
-                data:
-                  level: warning
-                  message: >
-                    Очиститель: пропуск обновления таймеров —
-                    Xiaomi Home нестабилен (input_boolean.xiaomi_home_integration_unstable = on).
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') }}"
-                  extra: "reason=xiaomi_home_integration_unstable;device=fan.zhimi_cn_271517251_mb3_s_2_air_purifier"
-              - stop: "Xiaomi Home unstable, skip air purifier timers update"
+              - stop: "Xiaomi Home нестабилен, обновление таймеров очистителя пропущено."
 
       # 1. Основное обновление таймеров
       - service: script.climate_update_timers
@@ -576,18 +532,6 @@ automation:
           last_on_entity: input_datetime.air_purifier_last_on
           last_off_entity: input_datetime.air_purifier_last_off
           force_update: true
-
-      # 2. Лог успешного обновления
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: >
-            Очиститель: обновление таймеров выполнено.
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
-          extra: "device=fan.zhimi_cn_271517251_mb3_s_2_air_purifier"
 
   # --------------------------------------------------------------------------
   # Инициализация таймеров при старте
@@ -616,18 +560,7 @@ automation:
                 entity_id: input_boolean.xiaomi_home_integration_unstable
                 state: "on"
             sequence:
-              - action: script.log_helper_event
-                data:
-                  level: warning
-                  message: >
-                    Инициализация таймеров климата пропущена —
-                    Xiaomi Home нестабилен (input_boolean.xiaomi_home_integration_unstable = on).
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "homeassistant.start"
-                  trigger_from: ""
-                  trigger_to: ""
-                  extra: "reason=xiaomi_home_integration_unstable"
-              - stop: "Xiaomi Home unstable, skip climate timers init"
+              - stop: "Xiaomi Home нестабилен, инициализация таймеров климата пропущена."
 
       # Увлажнитель: инициализировать таймеры, если они ещё пустые
       - service: script.climate_update_timers
@@ -642,16 +575,6 @@ automation:
           device_on_entity: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
           last_on_entity: input_datetime.air_purifier_last_on
           last_off_entity: input_datetime.air_purifier_last_off
-
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Инициализация таймеров климата при старте выполнена."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "homeassistant.start"
-          trigger_from: ""
-          trigger_to: ""
-          extra: ""
 
   # ==========================================================================
   # ЗИМНИЙ РЕЖИМ
@@ -693,29 +616,11 @@ automation:
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.winter_mode
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: "Зимний режим включён автоматически по месяцу."
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') if trigger.from_state is defined else '' }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') if trigger.to_state is defined else '' }}"
-                  extra: "month={{ now().month }}"
         default:
           # Летний период: выключаем зимний режим
           - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.winter_mode
-          - action: script.log_helper_event
-            data:
-              level: info
-              message: "Зимний режим выключен автоматически по месяцу."
-              source: "{{ this.entity_id }}"
-              trigger_entity: "{{ trigger.entity_id | default('') }}"
-              trigger_from: "{{ trigger.from_state.state | default('') if trigger.from_state is defined else '' }}"
-              trigger_to: "{{ trigger.to_state.state | default('') if trigger.to_state is defined else '' }}"
-              extra: "month={{ now().month }}"
 
   # ==========================================================================
   # CO₂ УВЕДОМЛЕНИЯ
@@ -800,16 +705,13 @@ automation:
                 data:
                   level: error
                   message: >
-                    CO₂: не удалось отправить уведомление о необходимости проветривания —
-                    sensor.uroven_co2_sglazhennyi недоступен.
+                    CO₂ alert: сенсор 'sensor.uroven_co2_sglazhennyi' недоступен, уведомление о проветривании не отправлено.
                   source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') }}"
-                  extra: >
-                    co2_state={{ states('sensor.uroven_co2_sglazhennyi') }};
-                    ventilation_need={{ states('binary_sensor.livingroom_ventilation_need') }}
-              - stop: "CO₂-сенсор недоступен, уведомление не отправлено."
+                  trigger_entity: "sensor.uroven_co2_sglazhennyi"
+                  trigger_from: ""
+                  trigger_to: "{{ states('sensor.uroven_co2_sglazhennyi') }}"
+                  extra: "livingroom_ventilation_need=on"
+              - stop: "CO₂ сенсор недоступен, уведомление о необходимости проветривания пропущено."
         default:
           # 2. Основная логика уведомлений (как было)
           - choose:
@@ -889,16 +791,13 @@ automation:
                 data:
                   level: error
                   message: >
-                    CO₂: не удалось отправить уведомление о завершении проветривания —
-                    sensor.uroven_co2_sglazhennyi недоступен.
+                    CO₂ alert: сенсор 'sensor.uroven_co2_sglazhennyi' недоступен, уведомление о завершении проветривания не отправлено.
                   source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') }}"
-                  extra: >
-                    co2_state={{ states('sensor.uroven_co2_sglazhennyi') }};
-                    ventilation_status={{ states('binary_sensor.livingroom_ventilation_status') }}
-              - stop: "CO₂-сенсор недоступен, уведомление не отправлено."
+                  trigger_entity: "sensor.uroven_co2_sglazhennyi"
+                  trigger_from: ""
+                  trigger_to: "{{ states('sensor.uroven_co2_sglazhennyi') }}"
+                  extra: "livingroom_ventilation_status=on"
+              - stop: "CO₂ сенсор недоступен, уведомление о завершении проветривания пропущено."
         default:
           # 2. Основная логика уведомлений
           - choose:
@@ -967,18 +866,6 @@ automation:
           entity_id:
             - input_boolean.co2_voice_notification_sensor
             - input_boolean.co2_text_notification_sensor
-
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: >
-            CO₂: флаги уведомлений сброшены по таймеру.
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
-          extra: >
-            reset_period={{ states('input_number.co2_notification_reset_period') }}_min
 
   # ==========================================================================
   # PRE-RESTART: СОХРАНЕНИЕ И ВОССТАНОВЛЕНИЕ СОСТОЯНИЙ
@@ -1053,20 +940,7 @@ automation:
           - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.humidifier_pre_restart_state
-      # лог: что именно сохранили
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: >
-            Сохранение состояний климатической техники перед shutdown выполнено.
-          source: "{{ this.entity_id }}"
-          trigger_entity: "homeassistant.shutdown"
-          trigger_from: ""
-          trigger_to: ""
-          extra: >
-            climate_pre_restart_state={{ states('input_boolean.climate_pre_restart_state') }};
-            fan_pre_restart_state={{ states('input_boolean.fan_pre_restart_state') }};
-            humidifier_pre_restart_state={{ states('input_boolean.humidifier_pre_restart_state') }}
+
   # --------------------------------------------------------------------------
   # Восстановление состояний после старта
   # --------------------------------------------------------------------------
@@ -1132,21 +1006,6 @@ automation:
             - input_boolean.climate_pre_restart_state
             - input_boolean.fan_pre_restart_state
             - input_boolean.humidifier_pre_restart_state
-      # лог: восстановление состояний выполнено
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: >
-            Восстановление состояний климатической техники после старта выполнено,
-            все флаги pre_restart сброшены.
-          source: "{{ this.entity_id }}"
-          trigger_entity: "homeassistant.start"
-          trigger_from: ""
-          trigger_to: ""
-          extra: >
-            climate_pre_restart_state_reset;
-            fan_pre_restart_state_reset;
-            humidifier_pre_restart_state_reset
   # ==========================================================================
   # АНТИПРОВЕТРИВАНИЕ: УПРАВЛЕНИЕ КЛИМАТОМ ПРИ ОТКРЫТИИ ДВЕРЕЙ
   # ==========================================================================
@@ -1331,21 +1190,9 @@ automation:
       - action: climate.turn_off
         target:
           entity_id: climate.konditsioner
-
       - action: notify.send_message
         target:
           entity_id: notify.telegram_master
         data:
           message: "Кондиционер принудительно отключён: активен зимний режим."
-
       - action: script.yandex_tts_kondicioner_warning
-
-      - action: script.log_helper_event
-        data:
-          level: warning
-          message: "Попытка включения кондиционера при активном зимнем режиме заблокирована."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.entity_id | default('') }}"
-          trigger_from: "{{ trigger.from_state.state | default('') }}"
-          trigger_to: "{{ trigger.to_state.state | default('') }}"
-          extra: "winter_mode=on"

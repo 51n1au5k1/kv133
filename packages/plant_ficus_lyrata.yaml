@@ -168,37 +168,31 @@ automation:
                 data:
                   level: error
                   message: >
-                    Фикус лировидный: не удалось отправить уведомление о поливе —
-                    один из сенсоров влажности почвы недоступен.
+                    Растение Фикус лировидный: не удалось отправить уведомление о поливе —
+                    один из сенсоров влажности недоступен или имеет некорректное значение.
                   source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') }}"
+                  trigger_entity: >-
+                    {% set tr = trigger | default({}) %}
+                    {{ tr.get('entity_id','') }}
+                  trigger_from: >-
+                    {% set tr = trigger | default({}) %}
+                    {% set fs = tr.get('from_state') %}
+                    {{ fs.state if fs is not none else '' }}
+                  trigger_to: >-
+                    {% set tr = trigger | default({}) %}
+                    {% set ts = tr.get('to_state') %}
+                    {{ ts.state if ts is not none else '' }}
                   extra: >
                     soil={{ states('sensor.ficus_lyrata_filtered_soil_moisture') }};
                     min={{ states('number.ficus_lyrata_min_soil_moisture') }};
                     max={{ states('number.ficus_lyrata_max_soil_moisture') }}
-              - stop: "Сенсоры влажности почвы недоступны, уведомление не отправлено."
+              - stop: "Сенсоры влажности недоступны, уведомление о поливе не отправлено."
         default:
           # 2. Основная логика: общая проверка условий растения
           - action: script.plant_check_conditions
             data:
               plant_name: "Фикус лировидный"
               plant_name_latin: "ficus_lyrata"
-
-          # 3. Лог успешного запуска проверки/уведомления
-          - action: script.log_helper_event
-            data:
-              level: info
-              message: "Фикус лировидный: выполнена проверка условий для уведомления о поливе."
-              source: "{{ this.entity_id }}"
-              trigger_entity: "{{ trigger.entity_id | default('') }}"
-              trigger_from: "{{ trigger.from_state.state | default('') }}"
-              trigger_to: "{{ trigger.to_state.state | default('') }}"
-              extra: >
-                soil={{ states('sensor.ficus_lyrata_filtered_soil_moisture') }};
-                min={{ states('number.ficus_lyrata_min_soil_moisture') }};
-                max={{ states('number.ficus_lyrata_max_soil_moisture') }}
 
   # --------------------------------------------------------------------------
   # Температура: уведомление
@@ -242,12 +236,20 @@ automation:
                 data:
                   level: error
                   message: >
-                    Фикус лировидный: не удалось отправить уведомление о температуре —
+                    Растение Фикус лировидный: не удалось отправить уведомление о температуре —
                     один из температурных сенсоров недоступен.
                   source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ trigger.entity_id | default('') }}"
-                  trigger_from: "{{ trigger.from_state.state | default('') }}"
-                  trigger_to: "{{ trigger.to_state.state | default('') }}"
+                  trigger_entity: >-
+                    {% set tr = trigger | default({}) %}
+                    {{ tr.get('entity_id','') }}
+                  trigger_from: >-
+                    {% set tr = trigger | default({}) %}
+                    {% set fs = tr.get('from_state') %}
+                    {{ fs.state if fs is not none else '' }}
+                  trigger_to: >-
+                    {% set tr = trigger | default({}) %}
+                    {% set ts = tr.get('to_state') %}
+                    {{ ts.state if ts is not none else '' }}
                   extra: >
                     temp={{ states('sensor.ficus_lyrata_filtered_temperature') }};
                     tmin={{ states('number.ficus_lyrata_min_temperature') }};
@@ -259,20 +261,6 @@ automation:
             data:
               plant_name: "Фикус лировидный"
               plant_name_latin: "ficus_lyrata"
-
-          # 3. Лог успешного запуска проверки/уведомления
-          - action: script.log_helper_event
-            data:
-              level: info
-              message: "Фикус лировидный: выполнена проверка условий для уведомления о температуре."
-              source: "{{ this.entity_id }}"
-              trigger_entity: "{{ trigger.entity_id | default('') }}"
-              trigger_from: "{{ trigger.from_state.state | default('') }}"
-              trigger_to: "{{ trigger.to_state.state | default('') }}"
-              extra: >
-                temp={{ states('sensor.ficus_lyrata_filtered_temperature') }};
-                tmin={{ states('number.ficus_lyrata_min_temperature') }};
-                tmax={{ states('number.ficus_lyrata_max_temperature') }}
 
   # --------------------------------------------------------------------------
   # Периодическая самопроверка раз в 6 часов
@@ -291,13 +279,3 @@ automation:
         data:
           plant_name: "Фикус лировидный"
           plant_name_latin: "ficus_lyrata"
-
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Фикус лировидный: выполнена периодическая проверка условий (раз в 6 часов)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "{{ trigger.platform | default('time_pattern') }}"
-          trigger_from: ""
-          trigger_to: ""
-          extra: "interval=6h"
