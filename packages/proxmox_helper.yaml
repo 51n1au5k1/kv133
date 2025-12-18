@@ -22,63 +22,70 @@ input_number:
     min: 1
     max: 64
     step: 1
-    initial: 4
+    initial: 12
 
   # Количество процессоров, выделенных для каждой VM или LXC
   cpu_100:
     name: "CPU 100 (HAOS)"
     min: 1
-    max: 16
+    max: 12
     step: 1
     initial: 2
 
   cpu_101:
     name: "CPU 101 (MariaDB)"
     min: 1
-    max: 16
+    max: 12
     step: 1
     initial: 1
 
   cpu_102:
     name: "CPU 102 (Jackett)"
     min: 1
-    max: 16
+    max: 12
     step: 1
     initial: 1
 
   cpu_103:
     name: "CPU 103 (Jellyfin)"
     min: 1
-    max: 16
+    max: 12
     step: 1
     initial: 2
 
   cpu_104:
     name: "CPU 104 (Deluge)"
     min: 1
-    max: 16
+    max: 12
     step: 1
     initial: 2
 
   cpu_105:
     name: "CPU 105 (TorrServer)"
     min: 1
-    max: 16
+    max: 12
     step: 1
     initial: 1
 
-  # cpu_106:
-  #   name: "CPU 106 (LMS)"
-  #   min: 1
-  #   max: 16
-  #   step: 1
-  #   initial: 1
+  cpu_106:
+    name: "CPU 106 (immich)"
+    min: 1
+    max: 12
+    step: 1
+    initial: 4
 
   cpu_107:
     name: "CPU 107 (Minim)"
     min: 1
-    max: 16
+    max: 12
     step: 1
+    initial: 1
+
+  cpu_108:
+    name: "CPU 108 (Photoview)"
+    min: 1
+    max: 12
+    step: 2
     initial: 1
 
 ##############################################################################
@@ -87,90 +94,88 @@ input_number:
 
 template:
   - sensor:
-      # --- Сенсоры нормализованной загрузки (как у вас) ---
-      # Показывают, насколько гость загружен относительно ВЫДЕЛЕННЫХ ему ресурсов.
+      # ========================================================================
+      # НОРМАЛИЗОВАННАЯ ЗАГРУЗКА (относительно выделенных ядер)
+      # ========================================================================
+      # Proxmox уже возвращает проценты — просто пробрасываем
+      
       - name: "CPU VM HAOS12 Normalized"
         unique_id: cpu_vm_haos12_100_normalized
         unit_of_measurement: "%"
         icon: mdi:percent-outline
         state: >-
-          {% set raw = states('sensor.qemu_haos12_3_100_cpu_used') | float(0) %}
-          {% set cpus = states('input_number.cpu_100') | float(1) %}
-          {{ (raw / cpus) | round(2) }}
+          {{ states('sensor.qemu_haos12_3_100_cpu_used') | float(0) | round(2) }}
 
       - name: "CPU LXC MariaDB Normalized"
         unique_id: cpu_lxc_mariadb_101_normalized
         unit_of_measurement: "%"
         icon: mdi:percent-outline
         state: >-
-          {% set raw = states('sensor.lxc_mariadb_101_cpu_used') | float(0) %}
-          {% set cpus = states('input_number.cpu_101') | float(1) %}
-          {{ (raw / cpus) | round(2) }}
+          {{ states('sensor.lxc_mariadb_101_cpu_used') | float(0) | round(2) }}
 
       - name: "CPU LXC Jackett Normalized"
         unique_id: cpu_lxc_jackett_102_normalized
         unit_of_measurement: "%"
         icon: mdi:percent-outline
         state: >-
-          {% set raw = states('sensor.lxc_jackett_102_cpu_used') | float(0) %}
-          {% set cpus = states('input_number.cpu_102') | float(1) %}
-          {{ (raw / cpus) | round(2) }}
+          {{ states('sensor.lxc_jackett_102_cpu_used') | float(0) | round(2) }}
 
       - name: "CPU LXC Jellyfin Normalized"
         unique_id: cpu_lxc_jellyfin_103_normalized
         unit_of_measurement: "%"
         icon: mdi:percent-outline
         state: >-
-          {% set raw = states('sensor.lxc_jellyfin_103_cpu_used') | float(0) %}
-          {% set cpus = states('input_number.cpu_103') | float(1) %}
-          {{ (raw / cpus) | round(2) }}
+          {{ states('sensor.lxc_jellyfin_103_cpu_used') | float(0) | round(2) }}
 
       - name: "CPU LXC Deluge Normalized"
         unique_id: cpu_lxc_deluge_104_normalized
         unit_of_measurement: "%"
         icon: mdi:percent-outline
         state: >-
-          {% set raw = states('sensor.lxc_deluge_104_cpu_used') | float(0) %}
-          {% set cpus = states('input_number.cpu_104') | float(1) %}
-          {{ (raw / cpus) | round(2) }}
+          {{ states('sensor.lxc_deluge_104_cpu_used') | float(0) | round(2) }}
 
       - name: "CPU LXC TorrServer Normalized"
         unique_id: cpu_lxc_torrserver_105_normalized
         unit_of_measurement: "%"
         icon: mdi:percent-outline
         state: >-
-          {% set raw = states('sensor.lxc_debian_105_cpu_used') | float(0) %}
-          {% set cpus = states('input_number.cpu_105') | float(1) %}
-          {{ (raw / cpus) | round(2) }}
+          {{ states('sensor.lxc_debian_105_cpu_used') | float(0) | round(2) }}
 
-      # - name: "CPU LXC Lyrion Music Server Normalized"
-      #   unique_id: cpu_lxc_lms_106_normalized
-      #   unit_of_measurement: "%"
-      #   icon: mdi:percent-outline
-      #   state: >-
-      #     {% set raw = states('sensor.lxc_lyrionmusicserver_106_cpu_used') | float(0) %}
-      #     {% set cpus = states('input_number.cpu_106') | float(1) %}
-      #     {{ (raw / cpus) | round(2) }}
+      - name: "CPU LXC Immich Normalized"
+        unique_id: cpu_lxc_immich_106_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: >-
+          {{ states('sensor.lxc_immich_106_cpu_used') | float(0) | round(2) }}
 
-      - name: "CPU LXC Minim Music Server Normalized"
+      - name: "CPU LXC Minim Server Normalized"
         unique_id: cpu_lxc_lms_107_normalized
         unit_of_measurement: "%"
         icon: mdi:percent-outline
         state: >-
-          {% set raw = states('sensor.lxc_minim_107_cpu_used') | float(0) %}
-          {% set cpus = states('input_number.cpu_107') | float(1) %}
-          {{ (raw / cpus) | round(2) }}
+          {{ states('sensor.lxc_minim_107_cpu_used') | float(0) | round(2) }}
 
-      # --- Сенсоры загрузки относительно ХОСТА ---
-      # Показывают, какой процент от ОБЩЕЙ мощности сервера использует гость.
+      - name: "CPU LXC Photoview Normalized"
+        unique_id: cpu_lxc_photoview_108_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: >-
+          {{ states('sensor.lxc_photoview_108_cpu_used') | float(0) | round(2) }}
+
+      # ========================================================================
+      # ВКЛАД В ЗАГРУЗКУ ХОСТА (какой % от всего сервера занимает гость)
+      # ========================================================================
+      # Формула: raw × выделенные_ядра / всего_ядер_хоста
+      
       - name: "CPU VM HAOS12 Host Percent"
         unique_id: cpu_vm_haos12_100_host_percent
         unit_of_measurement: "%"
         icon: mdi:chart-pie
         state: >-
           {% set raw = states('sensor.qemu_haos12_3_100_cpu_used') | float(0) %}
-          {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
-          {{ (raw / host_threads) | round(2) }}
+          {% set cpus = states('input_number.cpu_100') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
 
       - name: "CPU LXC MariaDB Host Percent"
         unique_id: cpu_lxc_mariadb_101_host_percent
@@ -178,8 +183,9 @@ template:
         icon: mdi:chart-pie
         state: >-
           {% set raw = states('sensor.lxc_mariadb_101_cpu_used') | float(0) %}
-          {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
-          {{ (raw / host_threads) | round(2) }}
+          {% set cpus = states('input_number.cpu_101') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
 
       - name: "CPU LXC Jackett Host Percent"
         unique_id: cpu_lxc_jackett_102_host_percent
@@ -187,8 +193,9 @@ template:
         icon: mdi:chart-pie
         state: >-
           {% set raw = states('sensor.lxc_jackett_102_cpu_used') | float(0) %}
-          {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
-          {{ (raw / host_threads) | round(2) }}
+          {% set cpus = states('input_number.cpu_102') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
 
       - name: "CPU LXC Jellyfin Host Percent"
         unique_id: cpu_lxc_jellyfin_103_host_percent
@@ -196,8 +203,9 @@ template:
         icon: mdi:chart-pie
         state: >-
           {% set raw = states('sensor.lxc_jellyfin_103_cpu_used') | float(0) %}
-          {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
-          {{ (raw / host_threads) | round(2) }}
+          {% set cpus = states('input_number.cpu_103') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
 
       - name: "CPU LXC Deluge Host Percent"
         unique_id: cpu_lxc_deluge_104_host_percent
@@ -205,8 +213,9 @@ template:
         icon: mdi:chart-pie
         state: >-
           {% set raw = states('sensor.lxc_deluge_104_cpu_used') | float(0) %}
-          {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
-          {{ (raw / host_threads) | round(2) }}
+          {% set cpus = states('input_number.cpu_104') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
 
       - name: "CPU LXC TorrServer Host Percent"
         unique_id: cpu_lxc_debian_105_host_percent
@@ -214,17 +223,19 @@ template:
         icon: mdi:chart-pie
         state: >-
           {% set raw = states('sensor.lxc_debian_105_cpu_used') | float(0) %}
-          {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
-          {{ (raw / host_threads) | round(2) }}
+          {% set cpus = states('input_number.cpu_105') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
 
-      # - name: "CPU LXC Lyrion Music Server Host Percent"
-      #   unique_id: cpu_lxc_lyrion_106_host_percent
-      #   unit_of_measurement: "%"
-      #   icon: mdi:chart-pie
-      #   state: >-
-      #     {% set raw = states('sensor.lxc_lyrionmusicserver_106_cpu_used') | float(0) %}
-      #     {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
-      #     {{ (raw / host_threads) | round(2) }}
+      - name: "CPU LXC Immich Host Percent"
+        unique_id: cpu_lxc_immich_106_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_immich_106_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_106') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
 
       - name: "CPU LXC Minim Server Host Percent"
         unique_id: cpu_lxc_minim_107_host_percent
@@ -232,5 +243,16 @@ template:
         icon: mdi:chart-pie
         state: >-
           {% set raw = states('sensor.lxc_minim_107_cpu_used') | float(0) %}
-          {% set host_threads = states('input_number.proxmox_host_cpu_threads') | float(1) %}
-          {{ (raw / host_threads) | round(2) }}
+          {% set cpus = states('input_number.cpu_107') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC Photoview Host Percent"
+        unique_id: cpu_lxc_photoview_108_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_photoview_108_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_108') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}

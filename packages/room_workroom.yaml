@@ -37,6 +37,13 @@ input_boolean:
     initial: false
     icon: mdi:bell-ring
 
+# ДОБАВЛЕНО: Таймер для надежного сброса флага
+timer:
+  workroom_th_notice_reset:
+    name: "Мастерская: таймер сброса уведомлений"
+    duration: "00:20:00"
+    icon: mdi:timer-refresh
+
 automation:
   # ----------------------------------------------------------------------------
   # 1) ВКЛ/ВЫКЛ ПОДСВЕТКИ РАБОЧЕЙ ЗОНЫ КНОПКОЙ
@@ -70,40 +77,40 @@ automation:
       чтобы не спамить до сброса.
     mode: single
     triggers:
+      # Основной триггер (переход границы)
       - trigger: numeric_state
         entity_id: sensor.srednee_znachenie_temperatury_v_masterskoi_2
         below: 20
         for:
           minutes: 1
+      # Резервный триггер (если HA перезагрузился, а там уже холодно)
+      - trigger: time_pattern
+        minutes: "/15"
 
     conditions:
-      # дверь реально открыта (холод идёт с балкона)
+      # Проверка значения (нужна для time_pattern и как условие для numeric_state)
+      - condition: numeric_state
+        entity_id: sensor.srednee_znachenie_temperatury_v_masterskoi_2
+        below: 20
+
       - condition: state
         entity_id: binary_sensor.masterskaia_balkon_contact
         state: "on"
-
-      # HA уже загрузился
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-
-      # не уведомляли ещё недавно
       - condition: state
         entity_id: input_boolean.workroom_th_notice
         state: "off"
-
-      # данные не мусор
       - condition: template
         value_template: >-
-          {{ states('sensor.srednee_znachenie_temperatury_v_masterskoi_2') not in ['unknown','unavailable',''] and
-            states('binary_sensor.masterskaia_balkon_contact') not in ['unknown','unavailable',''] }}
+          {{ states('sensor.srednee_znachenie_temperatury_v_masterskoi_2') not in ['unknown','unavailable',''] }}
 
     actions:
       - variables:
-          telegram_message: "Температура в мастерской ниже 20°. Это мастерская, а не холодильник! Закройте дверь."
+          telegram_message: "Температура в мастерской ниже 20°. Закройте дверь!"
 
       - choose:
-          # Вариант 1: можно сказать голосом (silent_mode=off и хозяин дома)
           - conditions:
               - condition: state
                 entity_id: input_boolean.silent_mode
@@ -114,9 +121,7 @@ automation:
             sequence:
               - action: script.yandex_tts_generic
                 data:
-                  text: "Внимание! Температура в мастерской ниже двадцати градусов. Закройте дверь!"
-
-          # Вариант 2: тихий режим, тогда пишем в Телеграм
+                  text: "Внимание! Температура в мастерской ниже двадцати градусов."
           - conditions:
               - condition: state
                 entity_id: input_boolean.silent_mode
@@ -131,23 +136,29 @@ automation:
                 data:
                   message: "{{ telegram_message }}"
 
-      # ставим флаг антиспама
+      # Ставим флаг и запускаем ТАЙМЕР (вместо delay)
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.workroom_th_notice
+      - action: timer.start
+        target:
+          entity_id: timer.workroom_th_notice_reset
+        data:
+          duration: "00:{{ states('input_number.low_th_notification_reset_period') | int(20) }}:00"
 
   # ----------------------------------------------------------------------------
   # 3) HELPER: Сброс уведомлений о температуре в мастерской
+  # (Переписано на timer.finished)
   # ----------------------------------------------------------------------------
   - id: "9bdeb719-0792-4176-8451-367273fdbb4c"
     alias: "HELPER: Сброс уведомлений о температуре в мастерской"
     mode: single
     triggers:
-      - trigger: state
-        entity_id: input_boolean.workroom_th_notice
-        to: "on"
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.workroom_th_notice_reset
     actions:
-      - delay: "00:{{ states('input_number.low_th_notification_reset_period') | int }}:00"
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.workroom_th_notice

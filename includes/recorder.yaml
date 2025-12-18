@@ -67,7 +67,7 @@ include:
     - sensor.vlazhnost_vannoi_usrednennaia_za_1_minutu
     - sensor.uroven_co2_sglazhennyi
     - sensor.bathroom_filtered_humidity
-    - sensor.temperatura_v_gostinnoi_sglazhennaia
+    - sensor.temperatura_v_gostinoi_sglazhennaia
     - sensor.temperatura_v_spalne_sglazhennaia
     - sensor.srednee_znachenie_temperatury_v_masterskoi_2
     # Электроэнергия

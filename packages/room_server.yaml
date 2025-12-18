@@ -23,7 +23,7 @@
 # ЗАВИСИМОСТИ:
 # • input_boolean.system_startup_phase — флаг фазы запуска системы
 # • input_boolean.silent_mode — режим тишины (без уведомлений)
-# • binary_sensor.someone_is_home_2 — наличие людей дома
+# • binary_sensor.someone_is_home — наличие людей дома
 #
 # ЛОГИКА УПРАВЛЕНИЯ ВЕНТИЛЯТОРОМ:
 # ┌─────────────────────────────────────────────────────────────────┐
@@ -91,9 +91,12 @@ input_number:
 #                          БИНАРНЫЕ СЕНСОРЫ
 ##############################################################################
 
-binary_sensor:
-  - platform: template
-    sensors:
+##############################################################################
+#                          БИНАРНЫЕ СЕНСОРЫ
+##############################################################################
+
+template:
+  - binary_sensor:
       # ======================================================================
       # МОНИТОРИНГ ПРОФИЛАКТИКИ ИБП
       # ======================================================================
@@ -101,38 +104,36 @@ binary_sensor:
       # ----------------------------------------------------------------------
       # Роутер на профилактике ИБП
       # ----------------------------------------------------------------------
-      ups_maintenance_router:
-        unique_id: ups_maintenance_router
-        friendly_name: "Роутер на профилактике ИБП"
-        device_class: problem
-        availability_template: >
-          {{ states('switch.my_multi_outlet_left') not in ['unknown','unavailable',''] }}
-        value_template: >
-          {{ is_state('switch.my_multi_outlet_left', 'off') }}
-        icon_template: >-
-          {% if is_state('switch.my_multi_outlet_left', 'off') %}
-            mdi:power-plug-off
-          {% else %}
-            mdi:power-plug
-          {% endif %}
+      # - unique_id: ups_maintenance_router
+      #   name: "Роутер на профилактике ИБП"
+      #   device_class: problem
+      #   availability: >
+      #     {{ states('switch.my_multi_outlet_left') not in ['unknown','unavailable',''] }}
+      #   state: >
+      #     {{ is_state('switch.my_multi_outlet_left', 'off') }}
+      #   icon: >-
+      #     {% if is_state('switch.my_multi_outlet_left', 'off') %}
+      #       mdi:power-plug-off
+      #     {% else %}
+      #       mdi:power-plug
+      #     {% endif %}
 
       # ----------------------------------------------------------------------
       # МиниПК на профилактике ИБП
       # ----------------------------------------------------------------------
-      ups_maintenance_minipc:
-        unique_id: ups_maintenance_minipc
-        friendly_name: "МиниПК на профилактике ИБП"
-        device_class: problem
-        availability_template: >
-          {{ states('switch.my_multi_outlet_right') not in ['unknown','unavailable',''] }}
-        value_template: >
-          {{ is_state('switch.my_multi_outlet_right', 'off') }}
-        icon_template: >-
-          {% if is_state('switch.my_multi_outlet_right', 'off') %}
-            mdi:power-plug-off
-          {% else %}
-            mdi:power-plug
-          {% endif %}
+      # - unique_id: ups_maintenance_minipc
+      #   name: "МиниПК на профилактике ИБП"
+      #   device_class: problem
+      #   availability: >
+      #     {{ states('switch.my_multi_outlet_right') not in ['unknown','unavailable',''] }}
+      #   state: >
+      #     {{ is_state('switch.my_multi_outlet_right', 'off') }}
+      #   icon: >-
+      #     {% if is_state('switch.my_multi_outlet_right', 'off') %}
+      #       mdi:power-plug-off
+      #     {% else %}
+      #       mdi:power-plug
+      #     {% endif %}
 
       # ======================================================================
       # КОНТРОЛЬ ТЕМПЕРАТУРЫ С ГИСТЕРЕЗИСОМ
@@ -159,22 +160,22 @@ binary_sensor:
       # • Предотвращает частые переключения вентилятора
       # • Защищает реле от износа
       # • Обеспечивает плавное управление
+      #
+      # ВАЖНО: delay_on не поддерживается в новом формате template.
+      # Задержка реализуется в автоматизации через "for:" в триггере.
       # ----------------------------------------------------------------------
-      server_temp_high:
-        unique_id: server_temp_high
-        friendly_name: "Высокая температура сервера"
+      - unique_id: server_temp_high
+        name: "Высокая температура сервера"
         device_class: problem
-        availability_template: >
+        availability: >
           {{ states('sensor.0xa4c13861a18df7c8_temperature') not in ['unknown','unavailable',''] }}
-        value_template: >
+        state: >
           {% set temp   = states('sensor.0xa4c13861a18df7c8_temperature') | float(0) %}
           {% set high   = states('input_number.server_temp_high_threshold') | float(30) %}
           {% set low    = states('input_number.server_temp_low_threshold')  | float(28) %}
           {% set was_on = is_state('binary_sensor.server_temp_high','on') %}
           {{ (temp > low) if was_on else (temp > high) }}
-        delay_on:
-          minutes: 2 # Устойчиво высокая температура 2 минуты
-        icon_template: >-
+        icon: >-
           {% if is_state('binary_sensor.server_temp_high', 'on') %}
             mdi:thermometer-alert
           {% else %}
@@ -240,68 +241,68 @@ automation:
   # --------------------------------------------------------------------------
   # Уведомление о недоступности розетки (отключение электричества)
   # --------------------------------------------------------------------------
-  - id: "12858001-138d-4238-97f9-e5a501c6fe18"
-    alias: "Сервер: недоступность розетки (отключение электричества)"
-    description: >
-      Отправляет уведомление при недоступности розеток ИБП.
+  # - id: "12858001-138d-4238-97f9-e5a501c6fe18"
+  #   alias: "Сервер: недоступность розетки (отключение электричества)"
+  #   description: >
+  #     Отправляет уведомление при недоступности розеток ИБП.
 
-      ТРИГГЕР:
-      • Розетка становится недоступной (unavailable) более 1 минуты
-      • switch.my_multi_outlet_left (роутер)
-      • switch.my_multi_outlet_right (Mini-PC)
+  #     ТРИГГЕР:
+  #     • Розетка становится недоступной (unavailable) более 1 минуты
+  #     • switch.my_multi_outlet_left (роутер)
+  #     • switch.my_multi_outlet_right (Mini-PC)
 
-      УСЛОВИЯ:
-      • Фаза запуска завершена (система инициализирована)
-      • Режим тишины выключен (уведомления разрешены)
-      • Кто-то дома (есть кому получить уведомление)
+  #     УСЛОВИЯ:
+  #     • Фаза запуска завершена (система инициализирована)
+  #     • Режим тишины выключен (уведомления разрешены)
+  #     • Кто-то дома (есть кому получить уведомление)
 
-      ДЕЙСТВИЯ:
-      • Отправка уведомления мастеру
-      • Запись в системный лог
+  #     ДЕЙСТВИЯ:
+  #     • Отправка уведомления мастеру
+  #     • Запись в системный лог
 
-      ВОЗМОЖНЫЕ ПРИЧИНЫ НЕДОСТУПНОСТИ:
-      • Отключение электричества
-      • Разряд ИБП
-      • Неисправность ИБП
-      • Проблемы с сетевым подключением
+  #     ВОЗМОЖНЫЕ ПРИЧИНЫ НЕДОСТУПНОСТИ:
+  #     • Отключение электричества
+  #     • Разряд ИБП
+  #     • Неисправность ИБП
+  #     • Проблемы с сетевым подключением
 
-      ПРИМЕЧАНИЕ:
-      • Задержка 1 минута защищает от ложных срабатываний
-      • При восстановлении питания розетки автоматически станут доступны
-    mode: single
-    triggers:
-      - trigger: state
-        entity_id:
-          - switch.my_multi_outlet_left
-          - switch.my_multi_outlet_right
-        to: "unavailable"
-        for:
-          minutes: 1
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.silent_mode
-        state: "off"
-      - condition: state
-        entity_id: binary_sensor.someone_is_home_2
-        state: "on"
-    actions:
-      - action: notify.send_message
-        target:
-          entity_id: notify.telegram_master
-        data:
-          message: >
-            ⚠️ Серверная: розетка недоступна!
+  #     ПРИМЕЧАНИЕ:
+  #     • Задержка 1 минута защищает от ложных срабатываний
+  #     • При восстановлении питания розетки автоматически станут доступны
+  #   mode: single
+  #   triggers:
+  #     - trigger: state
+  #       entity_id:
+  #         - switch.my_multi_outlet_left
+  #         - switch.my_multi_outlet_right
+  #       to: "unavailable"
+  #       for:
+  #         minutes: 1
+  #   conditions:
+  #     - condition: state
+  #       entity_id: input_boolean.system_startup_phase
+  #       state: "off"
+  #     - condition: state
+  #       entity_id: input_boolean.silent_mode
+  #       state: "off"
+  #     - condition: state
+  #       entity_id: binary_sensor.someone_is_home
+  #       state: "on"
+  #   actions:
+  #     - action: notify.send_message
+  #       target:
+  #         entity_id: notify.telegram_master
+  #       data:
+  #         message: >
+  #           ⚠️ Серверная: розетка недоступна!
 
-            Устройство: {{ state_attr(trigger.entity_id, 'friendly_name') }}
-            Розетка: {{ trigger.entity_id }}
-      - action: system_log.write
-        data:
-          message: >
-            Розетка {{ trigger.entity_id }} недоступна — уведомление отправлено.
-          level: warning
+  #           Устройство: {{ state_attr(trigger.entity_id, 'friendly_name') }}
+  #           Розетка: {{ trigger.entity_id }}
+  #     - action: system_log.write
+  #       data:
+  #         message: >
+  #           Розетка {{ trigger.entity_id }} недоступна — уведомление отправлено.
+  #         level: warning
 
   # ==========================================================================
   # УПРАВЛЕНИЕ ТЕМПЕРАТУРОЙ И ВЕНТИЛЯТОРОМ
@@ -338,14 +339,12 @@ automation:
       • Защищает от конфликтов при быстрых изменениях температуры
 
       ЛОГИКА ГИСТЕРЕЗИСА:
-      ┌────────────────────────────────────────┐
-      │ 30°C ─────────────────────────────────│ ← Включение (ON)
-      │                                        │
-      │ 29°C - - - - - - - - - - - - - - - - │
-      │      ↑ Вентилятор работает            │
-      │ 28°C ─────────────────────────────────│ ← Начало выключения (OFF)
-      │      ↓ Запуск таймеров                │
-      └────────────────────────────────────────┘
+       30°C ← Включение (ON)
+
+      29°C ↑ Вентилятор работает
+      28°C ← Начало выключения (OFF)
+      ↓ Запуск таймеров
+
     mode: restart
     triggers:
       - trigger: state
@@ -476,19 +475,13 @@ automation:
       • Запись в лог с указанием текущей температуры
 
       ПОЛНЫЙ ЦИКЛ ОХЛАЖДЕНИЯ:
-      ┌────────────────────────────────────────────────────────────┐
-      │ 1. Температура > 30°C (2 мин устойчиво)                   │
-      │    ↓                                                       │
-      │ 2. Включение вентилятора                                  │
-      │    ↓                                                       │
-      │ 3. Температура < 28°C                                     │
-      │    ↓                                                       │
-      │ 4. Таймер подтверждения (30 мин)                          │
-      │    ↓                                                       │
-      │ 5. Таймер задержки (5 мин)                                │
-      │    ↓                                                       │
-      │ 6. Выключение вентилятора ← ВЫ ЗДЕСЬ                      │
-      └────────────────────────────────────────────────────────────┘
+      1. Температура > 30°C (2 мин устойчиво)
+      2. Включение вентилятора
+      3. Температура < 28°C
+      4. Таймер подтверждения (30 мин)
+      5. Таймер задержки (5 мин)
+      6. Выключение вентилятора ← ВЫ ЗДЕСЬ
+
 
       ЗАЩИТА ОТ ПРЕЖДЕВРЕМЕННОГО ВЫКЛЮЧЕНИЯ:
       • Если температура поднялась на любом этапе — таймеры отменяются

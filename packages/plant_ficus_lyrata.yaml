@@ -1,146 +1,105 @@
 ################################################################################
 # /packages/plant_ficus_lyrata.yaml
 ################################################################################
-#
-# Мониторинг Фикуса лировидного (Ficus lyrata):
-#   • почва (нужно ли полить)
-#   • температура (слишком холодно / жарко)
-#
-# Фишки:
-#   - Гистерезис по влажности: после полива не кричим "полей"
-#   - Не шлём уведомления во время старта системы
-#   - Требуем, чтобы состояние было критичным стабильно (for:)
-#   - Уважаем кулдаун между уведомлениями
-################################################################################
 
-##############################################################################
-#                             ВХОДНЫЕ ПЕРЕМЕННЫЕ
-##############################################################################
+# ==============================================================================
+# ХРАНЕНИЕ СОСТОЯНИЯ (История уведомлений)
+# ==============================================================================
 input_text:
   notification_history_ficus_lyrata:
-    name: "Фикус лировидный: История уведомлений"
+    name: "Фикус лировидный: История"
+    max: 255
 
 input_datetime:
   last_ficus_lyrata_soil_notification:
-    name: "Last Ficus lyrata Soil Notification Time"
+    name: "Last Ficus Soil Notif"
     has_date: true
     has_time: true
-    initial: "1970-01-01 00:00:00"
-
   last_ficus_lyrata_temperature_notification:
-    name: "Last Ficus lyrata Temperature Notification Time"
+    name: "Last Ficus Temp Notif"
     has_date: true
     has_time: true
-    initial: "1970-01-01 00:00:00"
 
-##############################################################################
-#                                 СЕНСОРЫ
-##############################################################################
+# ==============================================================================
+# СГЛАЖИВАЮЩИЕ ФИЛЬТРЫ
+# ==============================================================================
 sensor:
-  # Температура (сглаженная)
   - platform: filter
     name: "ficus_lyrata_filtered_temperature"
-    entity_id: sensor.ficus_lyrata_temperature
+    # Ссылаемся на реальный сенсор Efekta
+    entity_id: sensor.flower_ficus_efekta_sensor_temperature
     filters:
       - filter: time_simple_moving_average
         window_size: "01:00"
         precision: 2
 
-  # Влажность воздуха рядом с растением (сглаженная)
-  - platform: filter
-    name: "ficus_lyrata_filtered_air_humidity"
-    entity_id: sensor.ficus_lyrata_air_humidity
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "01:00"
-        precision: 2
-
-  # Влажность почвы (сглаженная)
   - platform: filter
     name: "ficus_lyrata_filtered_soil_moisture"
-    entity_id: sensor.ficus_lyrata_soil_moisture
+    # Ссылаемся на реальный сенсор Efekta
+    entity_id: sensor.flower_ficus_efekta_sensor_soil_moisture
     filters:
       - filter: time_simple_moving_average
         window_size: "01:00"
         precision: 2
 
-##############################################################################
-#                            БИНАРНЫЕ СЕНСОРЫ
-##############################################################################
-binary_sensor:
-  - platform: template
-    sensors:
-      # ----------------------------------------------------------------------
-      # "Пора поливать" с гистерезисом и защитой от "слишком мокро"
-      # ----------------------------------------------------------------------
-      plant_alert_ficus_lyrata_soil:
-        unique_id: plant_alert_ficus_lyrata_soil
-        friendly_name: "Необходимость полива (Фикус лировидный)"
+  # Добавляем фильтр для влажности воздуха (раз он есть в дампе и может пригодиться)
+  # В дампе видно, что ficus использует внешний sensor.livingroom_average_humidity,
+  # поэтому здесь фильтр можно не делать, либо фильтровать его же.
+  # Оставим пока без фильтра, если логика пакета его не требует.
+
+# ==============================================================================
+# БИНАРНЫЕ СЕНСОРЫ (ЛОГИКА УВЕДОМЛЕНИЙ)
+# ==============================================================================
+template:
+  - binary_sensor:
+      # --- ПОЧВА (НУЖЕН ПОЛИВ) ---
+      - unique_id: plant_alert_ficus_lyrata_soil
+        name: "Необходимость полива (Фикус)"
         device_class: problem
-        availability_template: >-
-          {{ states('sensor.ficus_lyrata_filtered_soil_moisture') not in ['unknown','unavailable','none',''] and
-             states('number.ficus_lyrata_min_soil_moisture') not in ['unknown','unavailable','none',''] and
-             states('number.ficus_lyrata_max_soil_moisture') not in ['unknown','unavailable','none',''] }}
-        value_template: >-
+        availability: >-
+          {{ states('sensor.ficus_lyrata_filtered_soil_moisture') not in ['unknown','unavailable',''] }}
+        state: >-
           {% set moisture = states('sensor.ficus_lyrata_filtered_soil_moisture') | float(0) %}
-          {% set min_thr  = states('number.ficus_lyrata_min_soil_moisture') | float(0) %}
-          {% set max_thr  = states('number.ficus_lyrata_max_soil_moisture') | float(9999) %}
+          {# Используем существующие number.* от Efekta #}
+          {% set min_thr  = states('number.ficus_lyrata_min_soil_moisture') | float(15) %}
+          {% set max_thr  = states('number.ficus_lyrata_max_soil_moisture') | float(60) %}
+
           {% set was_on   = is_state('binary_sensor.plant_alert_ficus_lyrata_soil','on') %}
-
-          {# Пояснение логики:
-             1. Если почва залита (влажность > max_thr), явно НЕ просим полива.
-             2. Если раньше была тревога "сухо",
-                держим её включенной пока влага не ушла заметно выше минимума.
-                Берём "min_thr + 5" как зону отпускания.
-             3. Если раньше не было тревоги,
-                включаем её только если реально ниже минимума.
-          #}
-
           {% set release_thr = min_thr + 5 %}
-          {% if moisture > max_thr %}
-            false
-          {% elif was_on %}
-            {{ moisture < release_thr }}
-          {% else %}
-            {{ moisture < min_thr }}
+
+          {# Логика: если перелив (>max) - молчим. Иначе гистерезис. #}
+          {% if moisture > max_thr %} false
+          {% elif was_on %} {{ moisture < release_thr }}
+          {% else %} {{ moisture < min_thr }}
           {% endif %}
+        icon: mdi:water-alert
 
-      # ----------------------------------------------------------------------
-      # Температура вне диапазона
-      # ----------------------------------------------------------------------
-      plant_alert_ficus_lyrata_temperature:
-        unique_id: plant_alert_ficus_lyrata_temperature
-        friendly_name: "Необходимость согрева или охлаждения (Фикус лировидный)"
+      # --- ТЕМПЕРАТУРА ---
+      - unique_id: plant_alert_ficus_lyrata_temperature
+        name: "Температура (Фикус)"
         device_class: problem
-        availability_template: >-
-          {{ states('sensor.ficus_lyrata_filtered_temperature') not in ['unknown','unavailable','none',''] and
-             states('number.ficus_lyrata_min_temperature') not in ['unknown','unavailable','none',''] and
-             states('number.ficus_lyrata_max_temperature') not in ['unknown','unavailable','none',''] }}
-        value_template: >-
+        state: >-
           {% set t    = states('sensor.ficus_lyrata_filtered_temperature') | float(0) %}
-          {% set tmin = states('number.ficus_lyrata_min_temperature') | float(0) %}
-          {% set tmax = states('number.ficus_lyrata_max_temperature') | float(0) %}
-          {{ (t > 0 and t < tmin) or (t > tmax) }}
+          {% set tmin = states('number.ficus_lyrata_min_temperature') | float(12) %}
+          {% set tmax = states('number.ficus_lyrata_max_temperature') | float(32) %}
+          {{ (t > 0) and (t < tmin or t > tmax) }}
+        icon: mdi:sun-thermometer-outline
 
-##############################################################################
-#                              АВТОМАТИЗАЦИИ
-##############################################################################
+      # СВЕТА НЕТ (Удалено, так как датчик не отдает lux)
+
+# ==============================================================================
+# АВТОМАТИЗАЦИИ
+# ==============================================================================
 automation:
-  # --------------------------------------------------------------------------
-  # Полив: отправить уведомление, если фикус реально сухой
-  # --------------------------------------------------------------------------
-  - id: "3ee8085c-621a-49f0-98f6-cce0d5c3c49b"
-    alias: "Растение. Фикус лировидный: Уведомление о поливе"
-    description: >
-      Если бинарный сенсор 'почва сухая' держится во включённом состоянии,
-      хозяин дома, система не в старте и кулдаун прошёл — уведомляем.
+  # 1. Полив
+  - id: "ficus_notify_soil"
+    alias: "Растение. Фикус: Уведомление о поливе"
     mode: single
     trigger:
       - platform: state
         entity_id: binary_sensor.plant_alert_ficus_lyrata_soil
         to: "on"
-        for:
-          minutes: 30
+        for: "00:30:00"
     condition:
       - condition: state
         entity_id: person.master
@@ -148,67 +107,21 @@ automation:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-      - condition: template
-        value_template: >-
-          {% set last = states('input_datetime.last_ficus_lyrata_soil_notification') %}
-          {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
-          {% set cooldown = (states('input_number.plants_notification_cooldown_hours') | float(3) * 3600) | int %}
-          {{ (now().timestamp() - last_ts) > cooldown }}
     action:
-      # 1. Проверка доступности ключевых сенсоров влажности
-      - choose:
-          - conditions:
-              - condition: template
-                value_template: >-
-                  {{ states('sensor.ficus_lyrata_filtered_soil_moisture') in ['unknown','unavailable','none',''] or
-                     states('number.ficus_lyrata_min_soil_moisture') in ['unknown','unavailable','none',''] or
-                     states('number.ficus_lyrata_max_soil_moisture') in ['unknown','unavailable','none',''] }}
-            sequence:
-              - action: script.log_helper_event
-                data:
-                  level: error
-                  message: >
-                    Растение Фикус лировидный: не удалось отправить уведомление о поливе —
-                    один из сенсоров влажности недоступен или имеет некорректное значение.
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: >-
-                    {% set tr = trigger | default({}) %}
-                    {{ tr.get('entity_id','') }}
-                  trigger_from: >-
-                    {% set tr = trigger | default({}) %}
-                    {% set fs = tr.get('from_state') %}
-                    {{ fs.state if fs is not none else '' }}
-                  trigger_to: >-
-                    {% set tr = trigger | default({}) %}
-                    {% set ts = tr.get('to_state') %}
-                    {{ ts.state if ts is not none else '' }}
-                  extra: >
-                    soil={{ states('sensor.ficus_lyrata_filtered_soil_moisture') }};
-                    min={{ states('number.ficus_lyrata_min_soil_moisture') }};
-                    max={{ states('number.ficus_lyrata_max_soil_moisture') }}
-              - stop: "Сенсоры влажности недоступны, уведомление о поливе не отправлено."
-        default:
-          # 2. Основная логика: общая проверка условий растения
-          - action: script.plant_check_conditions
-            data:
-              plant_name: "Фикус лировидный"
-              plant_name_latin: "ficus_lyrata"
+      - service: script.plant_check_conditions
+        data:
+          plant_name: "Фикус лировидный"
+          plant_name_latin: "ficus_lyrata"
 
-  # --------------------------------------------------------------------------
-  # Температура: уведомление
-  # --------------------------------------------------------------------------
-  - id: "3ee8085c-621a-49f0-98f6-cce0d5c3c49c"
-    alias: "Растение. Фикус лировидный: Уведомление о температуре"
-    description: >
-      Температура вне диапазона 10 минут подряд, ты дома, кулдаун прошёл —
-      шлём уведомление (например «надо переставить в тёплое место»).
+  # 2. Температура
+  - id: "ficus_notify_temp"
+    alias: "Растение. Фикус: Уведомление о температуре"
     mode: single
     trigger:
       - platform: state
         entity_id: binary_sensor.plant_alert_ficus_lyrata_temperature
         to: "on"
-        for:
-          minutes: 10
+        for: "00:10:00"
     condition:
       - condition: state
         entity_id: person.master
@@ -216,66 +129,20 @@ automation:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-      - condition: template
-        value_template: >-
-          {% set last = states('input_datetime.last_ficus_lyrata_temperature_notification') %}
-          {% set last_ts = as_timestamp(last) if last not in ['unknown','unavailable','none'] else 0 %}
-          {% set cooldown = (states('input_number.plants_notification_cooldown_hours') | float(3) * 3600) | int %}
-          {{ (now().timestamp() - last_ts) > cooldown }}
     action:
-      # 1. Проверка доступности температурных сенсоров
-      - choose:
-          - conditions:
-              - condition: template
-                value_template: >-
-                  {{ states('sensor.ficus_lyrata_filtered_temperature') in ['unknown','unavailable','none',''] or
-                     states('number.ficus_lyrata_min_temperature') in ['unknown','unavailable','none',''] or
-                     states('number.ficus_lyrata_max_temperature') in ['unknown','unavailable','none',''] }}
-            sequence:
-              - action: script.log_helper_event
-                data:
-                  level: error
-                  message: >
-                    Растение Фикус лировидный: не удалось отправить уведомление о температуре —
-                    один из температурных сенсоров недоступен.
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: >-
-                    {% set tr = trigger | default({}) %}
-                    {{ tr.get('entity_id','') }}
-                  trigger_from: >-
-                    {% set tr = trigger | default({}) %}
-                    {% set fs = tr.get('from_state') %}
-                    {{ fs.state if fs is not none else '' }}
-                  trigger_to: >-
-                    {% set tr = trigger | default({}) %}
-                    {% set ts = tr.get('to_state') %}
-                    {{ ts.state if ts is not none else '' }}
-                  extra: >
-                    temp={{ states('sensor.ficus_lyrata_filtered_temperature') }};
-                    tmin={{ states('number.ficus_lyrata_min_temperature') }};
-                    tmax={{ states('number.ficus_lyrata_max_temperature') }}
-              - stop: "Температурные сенсоры недоступны, уведомление не отправлено."
-        default:
-          # 2. Основная логика: общая проверка условий растения
-          - action: script.plant_check_conditions
-            data:
-              plant_name: "Фикус лировидный"
-              plant_name_latin: "ficus_lyrata"
+      - service: script.plant_check_conditions
+        data:
+          plant_name: "Фикус лировидный"
+          plant_name_latin: "ficus_lyrata"
 
-  # --------------------------------------------------------------------------
-  # Периодическая самопроверка раз в 6 часов
-  # --------------------------------------------------------------------------
-  - id: "plant-ficus-periodic-check"
-    alias: "Растение. Фикус лировидный: Периодическая проверка"
-    description: >
-      Запуск общей проверки состояний растения, чтобы освежить историю
-      и не пропустить проблемы, даже если не было явного триггера.
-    mode: single
+  # 3. Периодическая проверка
+  - id: "ficus_periodic_check"
+    alias: "Растение. Фикус: Периодическая проверка"
     trigger:
       - platform: time_pattern
         hours: "/6"
     action:
-      - action: script.plant_check_conditions
+      - service: script.plant_check_conditions
         data:
           plant_name: "Фикус лировидный"
           plant_name_latin: "ficus_lyrata"

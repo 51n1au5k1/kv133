@@ -145,17 +145,16 @@ group:
 #                          БИНАРНЫЕ СЕНСОРЫ
 ##############################################################################
 
-binary_sensor:
-  - platform: template
-    sensors:
-      is_night_mode:
-        unique_id: bathroom_is_night_mode
-        friendly_name: "Ванная: ночной режим освещения"
+template:
+  # Ванная: ночной режим освещения
+  - binary_sensor:
+      - unique_id: bathroom_is_night_mode
+        name: bathroom_is_night_mode
         device_class: light
-        value_template: >-
+        state: >-
           {% set current_time = now().strftime('%H:%M') %}
           {{ '00:30' <= current_time < '06:00' }}
-        icon_template: >-
+        icon: >-
           {% if is_state('binary_sensor.is_night_mode', 'on') %}
             mdi:weather-night
           {% else %}
@@ -324,7 +323,7 @@ automation:
       - condition: or
         conditions:
           - condition: state
-            entity_id: binary_sensor.someone_is_home_2
+            entity_id: binary_sensor.someone_is_home
             state: "on"
           - condition: state
             entity_id: input_boolean.bathroom_cleaning_mode
@@ -414,7 +413,9 @@ automation:
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
-
+      - condition: state
+        entity_id: binary_sensor.bathroom_motions
+        state: "off"
     actions:
       - action: light.turn_off
         target:

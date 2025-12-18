@@ -2,22 +2,23 @@
 # /packages/room_livingroom_humidifier.yaml
 ################################################################################
 #
-# АВТОМАТИЧЕСКОЕ УПРАВЛЕНИЕ УВЛАЖНИТЕЛЕМ В ГОСТИНОЙ
+# АВТОМАТИЧЕСКОЕ УПРАВЛЕНИЕ УВЛАЖНИТЕЛЕМ В ГОСТИНОЙ (ALL-IN-ONE)
 #
 # ЛОГИКА:
-# • Источник данных: sensor.livingroom_average_humidity
-# • Включение: RH < 45% стабильно 3 мин
-# • Выключение: RH > 50% стабильно 3 мин
-# • Гистерезис: работающий остаётся ON, пока RH < 50%
-# • Антидребезг: мин. время работы/простоя (10/15 мин)
+# • Основной сенсор: sensor.livingroom_average_humidity
+# • Бинарный сенсор (гистерезис): binary_sensor.livingroom_need_humidify
+# • Единый контроллер: включает/выключает по гистерезису + блокировкам
 #
-# УСТРОЙСТВО:
-# • humidifier.xiaomi_cn_823407205_p3
+# ЗАЩИТА:
+# • Min On/Off time через input_datetime.humidifier_last_on/off (из helper_climate_common)
+# • Блокировка при открытых дверях (doors_in_kitchen_livingroom)
+# • Блокировка по low_water (input_boolean.humidifier_low_water_notified)
+#   - событие low_water -> ставим флаг ON
+#   - если устройство реально смогло включиться -> сбрасываем флаг OFF
 #
-# ЗАВИСИМОСТИ:
-# • helper_climate_common.yaml — таймеры, скрипт обновления
-# • room_livingroom.yaml — усреднённая влажность
-#
+# ВАЖНО:
+# • CO2 НЕ используется
+# • input_datetime.humidifier_last_on/off НЕ пишем вручную
 ################################################################################
 
 ##############################################################################
@@ -25,24 +26,12 @@
 ##############################################################################
 
 input_boolean:
-  # --------------------------------------------------------------------------
-  # Автоматический режим увлажнителя
-  # --------------------------------------------------------------------------
-  # Мастер-переключатель автоматизации увлажнителя.
-  # OFF → увлажнитель управляется только вручную
-  # ON → автоматическое управление на основе влажности
   livingroom_humidifier_auto:
     name: "Гостиная: авто-режим увлажнителя"
     icon: mdi:autorenew
     initial: true
 
 input_number:
-  # --------------------------------------------------------------------------
-  # Нижний порог влажности (%)
-  # --------------------------------------------------------------------------
-  # Мягкий порог для гистерезиса.
-  # Увлажнитель включается, когда RH < этого значения стабильно 3 мин.
-  # Работающий увлажнитель остаётся ON, пока RH < верхнего порога.
   livingroom_hum_low:
     name: "Гостиная: нижний порог RH (%)"
     min: 20
@@ -51,11 +40,6 @@ input_number:
     initial: 47
     unit_of_measurement: "%"
 
-  # --------------------------------------------------------------------------
-  # Верхний порог влажности (%)
-  # --------------------------------------------------------------------------
-  # Жёсткий порог для выключения.
-  # Увлажнитель выключается, когда RH > этого значения стабильно 3 мин.
   livingroom_hum_high:
     name: "Гостиная: верхний порог RH (%)"
     min: 30
@@ -64,12 +48,6 @@ input_number:
     initial: 50
     unit_of_measurement: "%"
 
-  # --------------------------------------------------------------------------
-  # Минимальное время работы (мин)
-  # --------------------------------------------------------------------------
-  # Антидребезг: увлажнитель не выключится раньше этого времени.
-  # Предотвращает частые включения/выключения при колебаниях влажности.
-  # Гарантирует эффективное увлажнение помещения.
   livingroom_hum_min_on_min:
     name: "Мин. время работы увлажнителя (мин)"
     min: 1
@@ -77,12 +55,6 @@ input_number:
     step: 1
     initial: 10
 
-  # --------------------------------------------------------------------------
-  # Минимальное время простоя (мин)
-  # --------------------------------------------------------------------------
-  # Антидребезг: увлажнитель не включится раньше этого времени.
-  # Предотвращает износ устройства от частых запусков.
-  # Позволяет влаге равномерно распределиться по помещению.
   livingroom_hum_min_off_min:
     name: "Мин. время простоя увлажнителя (мин)"
     min: 1
@@ -91,51 +63,28 @@ input_number:
     initial: 15
 
 ##############################################################################
-#                               БИНАРНЫЕ СЕНСОРЫ
+#                          БИНАРНЫЙ СЕНСОР (ГИСТЕРЕЗИС)
 ##############################################################################
 
-binary_sensor:
-  - platform: template
-    sensors:
-      # ------------------------------------------------------------------------
-      # Необходимость увлажнения (гистерезис)
-      # ------------------------------------------------------------------------
-      # Вычисляет, нужно ли включить/выключить увлажнитель.
-      #
-      # ЛОГИКА ГИСТЕРЕЗИСА:
-      # • Выключен → включается при RH < 45%
-      # • Включён → остаётся ON, пока RH < 50%
-      # • Включён → выключается при RH ≥ 50%
-      #
-      # ИСТОЧНИК ДАННЫХ:
-      # • sensor.livingroom_average_humidity (усреднённая влажность из helper_climate_common)
-      # • Вычисляется как среднее между двумя датчиками
-      #
-      # ЗАЩИТА ОТ ОШИБОК:
-      # • Если датчик недоступен → сохраняет предыдущее состояние
-      # • Валидация порогов: high всегда > low
-      #
-      # ИКОНКА:
-      # • ON → mdi:water-alert (требуется увлажнение)
-      # • OFF → mdi:water-check (влажность в норме)
-      livingroom_need_humidify:
-        unique_id: livingroom_need_humidify
-        friendly_name: "Гостиная: нужна влажность (гистерезис)"
+template:
+  - binary_sensor:
+      - unique_id: livingroom_need_humidify
+        name: "Гостиная: нужна влажность (гистерезис)"
         device_class: moisture
-        icon_template: >-
+        icon: >-
           {% if is_state('binary_sensor.livingroom_need_humidify', 'on') %}
             mdi:water-alert
           {% else %}
             mdi:water-check
           {% endif %}
-        availability_template: >-
+        availability: >-
           {{ states('sensor.livingroom_average_humidity') not in ['unknown','unavailable',''] }}
-        value_template: >-
+        state: >-
           {% set rh = states('sensor.livingroom_average_humidity') | float(default=none) %}
           {% if rh is none %}
             {{ states('binary_sensor.livingroom_need_humidify') }}
           {% else %}
-            {% set low = states('input_number.livingroom_hum_low') | float(45) %}
+            {% set low = states('input_number.livingroom_hum_low') | float(47) %}
             {% set high = states('input_number.livingroom_hum_high') | float(50) %}
             {% if low >= high %}{% set high = low + 1 %}{% endif %}
             {% set was_on = is_state('binary_sensor.livingroom_need_humidify','on') %}
@@ -152,249 +101,248 @@ binary_sensor:
 
 automation:
   # ==========================================================================
-  # АВТОМАТИЧЕСКОЕ УПРАВЛЕНИЕ УВЛАЖНИТЕЛЕМ
+  # ЕДИНЫЙ КОНТРОЛЛЕР УВЛАЖНИТЕЛЯ
   # ==========================================================================
-
-  # --------------------------------------------------------------------------
-  # Включение увлажнителя при низкой влажности
-  # --------------------------------------------------------------------------
-  - id: "53de443d-bfb8-44ce-b576-50caa4197722"
-    alias: "Гостиная: включить увлажнитель"
+  - id: "livingroom_humidifier_controller_aio"
+    alias: "Гостиная: Управление увлажнителем (All-in-One)"
     description: >
-      Включает увлажнитель при снижении влажности ниже порога.
-
-      ТРИГГЕР:
-      • binary_sensor.livingroom_need_humidify: OFF → ON стабильно 3 мин
-      • RH < 45% (нижний порог)
-
-      УСЛОВИЯ:
-      1. Автоматический режим включён (livingroom_humidifier_auto = ON)
-      2. Минимальное время простоя прошло (≥15 мин с последнего выключения)
-
-      ЗАЩИТА ОТ ЧАСТЫХ ВКЛЮЧЕНИЙ:
-      • Триггер с задержкой 3 мин → защита от кратковременных просадок
-      • Проверка времени простоя → защита от износа устройства
-      • Позволяет влаге равномерно распределиться
-
-      ДЕЙСТВИЕ:
-      • Включает humidifier.xiaomi_cn_823407205_p3
-      • Обновляет input_datetime.humidifier_last_on
-
-      ВЗАИМОДЕЙСТВИЕ С ДРУГИМИ АВТОМАТИЗАЦИЯМИ:
-      • При открытии балконных дверей → выключится (helper_climate_common)
-      • При закрытии дверей → восстановится, если был включён
-    mode: single
+      Единая автоматизация управления увлажнителем:
+      • ON/OFF по binary_sensor.livingroom_need_humidify (гистерезис)
+      • Блокировки: двери, low_water
+      • Антидребезг: min on/off time (по input_datetime из helper_climate_common)
+      • Watchdog: каждые 5 минут на случай пропуска событий
+    mode: restart
     trigger:
       - platform: state
         entity_id: binary_sensor.livingroom_need_humidify
-        from: "off"
         to: "on"
-        for:
-          minutes: 3
-    condition:
-      - condition: state
-        entity_id: input_boolean.livingroom_humidifier_auto
-        state: "on"
-      - condition: template
-        value_template: >-
-          {% set last_off_state = states('input_datetime.humidifier_last_off') %}
-          {# если таймер ещё ни разу не записывался — пропускаем проверку #}
-          {% if last_off_state in ['unknown','unavailable',''] %}
-            true
-          {% else %}
-            {% set ts_last_off = last_off_state | as_timestamp %}
-            {% if ts_last_off is none %}
-              true
-            {% else %}
-              {% set min_off = states('input_number.livingroom_hum_min_off_min') | int(0) %}
-              {% set minutes_off = (as_timestamp(now()) - ts_last_off) / 60 %}
-              {{ minutes_off >= min_off }}
-            {% endif %}
-          {% endif %}
-    action:
-      - service: humidifier.turn_on
-        target:
-          entity_id: humidifier.xiaomi_cn_823407205_p3
+        for: "00:03:00"
+        id: need_on
 
-  # --------------------------------------------------------------------------
-  # Выключение увлажнителя при достижении целевой влажности
-  # --------------------------------------------------------------------------
-  - id: "60173f23-e7be-4b15-be34-c1258096d0ef"
-    alias: "Гостиная: выключить увлажнитель"
-    description: >
-      Выключает увлажнитель при достижении целевой влажности.
-
-      ТРИГГЕР:
-      • binary_sensor.livingroom_need_humidify: ON → OFF стабильно 3 мин
-      • RH ≥ 50% (верхний порог)
-
-      УСЛОВИЯ:
-      1. Автоматический режим включён (livingroom_humidifier_auto = ON)
-      2. Минимальное время работы прошло (≥10 мин с последнего включения)
-
-      ЗАЩИТА ОТ ЧАСТЫХ ВЫКЛЮЧЕНИЙ:
-      • Триггер с задержкой 3 мин → защита от кратковременных всплесков
-      • Проверка времени работы → гарантия эффективного увлажнения
-
-      ГИСТЕРЕЗИС:
-      • Включается при RH < 45%
-      • Выключается при RH ≥ 50%
-      • Зона стабильности: 45–50%
-
-      ДЕЙСТВИЕ:
-      • Выключает humidifier.xiaomi_cn_823407205_p3
-      • Обновляет input_datetime.humidifier_last_off
-
-      ВЗАИМОДЕЙСТВИЕ С ДРУГИМИ АВТОМАТИЗАЦИЯМИ:
-      • Сохраняет состояние при shutdown HA (helper_climate_common)
-      • Восстанавливает состояние при старте HA
-    mode: single
-    trigger:
       - platform: state
         entity_id: binary_sensor.livingroom_need_humidify
-        from: "on"
         to: "off"
-        for:
-          minutes: 3
+        for: "00:03:00"
+        id: need_off
 
-    # Авто-режим должен быть включён
+      - platform: time_pattern
+        minutes: "/5"
+        id: watchdog
+
+      - platform: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom
+        to: "off"
+        for: "00:01:00"
+        id: door_closed
+
+      - platform: state
+        entity_id: input_boolean.livingroom_humidifier_auto
+        to: "on"
+        id: auto_on
+
     condition:
       - condition: state
-        entity_id: input_boolean.livingroom_humidifier_auto
-        state: "on"
-
-    action:
-      - wait_template: >-
-          {% set last_on_state = states('input_datetime.humidifier_last_on') %}
-          {% if last_on_state in ['unknown','unavailable',''] %}
-            true
-          {% else %}
-            {% set last_on = last_on_state | as_timestamp %}
-            {% set min_on = states('input_number.livingroom_hum_min_on_min') | int(0) %}
-            {% if last_on is none %}
-              true
-            {% else %}
-              {% set minutes_on = (as_timestamp(now()) - last_on) / 60 %}
-              {{ minutes_on >= min_on }}
-            {% endif %}
-          {% endif %}
-        timeout: "03:00:00"
-        continue_on_timeout: true
-      - condition: state
-        entity_id: input_boolean.livingroom_humidifier_auto
-        state: "on"
-      - condition: state
-        entity_id: binary_sensor.livingroom_need_humidify
+        entity_id: input_boolean.system_startup_phase
         state: "off"
-      - service: humidifier.turn_off
-        target:
-          entity_id: humidifier.xiaomi_cn_823407205_p3
 
-  # ==========================================================================
-  # ТЕХНИЧЕСКИЕ ТРИГГЕРЫ ДЛЯ УВЕДОМЛЕНИЙ
-  # ==========================================================================
+      - condition: state
+        entity_id: input_boolean.livingroom_humidifier_auto
+        state: "on"
 
-  # --------------------------------------------------------------------------
-  # Триггер: фильтр увлажнителя <10%
-  # --------------------------------------------------------------------------
-  - id: "a6f8e632-52ec-4857-a6f3-b9b74a69e1a5"
-    alias: "Триггер: фильтр увлажнителя <10%"
-    description: >
-      Технический триггер для уведомлений о необходимости замены фильтра.
-
-      ТРИГГЕР:
-      • sensor.xiaomi_cn_823407205_p3_filter_life_level_p_8_1 < 10% стабильно 1 мин
-
-      НАЗНАЧЕНИЕ:
-      • Активирует сенсор в других пакетах (например, notifications.yaml)
-      • Не выполняет действий напрямую (actions: [])
-
-      ИСПОЛЬЗОВАНИЕ:
-      • Другая автоматизация отслеживает изменение last_triggered
-      • Отправляет уведомление через Telegram/TTS
-      • Устанавливает флаг humidifier_filter_replace_notified
-
-      ВАЖНО:
-      • Фильтр увлажнителя требует замены при износе >90%
-      • Изношенный фильтр снижает эффективность увлажнения
-      • Может привести к размножению бактерий
-    triggers:
-      - trigger: numeric_state
-        entity_id: sensor.xiaomi_cn_823407205_p3_filter_life_level_p_8_1
-        below: 10
-        for: "00:01:00"
-    actions: []
-
-  # --------------------------------------------------------------------------
-  # Триггер: фильтр увлажнителя >10%
-  # --------------------------------------------------------------------------
-  - id: "121ce3ac-de14-4ba8-984d-454c7ae9b3ec"
-    alias: "Триггер: фильтр увлажнителя >10%"
-    description: >
-      Технический триггер для сброса уведомлений о замене фильтра.
-
-      ТРИГГЕР:
-      • sensor.xiaomi_cn_823407205_p3_filter_life_level_p_8_1 > 10% стабильно 1 мин
-
-      НАЗНАЧЕНИЕ:
-      • Сбрасывает флаг humidifier_filter_replace_notified
-      • Позволяет повторно уведомить при следующем износе
-
-      ИСПОЛЬЗОВАНИЕ:
-      • После замены фильтра уровень > 10% → триггер сбрасывает уведомление
-      • При следующем износе < 10% → уведомление снова отправляется
-
-      ЛОГИКА:
-      1. Фильтр новый (100%) → уведомление не требуется
-      2. Фильтр изнашивается до 10% → срабатывает триггер "< 10%" → уведомление
-      3. Фильтр заменён (100%) → срабатывает триггер "> 10%" → сброс флага
-      4. Цикл повторяется
-    triggers:
-      - trigger: numeric_state
-        entity_id: sensor.xiaomi_cn_823407205_p3_filter_life_level_p_8_1
-        above: 10
-        for: "00:01:00"
-    actions: []
-
-  # --------------------------------------------------------------------------
-  # Триггер: низкий уровень воды в увлажнителе
-  # --------------------------------------------------------------------------
-  - id: "0889817f-ac88-4d48-8cbd-a0f57efa6f04"
-    alias: "Триггер: низкий уровень воды в увлажнителе"
-    description: >
-      Технический триггер для уведомлений о необходимости долить воду.
-
-      ТРИГГЕР:
-      • event.xiaomi_cn_823407205_p3_low_water_level_e_2_1 срабатывает
-      • Увлажнитель обнаруживает низкий уровень воды в резервуаре
-
-      НАЗНАЧЕНИЕ:
-      • Активирует уведомление в других пакетах
-      • Не выполняет действий напрямую (actions: [])
-
-      ИСПОЛЬЗОВАНИЕ:
-      • Другая автоматизация отслеживает событие
-      • Отправляет уведомление через Telegram/TTS
-      • Устанавливает флаг humidifier_low_water_notified
-
-      ВАЖНО:
-      • Увлажнитель автоматически выключается при низком уровне воды
-      • Работа без воды может повредить устройство
-      • Рекомендуется долить воду в течение 1-2 часов
-
-      АВТОМАТИЧЕСКИЙ СБРОС:
-      • Когда вода доливается → устройство продолжает работу
-      • Флаг humidifier_low_water_notified сбрасывается автоматически
-
-      ЗАЩИТА ОТ ЛОЖНЫХ СРАБАТЫВАНИЙ:
-      • Проверяет флаг xiaomi_home_integration_unstable
-      • Если интеграция нестабильна → игнорирует событие
-      • Предотвращает спам-уведомления при проблемах с соединением
-    triggers:
-      - trigger: state
-        entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
-    conditions:
       - condition: state
         entity_id: input_boolean.xiaomi_home_integration_unstable
         state: "off"
-    actions: []
+
+      - condition: template
+        value_template: >
+          {{ states('humidifier.xiaomi_cn_823407205_p3') not in ['unavailable', 'unknown', ''] }}
+
+    action:
+      - variables:
+          hum: humidifier.xiaomi_cn_823407205_p3
+
+          # --- безопасные поля триггера (time_pattern не имеет from/to) ---
+          trig_platform: "{{ trigger.platform if trigger is defined and trigger.platform is defined else '' }}"
+          trig_id: "{{ trigger.id if trigger is defined and trigger.id is defined else '' }}"
+          trig_entity: "{{ trigger.entity_id if trigger is defined and trigger.entity_id is defined else '' }}"
+          trig_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is defined and trigger.from_state is not none
+               else '' }}
+          trig_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is defined and trigger.to_state is not none
+               else '' }}
+
+          need: "{{ is_state('binary_sensor.livingroom_need_humidify', 'on') }}"
+          is_on: "{{ is_state(hum, 'on') }}"
+
+          doors_closed: "{{ is_state('binary_sensor.doors_in_kitchen_livingroom', 'off') }}"
+          low_water_flag: "{{ is_state('input_boolean.humidifier_low_water_notified', 'on') }}"
+
+          last_on: "{{ states('input_datetime.humidifier_last_on') }}"
+          last_off: "{{ states('input_datetime.humidifier_last_off') }}"
+          min_on: "{{ states('input_number.livingroom_hum_min_on_min') | int(10) }}"
+          min_off: "{{ states('input_number.livingroom_hum_min_off_min') | int(15) }}"
+
+          # ВАЖНО:
+          # - last_on может быть пустым сразу после ручного включения (не успел обновиться helper)
+          # - чтобы не выключать мгновенно, при пустом last_on считаем diff_on_min = 0
+          diff_on_min: >-
+            {% if last_on in ['unknown','unavailable','', None] %}
+              0
+            {% else %}
+              {{ ((as_timestamp(now()) - as_timestamp(last_on)) / 60) | round(1) }}
+            {% endif %}
+
+          # last_off пустой -> разрешаем включать (ставим большое значение)
+          diff_off_min: >-
+            {% if last_off in ['unknown','unavailable','', None] %}
+              999999
+            {% else %}
+              {{ ((as_timestamp(now()) - as_timestamp(last_off)) / 60) | round(1) }}
+            {% endif %}
+
+      - choose:
+          # ----------------------------------------------------------
+          # ВКЛЮЧЕНИЕ
+          # ----------------------------------------------------------
+          - conditions:
+              - condition: template
+                value_template: "{{ need and (not is_on) }}"
+              - condition: template
+                value_template: "{{ doors_closed }}"
+              - condition: template
+                value_template: "{{ not low_water_flag }}"
+              - condition: template
+                value_template: "{{ diff_off_min >= min_off }}"
+            sequence:
+              - service: humidifier.turn_on
+                target:
+                  entity_id: "{{ hum }}"
+
+          # ----------------------------------------------------------
+          # ВЫКЛЮЧЕНИЕ
+          # ----------------------------------------------------------
+          - conditions:
+              - condition: template
+                value_template: "{{ (not need) and is_on }}"
+              - condition: template
+                value_template: "{{ diff_on_min >= min_on }}"
+            sequence:
+              - service: humidifier.turn_off
+                target:
+                  entity_id: "{{ hum }}"
+
+        default:
+          - service: script.log_helper_event
+            data:
+              level: debug
+              message: "Humidifier controller: action skipped by conditions."
+              source: "{{ this.entity_id }}"
+              trigger_entity: "{{ trig_entity }}"
+              trigger_from: "{{ trig_from }}"
+              trigger_to: "{{ trig_to }}"
+              extra: >-
+                trig_platform={{ trig_platform }};
+                trig_id={{ trig_id }};
+                need={{ need }};
+                is_on={{ is_on }};
+                doors_closed={{ doors_closed }};
+                low_water_flag={{ low_water_flag }};
+                diff_on_min={{ diff_on_min }} (min_on={{ min_on }});
+                diff_off_min={{ diff_off_min }} (min_off={{ min_off }});
+                humidity={{ states('sensor.livingroom_average_humidity') }};
+                low={{ states('input_number.livingroom_hum_low') }};
+                high={{ states('input_number.livingroom_hum_high') }};
+
+  # ==========================================================================
+  # LOW WATER: единая точка управления флагом humidifier_low_water_notified
+  # ==========================================================================
+  - id: "livingroom_humidifier_low_water_set_flag"
+    alias: "Гостиная: Увлажнитель — low water: поднять флаг"
+    description: >
+      Xiaomi event-энтити не даёт нормальных атрибутов (event_type=null),
+      поэтому просто: поймали событие low_water -> ставим флаг.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
+    condition:
+      - condition: state
+        entity_id: input_boolean.xiaomi_home_integration_unstable
+        state: "off"
+      - condition: template
+        value_template: >
+          {{ states('humidifier.xiaomi_cn_823407205_p3') not in ['unavailable', 'unknown', ''] }}
+    action:
+      - variables:
+          trig_platform: "{{ trigger.platform if trigger is defined and trigger.platform is defined else '' }}"
+          trig_entity: "{{ trigger.entity_id if trigger is defined and trigger.entity_id is defined else '' }}"
+          trig_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is defined and trigger.from_state is not none
+               else '' }}
+          trig_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is defined and trigger.to_state is not none
+               else '' }}
+
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.humidifier_low_water_notified
+
+      - service: script.log_helper_event
+        data:
+          level: warning
+          message: "Humidifier: low water event detected -> set humidifier_low_water_notified=on"
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trig_entity }}"
+          trigger_from: "{{ trig_from }}"
+          trigger_to: "{{ trig_to }}"
+          extra: "platform={{ trig_platform }}; event_type_attr={{ state_attr('event.xiaomi_cn_823407205_p3_low_water_level_e_2_1','event_type') }}"
+
+  - id: "livingroom_humidifier_low_water_auto_clear_on_start"
+    alias: "Гостиная: Увлажнитель — low water: сброс флага если смог включиться"
+    description: >
+      Если увлажнитель реально включился, значит защита по воде разрешила работу,
+      следовательно флаг low_water можно сбросить.
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: humidifier.xiaomi_cn_823407205_p3
+        to: "on"
+        for: "00:00:10"
+    condition:
+      - condition: state
+        entity_id: input_boolean.humidifier_low_water_notified
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.xiaomi_home_integration_unstable
+        state: "off"
+    action:
+      - variables:
+          trig_platform: "{{ trigger.platform if trigger is defined and trigger.platform is defined else '' }}"
+          trig_entity: "{{ trigger.entity_id if trigger is defined and trigger.entity_id is defined else '' }}"
+          trig_from: >-
+            {{ trigger.from_state.state
+               if trigger is defined and trigger.from_state is defined and trigger.from_state is not none
+               else '' }}
+          trig_to: >-
+            {{ trigger.to_state.state
+               if trigger is defined and trigger.to_state is defined and trigger.to_state is not none
+               else '' }}
+
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.humidifier_low_water_notified
+
+      - service: script.log_helper_event
+        data:
+          level: info
+          message: "Humidifier: device stayed ON -> clear humidifier_low_water_notified=off"
+          source: "{{ this.entity_id }}"
+          trigger_entity: "{{ trig_entity }}"
+          trigger_from: "{{ trig_from }}"
+          trigger_to: "{{ trig_to }}"
+          extra: "platform={{ trig_platform }}; auto_clear_on_start=true"

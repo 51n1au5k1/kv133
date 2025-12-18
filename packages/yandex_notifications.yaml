@@ -65,10 +65,11 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
-              - action: notify.master
+              - action: notify.send_message
+                target:
+                  entity_id: notify.telegram_master
                 data:
                   message: "Свет в квартире выключен! Приятной дороги!"
-
   # Температура ниже уровня
   - id: "a8c5eb07-9381-46d5-bc65-0f52dd7079a8"
     alias: "Уведомление. Яндекс: Температура ниже установленного уровня"
@@ -103,8 +104,11 @@ automation:
         entity_id: input_boolean.silent_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.someone_is_home_2
+        entity_id: binary_sensor.someone_is_home
         state: "on"
+      - condition: state
+        entity_id: input_boolean.xiaomi_home_integration_unstable
+        state: "off"
     actions:
       - action: script.yandex_tts_generic
         data:
@@ -124,8 +128,11 @@ automation:
         entity_id: input_boolean.silent_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.someone_is_home_2
+        entity_id: binary_sensor.someone_is_home
         state: "on"
+      - condition: state
+        entity_id: input_boolean.xiaomi_home_integration_unstable
+        state: "off"
     actions:
       - action: script.yandex_tts_generic
         data:
@@ -143,10 +150,13 @@ automation:
         entity_id: input_boolean.silent_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.someone_is_home_2
+        entity_id: binary_sensor.someone_is_home
         state: "on"
       - condition: state
         entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.xiaomi_home_integration_unstable
         state: "off"
     actions:
       - action: script.yandex_tts_generic

@@ -1,41 +1,6 @@
 ################################################################################
 # /packages/telegram_notifications.yaml
 ################################################################################
-#
-# Этот пакет Home Assistant реализует интеграцию с Telegram для отправки
-# различных уведомлений, обеспечивая мгновенное оповещение пользователей
-# о событиях в «умном доме». Он включает:
-#
-# Скрипты:
-#    • Формирование и отправка ежедневного прогноза погоды
-#
-# Автоматизации, отправляющие сообщения при:
-#    • Запуске/выключении Home Assistant.
-#    • Открытии входной двери в отсутствие владельца.
-#    • Прогнозе погоды каждый день.
-#    • Звонке в дверь.
-#    • Включении камеры (в определённое время/дни).
-#    • Завершении стирки.
-#    • Необходимости проветрить помещение при высоком CO2.
-#    • Завершении проветривания и нормализации уровня CO2.
-#    • Понижении температуры в помещениях при открытой двери/окне.
-#    • Низком уровне заряда батарей в устройствах (с помощью blueprint).
-#    • Доступных обновлениях компонентов/плагинов.
-#    • Необходимости замены фильтра в кондиционере.
-#
-# ВАЖНО:
-# Везде ниже используется notify-сущность notify.telegram_user_id.
-# ЗАМЕНИТЕ её на фактическую сущность, созданную интеграцией Telegram Bot
-# (Инструменты разработчика → Состояния → фильтр notify.*).
-################################################################################
-
-##############################################################################
-#                                  СКРИПТЫ
-##############################################################################
-
-# ----------------------------------------------------------------------------
-# Формирование и отправка прогноза погоды
-# ----------------------------------------------------------------------------
 
 script:
   telegram_send_weather_forecast:
@@ -46,10 +11,9 @@ script:
         example: "notify.telegram_master"
         required: true
     sequence:
-      # Сначала получаем прогноз через сервис
       - service: weather.get_forecasts
         data:
-          type: hourly # или daily, в зависимости от того, что вам нужно
+          type: hourly
         target:
           entity_id: weather.kvartira_133
         response_variable: weather_forecast
@@ -58,14 +22,14 @@ script:
           today_date: "{{ now().strftime('%d.%m.%Y') }}"
           title: "<b>Прогноз погоды на <u>{{ today_date }}</u></b>"
 
-          # Текущие погодные условия
-          current_condition: "{{ states('sensor.open_meteo_opisanie_na_russkom') | default(states('weather.kvartira_133')) }}"
+          # Текущие данные
+          current_condition: "{{ states('sensor.open_meteo_opisanie_na_russkom') | default(states('weather.kvartira_133'), true) }}"
           current_temperature: "{{ state_attr('weather.kvartira_133', 'temperature') | default('N/A') }}"
           current_wind_bearing: "{{ state_attr('weather.kvartira_133', 'wind_bearing') | default(0) }}"
           current_wind_speed: "{{ state_attr('weather.kvartira_133', 'wind_speed') | default('N/A') }}"
           current_pressure_mmhg: "{{ state_attr('weather.kvartira_133', 'pressure') | default(0) }}"
 
-          # Преобразуем направление ветра в текст
+          # Направление ветра
           wind_direction: >-
             {% set bearing = current_wind_bearing | int %}
             {% if bearing >= 337.5 or bearing < 22.5 %}северный
@@ -78,7 +42,7 @@ script:
             {% elif bearing >= 292.5 and bearing < 337.5 %}северо-западный
             {% else %}неизвестно{% endif %}
 
-          # Берём скорректированное давление из сенсора или из weather entity
+          # Давление
           current_pressure: >-
             {% set sensor_pressure = states('sensor.livingroom_corrected_pressure') | float(0) %}
             {% if sensor_pressure > 0 %}
@@ -89,7 +53,7 @@ script:
               735
             {% endif %}
 
-          # Выбор иконки для текущего состояния
+          # Иконка
           weather_icon: >-
             {% set cond = states('weather.kvartira_133') %}
             {% if cond == 'sunny' or current_condition == 'ясно' %}☀️
@@ -106,7 +70,6 @@ script:
             {% elif cond == 'lightning' or current_condition == 'гроза' %}⚡
             {% else %}🌈{% endif %}
 
-      # Отправляем сообщение через новый универсальный сервис notify.send_message
       - action: notify.send_message
         target:
           entity_id: "{{ recipient }}"
@@ -139,22 +102,16 @@ script:
             ℹ️ Прогноз на оставшуюся часть дня недоступен
             {%- endif -%}
             {%- else %}
-            ⚠️ Прогноз недоступен (проверьте интеграцию погоды)
+            ⚠️ Прогноз недоступен
             {%- endif %}
 
-            <b>💨 Атмосферное давление:</b> {{ current_pressure }} мм рт. ст.
-            (<i>{% if current_pressure > 740 %}⬆️ выше нормы{% elif current_pressure < 738 %}⬇️ ниже нормы{% else %}🟢 нормальное{% endif %}</i>)
+            <b>💨 Давление:</b> {{ current_pressure }} мм рт. ст.
+            (<i>{% if current_pressure > 740 %}⬆️ выше{% elif current_pressure < 738 %}⬇️ ниже{% else %}🟢 норма{% endif %}</i>)
 
-##############################################################################
-#                             АВТОМАТИЗАЦИИ
-##############################################################################
 automation:
-  # ----------------------------------------------------------------------------
-  # Уведомление: Прогноз погоды
-  # ----------------------------------------------------------------------------
+  # --- ПОГОДА ---
   - id: "ac0837cf-9ecb-413b-96fb-89552934212d"
     alias: "Уведомление. Телеграм: Прогноз погоды"
-    description: "Отправляет прогноз погоды на сегодня в Телеграм каждое утро."
     mode: single
     triggers:
       - trigger: time
@@ -164,19 +121,14 @@ automation:
         data:
           recipient: notify.telegram_master
 
-  # ----------------------------------------------------------------------------
-  # Уведомление: Открытие входной двери
-  # ----------------------------------------------------------------------------
+  # --- БЕЗОПАСНОСТЬ: ВХОДНАЯ ДВЕРЬ ---
   - id: "1f7e3ae4-268e-4afa-a7e6-d395821f244b"
     alias: "Уведомление. Телеграм: Открытие входной двери"
-    description: "Отправляет уведомление об открытии двери, если master не дома и режим уборки выключен."
     mode: single
     triggers:
-      - trigger: device
-        device_id: abd3e40b49cfbe61411bac5d87bf000f
+      - trigger: state
         entity_id: binary_sensor.hallway_door_contact
-        domain: binary_sensor
-        type: opened
+        to: "on"
     conditions:
       - condition: state
         entity_id: person.master
@@ -191,9 +143,7 @@ automation:
         data:
           message: "⚠️ <b>Открытие входной двери!</b> 🔓"
 
-  # ----------------------------------------------------------------------------
-  # Уведомление: Звонок в дверь
-  # ----------------------------------------------------------------------------
+  # --- БЕЗОПАСНОСТЬ: ЗВОНОК В ДВЕРЬ ---
   - id: "eaddf6dd-762d-487e-9bf2-ba018f10b742"
     alias: "Уведомление. Телеграм: Уведомление о звонке в дверь"
     mode: single
@@ -203,6 +153,7 @@ automation:
         device_id: d2c3001cdc59660c456de45aec09da91
         type: action
         subtype: single
+      # Для event entity лучше ловить любое изменение состояния (обновление timestamp)
       - trigger: state
         entity_id: event.madv_cn_329651133_miowlv2l_doorbell_ring_e_2_1
     conditions:
@@ -232,61 +183,36 @@ automation:
         target:
           entity_id: input_boolean.doorbell_spam_guard
 
-  # ----------------------------------------------------------------------------
-  # Уведомление: Сервер запущен
-  # ----------------------------------------------------------------------------
+  # --- СИСТЕМА: СТАРТ/СТОП ---
   - id: "686a3440-7629-4b55-b508-593caf3679af"
     alias: "Уведомление. Телеграм: Сервер запущен"
-    description: "Уведомление о запуске сервера"
     mode: single
     triggers:
       - trigger: homeassistant
         event: start
     actions:
-      - variables:
-          ha_start_text: >
-            {{ ["Home assistant запущена!", "Home assistant теперь работает!", "Home assistant has begun!", "HA запущен!"] | random }}
       - action: notify.send_message
         target:
           entity_id: notify.telegram_master
         data:
-          message: "⚠️ {{ ha_start_text }}"
-      # - action: telegram_bot.send_photo
-      #   data:
-      #     file: "/config/www/images/notify_alert/ha_wakeup.png"
-      #     caption: "{{ ha_start_text }}"
-      # при необходимости можно добавить parse_mode: html
+          message: "🚀 Home Assistant запущен!"
 
-  # ----------------------------------------------------------------------------
-  # Уведомление: Сервер отключён
-  # ----------------------------------------------------------------------------
   - id: "c8dc47aa-90f0-4522-b71e-4e99bbfe6c76"
     alias: "Уведомление. Телеграм: Сервер отключён"
-    description: "Уведомление о выключении сервера"
     mode: single
     triggers:
       - trigger: homeassistant
         event: shutdown
     actions:
-      - variables:
-          ha_shutdown_text: >
-            {{ ['Home Assistant выключен', 'Выключение Home Assistant', 'HA будет отключён'] | random }}
       - action: notify.send_message
         target:
           entity_id: notify.telegram_master
         data:
-          message: "⚠️ {{ ha_shutdown_text }}"
-      # - action: telegram_bot.send_photo
-      #   data:
-      #     file: "/config/www/images/notify_alert/ha_shutdown.png"
-      #     caption: "{{ ha_shutdown_text }}"
+          message: "🛑 Home Assistant выключается..."
 
-  # ----------------------------------------------------------------------------
-  # Уведомление: Возможны обновления компонентов
-  # ----------------------------------------------------------------------------
+  # --- СИСТЕМА: ОБНОВЛЕНИЯ HA ---
   - id: "4c5c8e57-be5b-4380-88a1-4ecc730c19da"
-    alias: "Уведомление. Телеграм: Возможно обновления компонента системы"
-    description: "Оповещение о новых обновлениях компонентов Home Assistant"
+    alias: "Уведомление. Телеграм: Обновления компонентов"
     mode: single
     triggers:
       - trigger: state
@@ -299,10 +225,13 @@ automation:
           - update.log_viewer_update
           - update.mosquitto_broker_update
           - update.studio_code_server_update
-          - update.advanced_ssh_web_terminal_update
           - update.zigbee2mqtt_update
           - update.ps5_mqtt_update
         to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
     actions:
       - action: notify.send_message
         target:
@@ -311,19 +240,13 @@ automation:
           message: >
             {% set entity = trigger.to_state %}
             {% if entity %}
-              🆕 Обновление доступно: {{ entity.attributes.friendly_name | default('Неизвестный компонент') }}
-              Текущая версия: {{ entity.attributes.installed_version | default('недоступно') }}
-              Новая версия: {{ entity.attributes.latest_version | default('недоступно') }}
-              📝 Сводка: {{ entity.attributes.release_summary | default('Нет подробностей') }}
-            {% else %}
-              Ошибка: Данные обновления недоступны.
+              🆕 <b>Обновление доступно:</b> {{ entity.attributes.friendly_name }}
+              v{{ entity.attributes.installed_version }} ➡️ v{{ entity.attributes.latest_version }}
             {% endif %}
 
-  # ----------------------------------------------------------------------------
-  # Уведомление: Низкий заряд батареи массажёра
-  # ----------------------------------------------------------------------------
+  # --- БАТАРЕЙКИ ---
   - id: "ab45665b-4995-448d-b180-c0e1d77184e9"
-    alias: "Уведомление. Телеграм: Низкий заряд батареи массажёра"
+    alias: "Уведомление. Телеграм: Массажёр (батарея)"
     mode: single
     triggers:
       - trigger: numeric_state
@@ -341,48 +264,83 @@ automation:
         target:
           entity_id: notify.telegram_master
         data:
-          message: "⚠️ <b>Массажёр нуждается в зарядке!</b>"
+          message: "🔋 <b>Массажёр разряжен (&lt;30%)</b>"
 
   # ----------------------------------------------------------------------------
-  # Уведомление: Проблемы с жесткими дисками Proxmox
+  # Уведомление: Проблемы с жесткими дисками Proxmox (S.M.A.R.T)
   # ----------------------------------------------------------------------------
   - id: "daa17acf-7c8a-4a8e-9fd0-4f2c5348c814"
-    alias: "Уведомление. Телеграм: Проблемы с жесткими дисками Proxmox"
+    alias: "Уведомление. Телеграм: Proxmox Диски (S.M.A.R.T)"
+    description: "Срабатывает, если device_class: problem переходит в ON"
     mode: single
     triggers:
       - trigger: state
-        entity_id: binary_sensor.disk_pve_h_w_raid1_dev_sdb_health
+        entity_id:
+          - binary_sensor.disk_pve_netac_nvme_ssd_500gb_health
+          - binary_sensor.disk_pve_wdc_wd80efpx_68c4zn0_health
+          # Если появятся дубликаты _2, _3, можно добавить их сюда,
+          # но обычно достаточно основного сенсора
         to: "on"
-      - trigger: state
-        entity_id: binary_sensor.disk_pve_128gb_ssd_dev_sda_health
-        to: "on"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - action: notify.send_message
         target:
           entity_id: notify.telegram_master
         data:
-          message: >-
-            ⚠️ <b>Обнаружена проблема с жестким диском Proxmox!</b>
-            {% if trigger.entity_id == 'binary_sensor.disk_pve_h_w_raid1_dev_sdb_health' %}
-            🔴 Внешний RAID массив (sdb) требует внимания!
-            {% elif trigger.entity_id == 'binary_sensor.disk_pve_128gb_ssd_dev_sda_health' %}
-            🔴 Основной диск системы (sda) требует внимания!
-            {% endif %}
+          message: >
+            🔴 <b>Proxmox: Ошибка диска (S.M.A.R.T)!</b>
+            Диск: {{ trigger.to_state.attributes.friendly_name | default('Неизвестный диск') }}
+            Статус: FAILURE/PROBLEM
 
   # ----------------------------------------------------------------------------
-  # Уведомление: Высокая загрузка диска Proxmox
+  # Уведомление: Проблемы с ZFS пулом (НОВОЕ)
   # ----------------------------------------------------------------------------
-  - id: "4751a90b-0134-4906-84f0-e5b1a7cb02c2"
-    alias: "Уведомление. Телеграм: Высокая загрузка диска Proxmox"
+  - id: "proxmox_zfs_health_alert"
+    alias: "Уведомление. Телеграм: Proxmox ZFS Pool Alert"
     mode: single
     triggers:
+      - trigger: state
+        entity_id: sensor.zfs_pve_zfs_pool_datapool_health
+        from: "ONLINE"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      # Игнорируем недоступность сенсора, реагируем только на DEGRADED/FAULTED
+      - condition: template
+        value_template: "{{ trigger.to_state.state not in ['unavailable', 'unknown', ''] }}"
+    actions:
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_master
+        data:
+          message: >
+            ☠️ <b>Proxmox: Проблема с ZFS пулом!</b>
+            Пул: <b>datapool</b>
+            Статус: <b>{{ trigger.to_state.state }}</b> (был ONLINE)
+            Срочно проверьте состояние дисков!
+
+  # ----------------------------------------------------------------------------
+  # Уведомление: Заканчивается место на дисках/хранилищах
+  # ----------------------------------------------------------------------------
+  - id: "4751a90b-0134-4906-84f0-e5b1a7cb02c2"
+    alias: "Уведомление. Телеграм: Proxmox Место на диске"
+    mode: single
+    triggers:
+      # Основной диск ноды
       - trigger: numeric_state
         entity_id: sensor.node_pve_disk_used_percentage
         above: 90
+        id: "root"
+      # Хранилище ZFS (datapool)
+      - trigger: numeric_state
+        entity_id: sensor.storage_pve_datapool_disk_used_percentage
+        above: 90
+        id: "datapool"
+      # Локальное хранилище (local)
+      - trigger: numeric_state
+        entity_id: sensor.storage_pve_local_disk_used_percentage
+        above: 90
+        id: "local"
     conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
@@ -392,9 +350,51 @@ automation:
         target:
           entity_id: notify.telegram_master
         data:
-          message: >-
-            ⚠️ <b>Предупреждение: Высокая загрузка диска на Proxmox!</b>
-            Использование диска: {{ states('sensor.node_pve_disk_used_percentage') }}%.
+          message: >
+            💾 <b>Proxmox: Мало места (>90%)!</b>
+            {% if trigger.id == 'root' %}
+            Системный диск (Root): <b>{{ states('sensor.node_pve_disk_used_percentage') }}%</b> занято.
+            {% elif trigger.id == 'datapool' %}
+            ZFS Datapool: <b>{{ states('sensor.storage_pve_datapool_disk_used_percentage') }}%</b> занято.
+            {% elif trigger.id == 'local' %}
+            Local Storage: <b>{{ states('sensor.storage_pve_local_disk_used_percentage') }}%</b> занято.
+            {% endif %}
+
+  # ----------------------------------------------------------------------------
+  # Уведомление: Высокая нагрузка на ресурсы (CPU/RAM)
+  # ----------------------------------------------------------------------------
+  - id: "proxmox_high_load_alert"
+    alias: "Уведомление. Телеграм: Proxmox Высокая нагрузка"
+    mode: single
+    triggers:
+      # CPU > 90% в течение 10 минут
+      - trigger: numeric_state
+        entity_id: sensor.node_pve_cpu_used
+        above: 90
+        for: "00:10:00"
+        id: cpu
+      # RAM > 90% в течение 10 минут
+      - trigger: numeric_state
+        entity_id: sensor.node_pve_memory_used_percentage
+        above: 90
+        for: "00:10:00"
+        id: ram
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_master
+        data:
+          message: >
+            🔥 <b>Proxmox: Высокая нагрузка!</b>
+            {% if trigger.id == 'cpu' %}
+            CPU загружен на <b>{{ states('sensor.node_pve_cpu_used') | round(1) }}%</b> более 10 минут.
+            {% elif trigger.id == 'ram' %}
+            RAM занята на <b>{{ states('sensor.node_pve_memory_used_percentage') | round(1) }}%</b> более 10 минут.
+            {% endif %}
 
   # ----------------------------------------------------------------------------
   # Уведомление: Доступны обновления для Proxmox
@@ -408,9 +408,6 @@ automation:
         to: "on"
     conditions:
       - condition: state
-        entity_id: person.master
-        state: "home"
-      - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
     actions:
@@ -418,14 +415,12 @@ automation:
         target:
           entity_id: notify.telegram_master
         data:
-          message: >-
+          message: >
             🔄 <b>Доступны обновления для Proxmox!</b>
-            Количество доступных обновлений: {{ states('sensor.node_pve_total_updates') | default(0) }}.
-            Проверьте систему и обновите при необходимости.
+            Количество пакетов: {{ states('sensor.node_pve_total_updates') | default('N/A') }}.
+            Рекомендуется обновить систему.
 
-  # ----------------------------------------------------------------------------
-  # Телеграм: Сейф — риск плесени (подтвержденный)
-  # ----------------------------------------------------------------------------
+  # --- СЕЙФ (Уведомления) ---
   - id: "666e2076-ea49-4c53-85de-ef23566b5d00"
     alias: "Уведомление. Телеграм: Сейф — риск плесени"
     mode: single
@@ -441,27 +436,14 @@ automation:
       - variables:
           rh: "{{ states('sensor.strongbox_th_humidity') | float(0) | round(1) }}"
           t: "{{ states('sensor.strongbox_th_temperature') | float(0) | round(1) }}"
-          dp: "{{ states('sensor.seif_tochka_rosy_c') | default(states('sensor.strongbox_th_temperature')) | float(0) | round(1) }}"
-          ah: "{{ states('sensor.seif_absolyutnaya_vlazhnost_g_m3') | default(0) | float(0) | round(2) }}"
       - action: notify.send_message
         target:
           entity_id: notify.telegram_master
         data:
-          message: >-
-            ⚠️ <b>Сейф: риск плесени</b>
-            Влажность: <b>{{ rh }}%</b>, Температура: <b>{{ t }}°C</b>
-            Точка росы: <b>{{ dp }}°C</b>, Абс. влажн.: <b>{{ ah }} г/м³</b>
+          message: "⚠️ <b>Сейф: риск плесени!</b> (RH: {{ rh }}%, T: {{ t }}°C)"
 
-            Рекомендации:
-            • Положите влагопоглотитель (силикагель) или замените пакет.
-            • Проветрите сейф и помещение (без резких перепадов).
-            • Стремитесь к RH 40–55% и T ≥ {{ states('input_number.strongbox_temp_min')|int }}°C.
-
-  # ----------------------------------------------------------------------------
-  # Телеграм: Сейф — условия нормализовались
-  # ----------------------------------------------------------------------------
   - id: "cba8ab8b-5849-423a-bc56-6c04bfb51699"
-    alias: "Уведомление. Телеграм: Сейф — условия нормализовались"
+    alias: "Уведомление. Телеграм: Сейф — норма"
     mode: single
     triggers:
       - trigger: state
@@ -472,22 +454,15 @@ automation:
         entity_id: input_boolean.system_startup_phase
         state: "off"
     actions:
-      - variables:
-          rh: "{{ states('sensor.strongbox_th_humidity') | float(0) | round(1) }}"
-          t: "{{ states('sensor.strongbox_th_temperature') | float(0) | round(1) }}"
       - action: notify.send_message
         target:
           entity_id: notify.telegram_master
         data:
-          message: >-
-            ✅ <b>Сейф: условия нормализованы</b>
-            Текущие значения: RH <b>{{ rh }}%</b>, T <b>{{ t }}°C</b>.
+          message: "✅ <b>Сейф: условия в норме.</b>"
 
-  # ----------------------------------------------------------------------------
-  # Очиститель — фильтр <10%
-  # ----------------------------------------------------------------------------
+  # --- ФИЛЬТРЫ: ОЧИСТИТЕЛЬ ВОЗДУХА ---
   - id: "d3bb27a3-51be-4ce6-8dc7-ebad482e5ea3"
-    alias: "Телеграм: очиститель — фильтр <10%"
+    alias: "Телеграм: Очиститель — Замените фильтр"
     mode: single
     triggers:
       - trigger: numeric_state
@@ -506,16 +481,14 @@ automation:
         target:
           entity_id: notify.telegram_master
         data:
-          message: "⚠️ Очиститель воздуха: ресурс фильтра &lt; 10%."
+          message: "⚠️ <b>Очиститель воздуха:</b> фильтр &lt; 10%!"
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.air_filter_replace_notified
 
-  # ----------------------------------------------------------------------------
-  # Увлажнитель — фильтр <10%
-  # ----------------------------------------------------------------------------
+  # --- ФИЛЬТРЫ: УВЛАЖНИТЕЛЬ ---
   - id: "dbaaf929-4f15-4b23-8d4b-b8edd4083484"
-    alias: "Телеграм: увлажнитель — фильтр <10%"
+    alias: "Телеграм: Увлажнитель — Замените фильтр"
     mode: single
     triggers:
       - trigger: numeric_state
@@ -534,18 +507,17 @@ automation:
         target:
           entity_id: notify.telegram_master
         data:
-          message: "⚠️ Увлажнитель: ресурс фильтра &lt; 10%."
+          message: "⚠️ <b>Увлажнитель:</b> фильтр &lt; 10%!"
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.humidifier_filter_replace_notified
 
-  # ----------------------------------------------------------------------------
-  # Низкий уровень воды
-  # ----------------------------------------------------------------------------
+  # --- ВОДА: УВЛАЖНИТЕЛЬ ---
   - id: "68eb40de-2339-4260-9bd6-3db5aa1604d9"
-    alias: "Телеграм: увлажнитель — низкий уровень воды"
+    alias: "Телеграм: Увлажнитель — Нет воды"
     mode: single
     triggers:
+      # Ловим событие (для Xiaomi Miot Auto это изменение атрибута или состояния event entity)
       - trigger: state
         entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
     conditions:
@@ -560,7 +532,7 @@ automation:
         target:
           entity_id: notify.telegram_master
         data:
-          message: "💧 Увлажнитель: низкий уровень воды. Пожалуйста, долейте воду."
+          message: "💧 <b>Увлажнитель:</b> закончилась вода!"
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.humidifier_low_water_notified

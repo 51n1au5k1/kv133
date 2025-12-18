@@ -37,7 +37,7 @@
 ################################################################################
 
 ################################################################################
-#                               СЕНСОРЫ
+# СЕНСОРЫ
 ################################################################################
 #
 # SQL-СЕНСОРЫ:
@@ -50,7 +50,6 @@
 # • livingroom_sockets_power_total — суммарная мощность розеток
 #
 ################################################################################
-
 sensor:
   # --------------------------------------------------------------------------
   # Измерение размера БД MariaDB
@@ -63,91 +62,63 @@ sensor:
     queries:
       - name: Maria DB size
         query: >
-          SELECT 
-            table_schema AS "database", 
-            ROUND(SUM(data_length + index_length) / 1048576, 2) AS "value" 
-          FROM information_schema.tables 
-          WHERE table_schema = "homeassistant" 
-          GROUP BY table_schema;
+          SELECT table_schema AS "database", ROUND(SUM(data_length + index_length) / 1048576, 2) AS "value"
+          FROM information_schema.tables WHERE table_schema = "homeassistant" GROUP BY table_schema;
         column: "value"
         unit_of_measurement: MB
 
 ##############################################################################
-#                           ШАБЛОННЫЕ СЕНСОРЫ
+# ШАБЛОННЫЕ СЕНСОРЫ
 ##############################################################################
-#
-# Блок template-сенсоров, которые могут быть использованы для вычисления
-# или хранения постоянных (фиксированных) значений, недоступных в виде отдельных
-# физических датчиков. В этом случае задан «Норма атмосферного давления» --
-# постоянное значение, которое можно, например, сравнивать с реальным
-# давлением, получаемым от другого датчика.
-#
-# Вы можете использовать этот сенсор в автоматизациях или в карточках Lovelace,
-# если хотите проверить отклонение текущего давления от «нормы», а также
-# отображать его в интерфейсе.
-#
-##############################################################################
-
 template:
   - binary_sensor:
       # Кто-то дома
-      - name: someone_is_home
-        device_class: occupancy
-        state: >
-          {{ expand('group.all_residents') | selectattr('state','eq','home') | list | length > 0 }}
-
-      # Андрей дома
-      - name: andrei_is_home
+      - name: "Someone is Home"
+        unique_id: someone_is_home
         device_class: occupancy
         availability: >
-          {{ states('sensor.pixel_8_pro_wi_fi_connection') not in ['unknown','unavailable'] }}
+          {{ expand('group.all_residents') | list | count > 0 }}
         state: >
-          {{ is_state('person.master','home') 
-             or is_state('sensor.pixel_8_pro_wi_fi_connection','mdhouse') }}
+          {{ expand('group.all_residents') | selectattr('state', 'eq', 'home') | list | count > 0 }}
 
-      # Любая дверь на балкон открыта -> on
-      - name: doors_in_kitchen_livingroom
-        device_class: door
+      # Андрей дома
+      - name: "Andrei is Home"
+        unique_id: andrei_is_home
+        device_class: occupancy
+        availability: >
+          {{ states('sensor.pixel_8_pro_wi_fi_connection') not in ['unknown', 'unavailable'] }}
         state: >
-          {% set sensors = [
-            'binary_sensor.gostinaia_balkon_contact',
-            'binary_sensor.0x00158d0003ce9922_contact'
-          ] %}
-          {{ sensors | select('is_state', 'on') | list | length > 0 }}
+          {{ is_state('person.master', 'home') or is_state('sensor.pixel_8_pro_wi_fi_connection', 'mdhouse') }}
+
+      # Любая балконная дверь открыта
+      - name: "Doors in Kitchen Livingroom"
+        unique_id: doors_in_kitchen_livingroom
+        device_class: door
+        availability: >
+          {{ states('binary_sensor.gostinaia_balkon_contact') not in ['unknown', 'unavailable']
+             and states('binary_sensor.0x00158d0003ce9922_contact') not in ['unknown', 'unavailable'] }}
+        state: >
+          {{ is_state('binary_sensor.gostinaia_balkon_contact', 'on')
+             or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') }}
 
   - sensor:
-      - name: livingroom_sockets_power_total
+      - name: "Суммарная мощность розеток гостиной"
         unique_id: livingroom_sockets_power_total
         unit_of_measurement: W
         state: >
-          {{ states('sensor.livingroom_socket_l_power')|float(0)
-           + states('sensor.livingroom_socket_r_power')|float(0) }}
+          {{ states('sensor.livingroom_socket_l_power') | float(0) + states('sensor.livingroom_socket_r_power') | float(0) }}
 
 ##############################################################################
-#  ВХОДНЫЕ ПАРАМЕТРЫ
-#  Входные переменные сохраняются между перезагрузками системы
+# ВХОДНЫЕ ПАРАМЕТРЫ
+# Входные переменные сохраняются между перезагрузками системы
 ##############################################################################
-#  ВХОДНЫЕ БУЛЕВЫ (INPUT_BOOLEAN)
+
+# ВХОДНЫЕ БУЛЕВЫ (INPUT_BOOLEAN)
 #############################################################################
-#
-# Блок булевых сенсоров, которые служат для переключения и учета различных
-# состояний и режимов в системе Home Assistant. Это могут быть как технические
-# (при загрузке системы, при необходимости выключить уведомления), так и
-# пользовательские режимы (режим тишины, зимний режим и т.д.).
-#
-# Использование input_boolean упрощает логику автоматизаций, делая её более
-# наглядной и гибкой. Ниже описано каждое поле, его назначение и начальное
-# значение (initial).
-#
-##############################################################################
-
 input_boolean:
   # --------------------------------------------------------------------------
   # Фаза загрузки системы
-  # --
-  # Активируется при старте Home Assistant, указывая, что система в процессе
-  # загрузки (например, чтобы временно приостановить срабатывание некоторых
-  # автоматизаций). Позже автоматически отключается.
+  # --------------------------------------------------------------------------
   system_startup_phase:
     name: "Фаза загрузки системы"
     initial: on
@@ -155,14 +126,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # Режим тишины
-  # --
-  # Используется, чтобы переключать «тихий режим» в определенные часы суток
-  # (23:00--09:00 по умолчанию). В этом режиме система блокирует громкие
-  # уведомления или отключает/уменьшает громкость оповещений.
-  #
-  # Если пользователь вручную включает silent_mode в другое время,
-  # автоматизация все равно переключит его в off в 09:00 на следующий день,
-  # обеспечивая гарантированный выход из режима тишины.
+  # --------------------------------------------------------------------------
   silent_mode:
     name: "Режим тишины"
     initial: off
@@ -170,10 +134,7 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # Режим уборки в ванной
-  # --
-  # Может использоваться для автоматизаций, связанных с уборкой:
-  # включение вытяжки, освещения или других устройств в ванной
-  # в «режиме уборки», чтобы удобно и безопасно заниматься чисткой/мойкой.
+  # --------------------------------------------------------------------------
   bathroom_cleaning_mode:
     name: "Режим уборки в ванной"
     initial: off
@@ -182,40 +143,36 @@ input_boolean:
   # ==========================================================================
   # УПРАВЛЕНИЕ УСТРОЙСТВАМИ
   # ==========================================================================
-
   # --------------------------------------------------------------------------
   # Форсированное отключение камер
   # --------------------------------------------------------------------------
-  # Переключатель для принудительного отключения камер независимо от присутствия.
-  # Используется для обслуживания или по требованию приватности.
   force_camera_off:
     name: "Форсированное отключение камер"
     initial: off
     icon: mdi:cctv-off
+
   # ==========================================================================
   # ЗАЩИТА УСТРОЙСТВ ПРИ СТАРТЕ
   # ==========================================================================
-
   # --------------------------------------------------------------------------
   # Защита освещения ванной
   # --------------------------------------------------------------------------
-  # Предотвращает случайное включение света в ванной при старте HA.
   bathroom_lights_startup_protection:
     name: "Защита освещения ванной при запуске"
     initial: on
     icon: mdi:shield-home
+
   # ==========================================================================
   # СТИРАЛЬНАЯ МАШИНА
   # ==========================================================================
-
   # --------------------------------------------------------------------------
   # Флаг активного цикла стирки
   # --------------------------------------------------------------------------
-  # Отмечает, что цикл стирки начался после текущего запуска HA.
   wm_cycle_seen_start:
     name: "Стиралка: цикл начинался после текущего старта HA"
     initial: off
     icon: mdi:flag-outline
+
   # --------------------------------------------------------------------------
   # Статус работы стиральной машины
   # --------------------------------------------------------------------------
@@ -223,18 +180,18 @@ input_boolean:
     name: "Стиральная машина работает"
     initial: off
     icon: mdi:washing-machine
+
   # --------------------------------------------------------------------------
   # Состояние до перезагрузки
   # --------------------------------------------------------------------------
-  # Сохраняет состояние стиралки перед shutdown, чтобы восстановить после старта.
   washing_machine_pre_restart_state:
     name: "Washing Machine Pre-Restart State"
     initial: off
     icon: mdi:washing-machine
+
   # --------------------------------------------------------------------------
   # Авария питания
   # --------------------------------------------------------------------------
-  # Активируется при отключении розетки стиральной машины.
   wm_socket_outage_active:
     name: "Стиралка: авария питания активна"
     initial: off
@@ -242,26 +199,25 @@ input_boolean:
 
   # --------------------------------------------------------------------------
   # Хелпер-флаг уведомлений о звонке в дверь
-  # --
-
+  # --------------------------------------------------------------------------
   doorbell_spam_guard:
     name: Doorbell spam guard
     icon: mdi:bell-badge
+
   # --------------------------------------------------------------------------
   # Хелпер-флаг стабильности работы интеграции Xiaomi Home
-  # --
+  # --------------------------------------------------------------------------
   xiaomi_home_integration_unstable:
     name: "Xiaomi Home: интеграция нестабильна"
     initial: off
     icon: mdi:alert-circle
 
 ##############################################################################
-#  ВХОДНЫЕ ТЕКСТОВЫЕ (INPUT_TEXT)
+# ВХОДНЫЕ ТЕКСТОВЫЕ (INPUT_TEXT)
 #############################################################################
 input_text:
   # ----------------------------------------------------------------------------
-  # Текстовое поле, которое в автоматизации "Обновление списка пользователей,
-  # находящихся дома" хранит список имен тех, кто фактически находится дома.
+  # Хранит список имен тех, кто фактически находится дома.
   # ----------------------------------------------------------------------------
   currently_home:
     name: "Currently Home"
@@ -269,41 +225,26 @@ input_text:
     max: 255
 
 ##############################################################################
-#                                 ГРУППЫ
+# ГРУППЫ
 ##############################################################################
-#
-# Группировка сущностей для удобного контроля присутствия пользователей.
-# group.all_residents указывает, что «дом» считается занятым,
-# если хотя бы один человек (master или tatiana) находится дома.
-#
-##############################################################################
-
 group:
   all_residents:
     name: "Все Жильцы"
     entities:
       - person.master
-  #      - person.tatiana
+      # - person.КТО-ТО
 
-  # ----------------------------------------------------------------------------
-  # Группа камер
-  # ----------------------------------------------------------------------------
   cameras:
     name: "Камеры"
     entities:
       - switch.chuangmi_cn_309825146_ipc019_on_p_2_1
       - switch.chuangmi_cn_311366982_ipc019_on_p_2_1
 
-  # ----------------------------------------------------------------------------
-  # Группа телевизоров в гостиной
-  # ----------------------------------------------------------------------------
   living_room_tv:
     name: "Телевизоры в гостиной"
     entities:
       - media_player.televizor_v_gostinoi
-      - media_player.televizor_v_gostinoi_2
       - media_player.android_tv_192_168_100_171
-      - media_player.samsung_q70_series_55
 
 ##############################################################################
 # УНИВЕРСАЛЬНЫЙ СКРИПТ ЛОГИРОВАНИЯ
@@ -325,7 +266,7 @@ script:
         example: "automation.helper_silent_mode_on"
       trigger_entity:
         description: "Сущность, сработавшая как триггер"
-        example: "binary_sensor.someone_is_home_2"
+        example: "binary_sensor.someone_is_home"
       trigger_from:
         description: "Старое состояние триггера"
         example: "on"
@@ -338,7 +279,7 @@ script:
       notify:
         description: >
           Отправить уведомление в Telegram (true/false).
-          При level=error/critical уведомление отправляется всегда, даже если notify не задано.
+          При level=error/critical уведомление отправляется всегда.
         example: true
     sequence:
       - variables:
@@ -359,18 +300,10 @@ script:
             {{ _level if _level in allowed else 'info' }}
           message: >
             [{{ _source }}] {{ message }}
-            {% if _trigger_entity %}
-              | trigger={{ _trigger_entity }}
-            {% endif %}
-            {% if _trigger_from %}
-              | from={{ _trigger_from }}
-            {% endif %}
-            {% if _trigger_to %}
-              | to={{ _trigger_to }}
-            {% endif %}
-            {% if _extra %}
-              | {{ _extra }}
-            {% endif %}
+            {% if _trigger_entity %} | trigger={{ _trigger_entity }} {% endif %}
+            {% if _trigger_from %} | from={{ _trigger_from }} {% endif %}
+            {% if _trigger_to %} | to={{ _trigger_to }} {% endif %}
+            {% if _extra %} | {{ _extra }} {% endif %}
 
       - choose:
           - conditions:
@@ -392,30 +325,14 @@ script:
                     {% endif %}
 
 ##############################################################################
-#                             АВТОМАТИЗАЦИИ
+# АВТОМАТИЗАЦИИ
 ##############################################################################
-#
-# Ниже собраны автоматизации, упрощающие управление системой:
-# • Обновление списка пользователей, находящихся дома.
-# • Переключение зимнего режима по месяцам.
-# • Управление фазой загрузки системы (включение/отключение).
-# • Автоматический режим тишины (включение в 23:00, снятие в 09:00).
-# • Сброс уведомлений о CO2 при завершении проветривания.
-# • Сохранение/восстановление состояний климатических приборов при выключении/старте HA.
-# • Управление камерами в зависимости от присутствия.
-# • Очистка базы данных MariaDB.
-# • Дополнительные автоматизации для управления освещением, розеткой отпаривателя
-#   и ТВ в рабочие дни, а также автономное отключение отпаривателя при отсутствии дома.
-#
-##############################################################################
-
 automation:
   # --------------------------------------------------------------------------
   # HELPER: Xiaomi Home — интеграция упала (по MQTT offline)
   # --------------------------------------------------------------------------
-
   - id: "2674efa1-8470-45f4-842a-fcabebc5ea20"
-    alias: "HELPER: Xiaomi Home — интеграция нестабильна (простой вариант, большинство устройств)"
+    alias: "HELPER: Xiaomi Home — интеграция нестабильна"
     mode: restart
     trigger:
       - platform: state
@@ -427,14 +344,20 @@ automation:
           - switch.chuangmi_cn_311366982_ipc019_on_p_2_1
           - vacuum.dreame_cn_332835372_mc1808
         to: "unavailable"
-
+        from:
+          - "on"
+          - "off"
+        for: "00:00:10"
     condition:
-      # 1) Флаг ещё не поднят — чтобы не спамить
+      # Не в фазе загрузки
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      # Флаг ещё не поднят
       - condition: state
         entity_id: input_boolean.xiaomi_home_integration_unstable
         state: "off"
-
-      # 2) Проверяем, что НЕДОСТУПНО БОЛЬШЕ ПОЛОВИНЫ устройств из списка
+      # Большинство устройств недоступно
       - condition: template
         value_template: >
           {% set devices = [
@@ -445,88 +368,26 @@ automation:
             'switch.chuangmi_cn_311366982_ipc019_on_p_2_1',
             'vacuum.dreame_cn_332835372_mc1808'
           ] %}
-          {% set total = devices | count %}
-          {% set unavailable = devices
-             | map('states')
-             | select('eq', 'unavailable')
-             | list
-             | count %}
-          {% set threshold = (total // 2) + 1 %}
-          {{ unavailable >= threshold }}
-
+          {{ devices | map('states') | select('eq','unavailable') | list | count >= (devices | count // 2 + 1) }}
     action:
       - service: input_boolean.turn_on
         target:
           entity_id: input_boolean.xiaomi_home_integration_unstable
-
       - service: script.log_helper_event
         data:
           level: warning
           message: >-
-            Xiaomi Home: у большинства ключевых устройств состояние unavailable,
-            считаем интеграцию нестабильной, флаг unstable = on (на 30 секунд).
+            Xiaomi Home: у большинства ключевых устройств состояние unavailable, считаем интеграцию нестабильной, флаг unstable = on (на 60 секунд).
           source: "{{ this.entity_id }}"
           trigger_entity: "{{ trigger.entity_id | default('') }}"
           trigger_from: >-
-            {{ trigger.from_state.state
-               if trigger is defined and trigger.from_state is not none
-               else '' }}
+            {{ trigger.from_state.state if trigger is defined and trigger.from_state is not none else '' }}
           trigger_to: >-
-            {{ trigger.to_state.state
-               if trigger is defined and trigger.to_state is not none
-               else '' }}
+            {{ trigger.to_state.state if trigger is defined and trigger.to_state is not none else '' }}
           extra: >-
-            action=set_unstable_flag;
-            duration=30s;
-            triggered_by={{ trigger.entity_id }}
+            action=set_unstable_flag; duration=60s; triggered_by={{ trigger.entity_id }}
           notify: true
-
-      - delay: "00:00:30"
-
-      - service: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.xiaomi_home_integration_unstable
-
-  - id: "e7e8a3b0-1f1c-4f2d-9e13-4f3a2b1165b1"
-    alias: "HELPER: Xiaomi Home — mips disconnect по system_log"
-    mode: restart
-
-    trigger:
-      - platform: event
-        event_type: system_log_event
-
-    condition:
-      - condition: template
-        value_template: >-
-          {% set logger = trigger.event.data.get('logger', '') %}
-          {% set message = trigger.event.data.get('message', '') %}
-          {{ 'custom_components.xiaomi_home.miot.miot_client' in logger
-             and 'mips disconnect' in message }}
-
-    action:
-      - service: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.xiaomi_home_integration_unstable
-
-      - service: script.log_helper_event
-        data:
-          level: error
-          message: >-
-            Xiaomi Home: mips disconnect пойман через system_log_event,
-            флаг unstable = on (на 30 секунд).
-          source: "{{ this.entity_id }}"
-          trigger_entity: "system_log_event"
-          trigger_from: ""
-          trigger_to: >-
-            {{ trigger.event.data.get('message', '') }}
-          extra: >-
-            action=set_unstable_flag_from_system_log;
-            level={{ trigger.event.data.get('level', '') }};
-            logger={{ trigger.event.data.get('logger', '') }}
-          notify: true
-
-      - delay: "00:00:30"
-
+      - delay: "00:01:00"
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.xiaomi_home_integration_unstable
@@ -633,13 +494,13 @@ automation:
     triggers:
       # устойчиво НИКОГО НЕТ дома 2 минуты
       - trigger: state
-        entity_id: binary_sensor.someone_is_home_2
+        entity_id: binary_sensor.someone_is_home
         to: "off"
         for: "00:02:00"
         id: away
       # устойчиво КТО-ТО ДОМА 2 минуты
       - trigger: state
-        entity_id: binary_sensor.someone_is_home_2
+        entity_id: binary_sensor.someone_is_home
         to: "on"
         for: "00:02:00"
         id: home
@@ -667,7 +528,6 @@ automation:
                   entity_id: notify.telegram_master
                 data:
                   message: "Камеры включены: Никого нет дома."
-
           - conditions:
               - condition: trigger
                 id: home
@@ -698,6 +558,9 @@ automation:
           - switch.chuangmi_cn_309825146_ipc019_on_p_2_1
           - switch.chuangmi_cn_311366982_ipc019_on_p_2_1
         to: "on"
+      - trigger: state
+        entity_id: input_boolean.force_camera_off
+        to: "on"
     conditions:
       - condition: state
         entity_id: input_boolean.force_camera_off
@@ -720,8 +583,7 @@ automation:
   - id: "779498b6-e63f-454d-8866-8e7e7a94d8e4"
     alias: "MariaDB: Очистка базы в 3:40"
     description: >
-      Каждый день в 03:40 запускаем recorder.purge,
-      оставляя историю только за последние 90 дней.
+      Каждый день в 03:40 запускаем recorder.purge, оставляя историю только за последние 90 дней.
     mode: single
     triggers:
       - trigger: time
@@ -743,12 +605,11 @@ automation:
   - id: "8a46561c-f48f-4c93-b53e-d1af940fdb6d"
     alias: "Рабочие дни: Выключение света, отпаривателя и ТВ (09:00-17:00)"
     description: >
-      В будни с 09:00 до 17:00, если никого нет дома и не идёт уборка,
-      выключаем свет, отпариватель и ТВ.
+      В будни с 09:00 до 17:00, если никого нет дома и не идёт уборка, выключаем свет, отпариватель и ТВ.
     mode: single
     triggers:
       - trigger: state
-        entity_id: binary_sensor.someone_is_home_2
+        entity_id: binary_sensor.someone_is_home
         to: "off"
       - trigger: time
         at: "09:00:00"
@@ -767,7 +628,7 @@ automation:
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.someone_is_home_2
+        entity_id: binary_sensor.someone_is_home
         state: "off"
     actions:
       # Сначала проверяем, что ключевой сенсор в адекватном состоянии
@@ -775,16 +636,13 @@ automation:
           - conditions:
               - condition: template
                 value_template: >
-                  {{ states('binary_sensor.someone_is_home_2') in ['unknown', 'unavailable'] }}
+                  {{ states('binary_sensor.someone_is_home') in ['unknown', 'unavailable'] }}
             sequence:
               - stop: "Сенсор присутствия в неизвестном состоянии, действия не выполняем."
         default:
           - action: homeassistant.turn_off
             target:
               entity_id: light.all_lights
-          - action: switch.turn_off
-            target:
-              entity_id: switch.smart_plug_in_unit_vykliuchatel
           - action: homeassistant.turn_off
             target:
               entity_id: group.living_room_tv
@@ -792,7 +650,7 @@ automation:
   ################################################################################
   # Отключение отпаривателя при отсутствии дома
   ################################################################################
-  - id: "ee320693-2e76-435b-8012-3a908046d4d"
+  - id: "ee320693-2e76-435b-8012-3a908046d4d0"
     alias: "Выключение отпаривателя при отсутствии дома"
     description: >
       Выключает розетку отпаривателя при уходе всех жильцов.
@@ -800,7 +658,7 @@ automation:
     mode: single
     triggers:
       - trigger: state
-        entity_id: binary_sensor.someone_is_home_2
+        entity_id: binary_sensor.someone_is_home
         to: "off"
     actions:
       - action: switch.turn_off

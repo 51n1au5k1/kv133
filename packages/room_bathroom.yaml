@@ -130,17 +130,16 @@ sensor:
 #                          ВСПОМОГАТЕЛЬНЫЕ СЕНСОРЫ
 ##############################################################################
 
+##############################################################################
+#                          БИНАРНЫЕ СЕНСОРЫ
+##############################################################################
+
 template:
   - sensor:
       # ======================================================================
       # Алиас усреднённой влажности с фиксированным entity_id
       # ======================================================================
-      # НАЗНАЧЕНИЕ:
-      # • Фиксированный entity_id для стабильных ссылок в автоматизациях
-      # • Упрощение миграции при изменении имени исходного сенсора
-      # • Централизованное управление доступностью
-      # ======================================================================
-      - name: "bathroom_filtered_humidity"
+      - name: bathroom_filtered_humidity
         unique_id: bathroom_filtered_humidity_alias
         state: "{{ states('sensor.vlazhnost_vannoi_usrednennaia_za_1_minutu') }}"
         unit_of_measurement: "%"
@@ -150,35 +149,20 @@ template:
           {{ states('sensor.vlazhnost_vannoi_usrednennaia_za_1_minutu') not in ['unknown','unavailable',''] }}
         icon: mdi:water-percent
 
-##############################################################################
-#                          БИНАРНЫЕ СЕНСОРЫ
-##############################################################################
-
-binary_sensor:
-  - platform: template
-    sensors:
+  - binary_sensor:
       # ======================================================================
       # Влажность выше верхнего порога (включение вентилятора)
       # ======================================================================
-      # ЛОГИКА:
-      # • ON: влажность > 60% (настраиваемый порог)
-      # • OFF: влажность ≤ 60%
-      #
-      # НАЗНАЧЕНИЕ:
-      # • Триггер для включения вентилятора
-      # • Верхний порог гистерезиса
-      # ======================================================================
-      bathroom_humidity_max:
-        unique_id: bathroom_humidity_max
-        friendly_name: "Ванная: влажность выше порога"
+      - unique_id: bathroom_humidity_max
+        name: "Ванная: влажность выше порога"
         device_class: problem
-        availability_template: >-
+        availability: >-
           {{ states('sensor.bathroom_filtered_humidity') not in ['unknown', 'unavailable', 'none', ''] }}
-        value_template: >-
+        state: >-
           {% set humidity = states('sensor.bathroom_filtered_humidity') | float(0) %}
           {% set threshold = states('input_number.bathroom_humidity_max_threshold') | float(60) %}
           {{ humidity > threshold }}
-        icon_template: >-
+        icon: >-
           {% if is_state('binary_sensor.bathroom_humidity_max', 'on') %}
             mdi:water-alert
           {% else %}
@@ -188,25 +172,16 @@ binary_sensor:
       # ======================================================================
       # Влажность ниже нижнего порога (выключение вентилятора)
       # ======================================================================
-      # ЛОГИКА:
-      # • ON: влажность < 50% (настраиваемый порог)
-      # • OFF: влажность ≥ 50%
-      #
-      # НАЗНАЧЕНИЕ:
-      # • Триггер для запуска продува и выключения вентилятора
-      # • Нижний порог гистерезиса
-      # ======================================================================
-      bathroom_humidity_min:
-        unique_id: bathroom_humidity_min
-        friendly_name: "Ванная: влажность ниже порога"
+      - unique_id: bathroom_humidity_min
+        name: bathroom_humidity_min
         device_class: problem
-        availability_template: >-
+        availability: >-
           {{ states('sensor.bathroom_filtered_humidity') not in ['unknown', 'unavailable', 'none', ''] }}
-        value_template: >-
+        state: >-
           {% set humidity = states('sensor.bathroom_filtered_humidity') | float(0) %}
           {% set threshold = states('input_number.bathroom_humidity_min_threshold') | float(50) %}
           {{ humidity < threshold }}
-        icon_template: >-
+        icon: >-
           {% if is_state('binary_sensor.bathroom_humidity_min', 'on') %}
             mdi:water-minus
           {% else %}
@@ -216,25 +191,16 @@ binary_sensor:
       # ======================================================================
       # Открытие дверей ванной (внутренняя ИЛИ внешняя)
       # ======================================================================
-      # ЛОГИКА:
-      # • ON: хотя бы одна дверь открыта
-      # • OFF: обе двери закрыты
-      #
-      # НАЗНАЧЕНИЕ:
-      # • Детекция входа/выхода из ванной
-      # • Мониторинг проветривания
-      # ======================================================================
-      bathroom_open_door:
-        unique_id: bathroom_open_door
-        friendly_name: "Ванная: дверь открыта"
+      - unique_id: bathroom_open_door
+        name: bathroom_open_door
         device_class: door
-        availability_template: >-
+        availability: >-
           {{ states('binary_sensor.bathroom_door_inside_contact') not in ['unknown', 'unavailable']
              and states('binary_sensor.bathroom_door_outside_contact') not in ['unknown', 'unavailable'] }}
-        value_template: >-
+        state: >-
           {{ is_state('binary_sensor.bathroom_door_inside_contact', 'on') or
              is_state('binary_sensor.bathroom_door_outside_contact', 'on') }}
-        icon_template: >-
+        icon: >-
           {% if is_state('binary_sensor.bathroom_open_door', 'on') %}
             mdi:door-open
           {% else %}
@@ -244,23 +210,14 @@ binary_sensor:
       # ======================================================================
       # Движение в ванной (объединение всех датчиков)
       # ======================================================================
-      # ЛОГИКА:
-      # • ON: хотя бы один датчик движения активен
-      # • OFF: все датчики неактивны
-      #
-      # НАЗНАЧЕНИЕ:
-      # • Детекция присутствия в ванной
-      # • Упрощённая проверка активности
-      # ======================================================================
-      bathroom_motions:
-        unique_id: bathroom_motions
-        friendly_name: "Ванная: движение обнаружено"
+      - unique_id: bathroom_motions
+        name: bathroom_motions
         device_class: motion
-        availability_template: >-
+        availability: >-
           {{ states('group.bathroom_motion_sensors') not in ['unknown', 'unavailable'] }}
-        value_template: >-
+        state: >-
           {{ is_state('group.bathroom_motion_sensors', 'on') }}
-        icon_template: >-
+        icon: >-
           {% if is_state('binary_sensor.bathroom_motions', 'on') %}
             mdi:motion-sensor
           {% else %}
@@ -270,31 +227,13 @@ binary_sensor:
       # ======================================================================
       # Отсутствие активности в ванной (15 минут)
       # ======================================================================
-      # ЛОГИКА:
-      # • ON: нет движения И дверь не открывалась более 15 минут
-      # • OFF: есть движение ИЛИ дверь открывалась недавно
-      #
-      # УСЛОВИЯ:
-      # • Движение = OFF (все датчики неактивны)
-      # • Дверь не открывалась > 900 секунд (15 минут)
-      #
-      # НАЗНАЧЕНИЕ:
-      # • Детекция долгого отсутствия активности
-      # • Может использоваться для дополнительных проверок
-      #
-      # ПРИМЕРЫ:
-      # 1. Дверь открыли 10 мин назад, нет движения → OFF (ещё рано)
-      # 2. Дверь открыли 20 мин назад, нет движения → ON (долго нет активности)
-      # 3. Есть движение (независимо от времени) → OFF
-      # ======================================================================
-      no_activity_in_bathroom_recently:
-        unique_id: no_activity_in_bathroom_recently
-        friendly_name: "Ванная: нет активности более 15 минут"
+      - unique_id: no_activity_in_bathroom_recently
+        name: no_activity_in_bathroom_recently
         device_class: problem
-        availability_template: >-
+        availability: >-
           {{ states('binary_sensor.bathroom_open_door') not in ['unknown', 'unavailable']
              and states('group.bathroom_motion_sensors') not in ['unknown', 'unavailable'] }}
-        value_template: >-
+        state: >-
           {% set door = states.binary_sensor.bathroom_open_door %}
           {% set motion_off = is_state('group.bathroom_motion_sensors', 'off') %}
           {% if door is not none and door.last_changed is not none %}
@@ -302,7 +241,7 @@ binary_sensor:
           {% else %}
             false
           {% endif %}
-        icon_template: >-
+        icon: >-
           {% if is_state('binary_sensor.no_activity_in_bathroom_recently', 'on') %}
             mdi:clock-alert
           {% else %}
@@ -475,19 +414,12 @@ automation:
       • Выключение вентилятора
 
       ПОЛНЫЙ ЦИКЛ РАБОТЫ ВЕНТИЛЯТОРА:
-      ┌────────────────────────────────────────────────────────────┐
-      │ 1. Влажность > 60%                                        │
-      │    ↓                                                       │
-      │ 2. Включение вентилятора                                  │
-      │    ↓                                                       │
-      │ 3. Работа вентилятора (осушение)                          │
-      │    ↓                                                       │
-      │ 4. Влажность < 50%                                        │
-      │    ↓                                                       │
-      │ 5. Запуск таймера продува (2 мин)                         │
-      │    ↓                                                       │
-      │ 6. Выключение вентилятора ← ВЫ ЗДЕСЬ                      │
-      └────────────────────────────────────────────────────────────┘
+      1. Влажность > 60%
+      2. Включение вентилятора
+      3. Работа вентилятора (осушение)
+      4. Влажность < 50%
+      5. Запуск таймера продува (2 мин)
+      6. Выключение вентилятора ← ВЫ ЗДЕСЬ
 
       ЗАЩИТА ОТ ПРЕЖДЕВРЕМЕННОГО ВЫКЛЮЧЕНИЯ:
       • Финальная проверка влажности перед выключением

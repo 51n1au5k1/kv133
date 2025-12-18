@@ -26,7 +26,7 @@
 # ЗАВИСИМОСТИ:
 # • script.yandex_tts_temp_status — голосовое уведомление о температуре
 # • person.master — статус присутствия владельца
-# • binary_sensor.someone_is_home_2 — наличие людей дома
+# • binary_sensor.someone_is_home — наличие людей дома
 #
 # ЛОГИКА ЭНЕРГОСБЕРЕЖЕНИЯ:
 # ┌──────────────────────────────────────────────────────────────────┐
@@ -258,17 +258,12 @@ automation:
       5. Запись в лог
 
       ЛОГИКА АНТИСПАМА:
-      ┌────────────────────────────────────────┐
-      │ Уведомление отправлено                 │
-      │ ↓                                      │
-      │ Флаг антиспама = ON                    │
-      │ ↓                                      │
-      │ Таймер 20 минут                        │
-      │ ↓                                      │
-      │ Флаг антиспама = OFF                   │
-      │ ↓                                      │
-      │ Возможно новое уведомление             │
-      └────────────────────────────────────────┘
+      1. Уведомление отправлено
+      2. Флаг антиспама = ON
+      3. Таймер 20 минут
+      4.Флаг антиспама = OFF
+      5. Возможно новое уведомление
+
 
       СГЛАЖИВАНИЕ ТЕМПЕРАТУРЫ:
       • Скользящее среднее за 2 минуты
@@ -295,6 +290,8 @@ automation:
         below: 20
         for:
           minutes: 1
+      - trigger: time_pattern
+        minutes: "/15"
 
     conditions:
       - condition: state
@@ -310,7 +307,7 @@ automation:
         state: "on"
 
       - condition: state
-        entity_id: binary_sensor.someone_is_home_2
+        entity_id: binary_sensor.someone_is_home
         state: "on"
 
       - condition: template
@@ -321,6 +318,9 @@ automation:
         entity_id: input_boolean.bedroom_th_notice
         state: "off"
 
+      - condition: numeric_state
+        entity_id: sensor.temperatura_v_spalne_sglazhennaia
+        below: 20
     actions:
       - variables:
           current_temp: "{{ states('sensor.temperatura_v_spalne_sglazhennaia') }}"

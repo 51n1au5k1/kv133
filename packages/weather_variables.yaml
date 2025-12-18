@@ -1,74 +1,30 @@
 ################################################################################
-# /packages/variables.yaml
+# /packages/weather_variables.yaml
 ################################################################################
 #
 # Назначение:
-#   В данном пакете собраны переменные (input_number) и вычисляемые сенсоры
+#   В данном пакете собраны и вычисляемые сенсоры
 #   (template), используемые в различных частях системы умного дома.
 #   Например, здесь определяются:
-#   1) Лимиты для управляющей логики вытяжки на кухне (kitchen_fan_temp_limit,
-#      kitchen_fan_hum_limit);
-#   2) Погодные переводы (направления ветра, погода) как для OpenWeather
+#   1) Погодные переводы (направления ветра, погода) как для OpenWeather
 #      (open_meteo_*) так и для Яндекс (yandex_weather4notion_*).
 #
 ################################################################################
 
 ##############################################################################
-#                               INPUT_NUMBER
-##############################################################################
-input_number:
-  kitchen_fan_temp_limit:
-    name: "Кухня: Лимит температуры для вытяжки"
-    min: 0
-    max: 50
-    step: 0.1
-    unit_of_measurement: "°C"
-    initial: 25
-
-  kitchen_fan_hum_limit:
-    name: "Кухня: Лимит влажности для вытяжки"
-    min: 0
-    max: 100
-    step: 1
-    unit_of_measurement: "%"
-    initial: 60
-
-##############################################################################
 #                             TEMPLATE SENSORS
 ##############################################################################
-sensor:
+template:
   # ==================================================================
-  # 1) Стартовые значения порогов для вытяжки на кухне
+  # 1) Перевод состояний погоды Open Meteo (weather.kvartira_133)
   # ==================================================================
-  - platform: template
-    sensors:
-      kitchen_fan_temp_initial:
-        unique_id: "kitchen_fan_temp_initial"
-        friendly_name: "Кухня: Начальное значение температуры для вытяжки"
-        unit_of_measurement: "°C"
-        icon_template: "mdi:thermometer"
-        value_template: >
-          {{ (states('sensor.livingroom_average_temperature') | float(20)) + 5 }}
-
-      kitchen_fan_hum_initial:
-        unique_id: "kitchen_fan_hum_initial"
-        friendly_name: "Кухня: Начальное значение влажности для вытяжки"
-        unit_of_measurement: "%"
-        icon_template: "mdi:water-percent"
-        value_template: >
-          {{ (states('sensor.livingroom_average_humidity') | float(50)) + 10 }}
-
-  # ==================================================================
-  # 2) Перевод состояний погоды Open Meteo (weather.kvartira_133)
-  # ==================================================================
-  - platform: template
-    sensors:
-      open_meteo_weather4notion_wind:
-        unique_id: "open_meteo_weather4notion_wind"
-        friendly_name: "Направление ветра (OpenWeather)"
-        availability_template: >-
+  - sensor:
+      - unique_id: open_meteo_weather4notion_wind
+        name: "Направление ветра (OpenWeather)"
+        icon: mdi:windsock
+        availability: >
           {{ state_attr('weather.kvartira_133', 'wind_bearing') is not none }}
-        value_template: >-
+        state: >
           {% set bearing = state_attr('weather.kvartira_133', 'wind_bearing') | float(0) %}
           {% if (337.5 <= bearing < 360) or (0 <= bearing < 22.5) %}
             северный
@@ -90,12 +46,12 @@ sensor:
             Направление ветра не определено
           {% endif %}
 
-      open_meteo_opisanie_na_russkom:
-        unique_id: "open_meteo_opisanie_na_russkom"
-        friendly_name: "Погодные условия (OpenWeather, рус.)"
-        availability_template: >-
-          {{ states('weather.kvartira_133') not in ['unknown','unavailable',''] }}
-        value_template: >-
+      - unique_id: open_meteo_opisanie_na_russkom
+        name: "Погодные условия (OpenWeather, рус.)"
+        icon: mdi:weather-partly-cloudy
+        availability: >
+          {{ states('weather.kvartira_133') not in ['unknown', 'unavailable', ''] }}
+        state: >
           {% set condition = states('weather.kvartira_133') %}
           {% if condition == 'sunny' %}
             ясно
@@ -128,4 +84,3 @@ sensor:
           {% else %}
             неопределенные погодные условия
           {% endif %}
-

@@ -1,89 +1,24 @@
-# packages/telegram_bot.yaml
-# ====================================================================
-# Пакет: Telegram Bot для Home Assistant
-# ====================================================================
-# Этот пакет реализует управление умным домом через Telegram-бота.
-# Пользователь может отправлять команды боту и получать актуальный
-# статус различных устройств и комнат.
+################################################################################
+# /packages/telegram_bot.yaml
+################################################################################
 #
-# Функционал включает:
-# - Вывод текущего состояния помещений (температура, влажность, CO₂ и т. д.).
-# - Управление освещением, розетками, вентиляцией и другими устройствами.
-# - Контроль состояния сервера и сети (температура, пинг, скорость интернета).
-# - Возможность перезагрузки Home Assistant из Telegram.
+# Пакет: Telegram Bot для Home Assistant (OPTIMIZED)
 #
-# ====================================================================
-# Почему используем скрипты?
-# ====================================================================
-# В пакете активно используются скрипты для генерации сообщений с
-# состоянием и управления устройствами. Это позволяет:
-# - Избежать дублирования кода в автоматизациях.
-# - Упростить обслуживание: если нужно изменить формат сообщения,
-#   достаточно поправить только скрипт.
-# - Автоматически обновлять интерфейс Telegram после выполнения действий.
+# Основные улучшения в этой версии:
+# 1. Реально работают input_boolean для логов и input_number для задержек.
+# 2. Блок управления PVE (Proxmox) переписан в одну умную автоматизацию
+#    вместо 30 отдельных (используется mapping команд).
+# 3. Исправлена ошибка в кнопке Stop для Deluge.
 #
-# Пример:
-# Вместо того чтобы в каждой автоматизации заново прописывать
-# формат сообщения, мы создаем один скрипт (например, `send_livingroom_status`),
-# а затем вызываем его во всех соответствующих автоматизациях.
-#
-# ====================================================================
-# Структура пакета:
-# ====================================================================
-# script:
-#   - Скрипты для отправки информации в Telegram.
-#
-# automation:
-#   - Обработчики команд и нажатий кнопок.
-#   - Автоматизации для переключения устройств.
-#
-# ====================================================================
-# Разделы меню Telegram:
-# ====================================================================
-# /main_menu       - Главное меню
-# /livingroom_control - Гостиная
-# /kitchen_control  - Кухня
-# /workroom_control - Рабочий кабинет
-# /bedroom_control - Спальня
-# /bathroom_control   - Ванная
-# /hallway_control - Прихожая
-# /system_control  - Система (состояние сервера и сети)
-# /pve_status_refresh - Система виртуализации Proxmox Virtual Environment
-#
-# ====================================================================
-# Специфика реализации:
-# ====================================================================
-# - Каждое действие в Telegram сопровождается удалением предыдущего
-#   сообщения, чтобы интерфейс оставался чистым и удобным.
-# - В ответах всегда есть кнопка "Обновить", чтобы получить
-#   актуальное состояние устройств.
-# - В случае управления переключаемыми устройствами (свет, розетки)
-#   после выполнения команды автоматически отправляется обновленный
-#   статус.
-#
-# ====================================================================
-# Особенности кнопки принудительной перезагрузки:
-# ====================================================================
-# - Запускает `homeassistant.restart`, полностью перезапуская HA.
-# - Перед этим отправляет предупреждение пользователю.
-# - Включена задержка в 5 секунд для безопасности.
-#
-# Доработки:
-# - Добавлена обработка unavailable states (default 'N/A').
-# - Общий скрипт для toggle (toggle_device с params).
-# - Confirmation для reboot (новая кнопка /confirm_reboot).
-# - silent_mode/startup_phase в triggers.
-# - Input_number для delay, логирование событий.
-#
-# ====================================================================
+################################################################################
 
 input_number:
   telegram_delay_ms:
-    name: "Задержка в Telegram-боте (ms)"
-    min: 100
-    max: 1000
-    step: 50
-    initial: 200
+    name: "Задержка PVE действий (сек)" # Переименовал для ясности
+    min: 1
+    max: 10
+    step: 1
+    initial: 5
     icon: mdi:timer-sand
 
 input_boolean:
@@ -92,9 +27,14 @@ input_boolean:
     initial: true
     icon: mdi:math-log
 
-# Скрипты для отправки информации в Telegram
+##############################################################################
+#                                СКРИПТЫ
+##############################################################################
 
 script:
+  # --------------------------------------------------------------------------
+  # Универсальный переключатель устройств
+  # --------------------------------------------------------------------------
   toggle_device:
     alias: "Общий скрипт для toggle устройства и обновления меню"
     fields:
@@ -117,6 +57,7 @@ script:
         description: "ID пользователя"
         required: false
     sequence:
+      # 1. Выполняем действие
       - service: >-
           {% if domain == 'climate' %}
             climate.turn_{{ 'on' if is_state(entity, 'off') else 'off' }}
@@ -125,18 +66,64 @@ script:
           {% endif %}
         target:
           entity_id: "{{ entity }}"
+
+      # 2. Удаляем старое сообщение (чтобы не было дублей)
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ message_id }}"
           chat_id: "{{ chat_id }}"
+
+      # 3. Отправляем обновленное меню
       - service: "{{ menu_script }}"
         data:
           target: "{{ chat_id }}"
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: Toggle {{ entity }} by user: {{ user_id | default('unknown') }}"
-          level: info
 
+      # 4. Логируем (если включено)
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.telegram_bot_log_commands
+                state: "on"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: "TG: Toggle {{ entity }} by user: {{ user_id | default('unknown') }}"
+                  level: info
+
+  # --------------------------------------------------------------------------
+  # PVE Action (Действие с задержкой и обновлением)
+  # --------------------------------------------------------------------------
+  pve_action:
+    alias: "PVE Action with Delay"
+    fields:
+      button: { required: true }
+      chat_id: { required: true }
+      user_id: { required: false }
+    sequence:
+      - service: button.press
+        target:
+          entity_id: "{{ button }}"
+      # Используем настройку задержки из input_number
+      - delay:
+          seconds: "{{ states('input_number.telegram_delay_ms') | int(5) }}"
+      - service: script.send_pve_status
+        data:
+          target: "{{ chat_id }}"
+      # Логирование
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.telegram_bot_log_commands
+                state: "on"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: "TG: PVE Action {{ button }} by {{ user_id | default('unknown') }}"
+                  level: info
+
+  # --------------------------------------------------------------------------
+  # Генераторы меню (Send Status Scripts)
+  # --------------------------------------------------------------------------
   send_main_menu:
     alias: "Send Main Menu"
     sequence:
@@ -153,10 +140,7 @@ script:
                 [ ["🛁 Ванная", "/bathroom_control"], ["🚪 Коридор", "/hallway_control"] ],
                 [ ["🖥 Система", "/system_control"] ]
               ] | tojson }}
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: Send Main Menu to {{ user_id | default('unknown') }}"
-          level: info
+
   send_livingroom_status:
     alias: "Send Living Room Status"
     sequence:
@@ -184,10 +168,7 @@ script:
                   ["🔴 Правая розетка" if is_state("switch.livingroom_socket_r", "off") else "🟢 Правая розетка", "/toggle_livingroom_socket_r"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/livingroom_control"] ]
               ] | tojson }}
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: Send Living Room Status to {{ user_id | default('unknown') }}"
-          level: info
+
   send_workroom_status:
     alias: "Send Workroom Status"
     sequence:
@@ -207,10 +188,7 @@ script:
                 [ ["🔴 Розетка отпаривателя" if is_state("switch.smart_plug_in_unit_vykliuchatel", "off") else "🟢 Розетка отпаривателя", "/toggle_workroom_plug"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/workroom_control"] ]
               ] | tojson }}
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: Send Workroom Status to {{ user_id | default('unknown') }}"
-          level: info
+
   send_bedroom_status:
     alias: "Send Bedroom Status"
     sequence:
@@ -233,10 +211,7 @@ script:
                   ["🔴 Розетка Справа" if is_state("switch.0x00158d0002530ba3", "off") else "🟢 Розетка Справа", "/toggle_bedroom_plug_right"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/bedroom_control"] ]
               ] | tojson }}
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: Send Bedroom Status to {{ user_id | default('unknown') }}"
-          level: info
+
   send_bathroom_status:
     alias: "Send Bathroom Status"
     sequence:
@@ -249,17 +224,14 @@ script:
             <b>🌡 Температура:</b> {{ states('sensor.bathroom_th_2_temperature') | default('N/A') }}°C
             <b>💧 Влажность:</b> {{ states('sensor.bathroom_th_2_humidity') | default('N/A') }}%
             <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.bathroom_open_door', 'on') %}Открыта{% else %}Закрыта{% endif %}
-            <b>🧺 Стиральная машина:</b> {% if is_state('binary_sensor.washing_machine_active', 'on') %}🟢 Работает{% else %}🔴 Не работает{% endif %}
+            <b>🧺 Стиральная машина:</b> {% if is_state('input_boolean.washing_machine_running', 'on') %}🟢 Работает{% else %}🔴 Не работает{% endif %}
           inline_keyboard: >
             {{ [
                 [ ["🔴 Весь свет" if is_state("light.light_bathroom", "off") else "🟢 Весь свет", "/toggle_bathroom_light"] ],
                 [ ["🔴 Вытяжка" if is_state("fan.bathroom_relay_l1", "off") else "🟢 Вытяжка", "/toggle_bathroom_fan"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/bathroom_control"] ]
               ] | tojson }}
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: Send Bathroom Status to {{ user_id | default('unknown') }}"
-          level: info
+
   send_kitchen_status:
     alias: "Send Kitchen Status"
     sequence:
@@ -279,10 +251,7 @@ script:
                   ["🔴 Подсветка" if is_state("switch.kitchen_fartuh", "off") else "🟢 Подсветка", "/toggle_kitchen_fartuh"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/kitchen_control"] ]
               ] | tojson }}
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: Send Kitchen Status to {{ user_id | default('unknown') }}"
-          level: info
+
   send_hallway_status:
     alias: "Send Hallway Status"
     sequence:
@@ -299,10 +268,7 @@ script:
                   ["🔴 Шлюз" if is_state("light.gateway_light_04cf8c977cdd", "off") else "🟢 Шлюз", "/toggle_hallway_gateway_light"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/hallway_control"] ]
               ] | tojson }}
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: Send Hallway Status to {{ user_id | default('unknown') }}"
-          level: info
+
   send_system_status:
     alias: "Send System Status"
     sequence:
@@ -322,8 +288,6 @@ script:
             <b>⬆️ Передача:</b> {{ states('sensor.speedtest_upload') | default('N/A') }} Mbps
           inline_keyboard: >
             {{ [
-                [ ["🔴 Роутер" if is_state("switch.my_multi_outlet_left", "off") else "🟢 Роутер", "/toggle_router_socket"],
-                  ["🔴 МиниПК" if is_state("switch.my_multi_outlet_right", "off") else "🟢 МиниПК", "/toggle_minipc_socket"] ],
                 [ ["🔴 Питание ванной" if is_state("light.bathroom_main", "off") else "🟢 Питание ванной", "/toggle_bathroom_power"] ],
                 [ ["🔴 Режим тишины" if is_state("input_boolean.silent_mode", "off") else "🟢 Режим тишины", "/toggle_silent_mode"] ],
                 [ ["🔴 Режим Force CCTV Off" if is_state("input_boolean.force_camera_off", "off") else "🟢 Режим Force CCTV Off", "/toggle_force_cctv_mode"] ],
@@ -331,10 +295,7 @@ script:
                 [ ["⚠️ Перезагрузить систему", "/confirm_reboot"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/system_control"] ]
               ] | tojson }}
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: Send System Status to {{ user_id | default('unknown') }}"
-          level: info
+
   send_pve_status:
     alias: "Отправить статус PVE"
     sequence:
@@ -343,56 +304,83 @@ script:
           target: "{{ target }}"
           parse_mode: html
           message: |
-            <b>🖥 Статус нод и контейнеров</b>
+            <b>🖥 Статус Proxmox (Node: pve)</b>
 
-            <b>📊 Запущенные ВМ:</b> {{ states('sensor.node_pve_virtual_machines_running') | default('N/A') }}
-            <b>📊 Запущенные контейнеры:</b> {{ states('sensor.node_pve_containers_running') | default('N/A') }}
+            <b>📊 Сводка:</b>
+            ВМ: {{ states('sensor.node_pve_virtual_machines_running') }} | LXC: {{ states('sensor.node_pve_containers_running') }}
+            CPU: {{ states('sensor.node_pve_cpu_used') | round(1) }}% | RAM: {{ states('sensor.node_pve_memory_used_percentage') | round(1) }}%
 
-            <b>🔥 Нагрузка CPU (нормализовано | сырое):</b>
-            <b>VM HAOS12:</b> {{ states('sensor.cpu_vm_haos12_normalized') | float(0) | round(0) }}% | {{ states('sensor.qemu_haos12_3_100_cpu_used') | float(0) | round(0) }}%
-            <b>LXC MariaDB:</b> {{ states('sensor.cpu_lxc_mariadb_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_mariadb_101_cpu_used') | float(0) | round(0) }}%
-            <b>LXC Jackett:</b> {{ states('sensor.cpu_lxc_jackett_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_jackett_102_cpu_used') | float(0) | round(0) }}%
-            <b>LXC Jellyfin:</b> {{ states('sensor.cpu_lxc_jellyfin_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_jellyfin_103_cpu_used') | float(0) | round(0) }}%
-            <b>LXC Deluge:</b> {{ states('sensor.cpu_lxc_deluge_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_deluge_104_cpu_used') | float(0) | round(0) }}%
-            <b>LXC TorrServer:</b> {{ states('sensor.cpu_lxc_torrserver_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_debian_105_cpu_used') | float(0) | round(0) }}%
-            <b>LXC Minim Server:</b> {{ states('sensor.cpu_lxc_minim_music_server_normalized') | float(0) | round(0) }}% | {{ states('sensor.lxc_minim_107_cpu_used') | float(0) | round(0) }}%
+            <b>📦 Состояние (CPU | RAM):</b>
+
+            {# Макрос для вывода строки статуса LXC #}
+            {%- macro status(entity_id, name, cpu_sensor, ram_sensor) -%}
+            {{ '🟢' if is_state(entity_id, 'on') else '🔴' }} <b>{{ name }}:</b> {{ states(cpu_sensor) | float(0) | round(0) }}% | {{ states(ram_sensor) | float(0) | round(0) }}%
+            {%- endmacro -%}
+
+            {# VM HAOS12 (вручную, так как это VM) #}
+            {{ '🟢' if is_state('binary_sensor.qemu_haos12_3_100_status', 'on') else '🔴' }} <b>HAOS12:</b> {{ states('sensor.qemu_haos12_3_100_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_haos12_3_100_memory_used_percentage') | float(0) | round(0) }}%
+
+            {# LXC Контейнеры (через макрос) #}
+            {{ status('binary_sensor.lxc_mariadb_101_status', 'MariaDB', 'sensor.lxc_mariadb_101_cpu_used', 'sensor.lxc_mariadb_101_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_jackett_102_status', 'Jackett', 'sensor.lxc_jackett_102_cpu_used', 'sensor.lxc_jackett_102_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_jellyfin_103_status', 'Jellyfin', 'sensor.lxc_jellyfin_103_cpu_used', 'sensor.lxc_jellyfin_103_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_deluge_104_status', 'Deluge', 'sensor.lxc_deluge_104_cpu_used', 'sensor.lxc_deluge_104_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_debian_105_status', 'TorrServer', 'sensor.lxc_debian_105_cpu_used', 'sensor.lxc_debian_105_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_immich_106_status', 'Immich', 'sensor.lxc_immich_106_cpu_used', 'sensor.lxc_immich_106_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_minim_107_status', 'MinimServer', 'sensor.lxc_minim_107_cpu_used', 'sensor.lxc_minim_107_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_photoview_108_status', 'Photoview', 'sensor.lxc_photoview_108_cpu_used', 'sensor.lxc_photoview_108_memory_used_percentage') }}
 
           inline_keyboard: >
+            {% set s_haos = is_state('binary_sensor.qemu_haos12_3_100_status', 'on') %}
+            {% set s_maria = is_state('binary_sensor.lxc_mariadb_101_status', 'on') %}
+            {% set s_jack = is_state('binary_sensor.lxc_jackett_102_status', 'on') %}
+            {% set s_jelly = is_state('binary_sensor.lxc_jellyfin_103_status', 'on') %}
+            {% set s_deluge = is_state('binary_sensor.lxc_deluge_104_status', 'on') %}
+            {% set s_torr = is_state('binary_sensor.lxc_debian_105_status', 'on') %}
+            {% set s_immich = is_state('binary_sensor.lxc_immich_106_status', 'on') %}
+            {% set s_minim = is_state('binary_sensor.lxc_minim_107_status', 'on') %}
+            {% set s_photo = is_state('binary_sensor.lxc_photoview_108_status', 'on') %}
+
             {{ [
-                [ ["🔄 Обновить", "/pve_status_refresh"] ],
-                [ ["🔄 Перезагрузить HAOS12", "/reboot_haos12"] ],
-                [ ["🟢 MariaDB", "/start_mariadb"], ["🔴 Остановить", "/stop_mariadb"], ["🔄 Перезагрузка", "/reboot_mariadb"] ],
-                [ ["🟢 Jackett", "/start_jackett"], ["🔴 Остановить", "/stop_jackett"], ["🔄 Перезагрузка", "/reboot_jackett"] ],
-                [ ["🟢 Jellyfin", "/start_jellyfin"], ["🔴 Остановить", "/stop_jellyfin"], ["🔄 Перезагрузка", "/reboot_jellyfin"] ],
-                [ ["🟢 Deluge", "/start_deluge"], ["🔴 Остановить", "/stop_deluge"], ["🔄 Перезагрузка", "/reboot_deluge"] ],
-                [ ["🟢 TorrServer", "/start_torrserver"], ["🔴 Остановить", "/stop_torrserver"], ["🔄 Перезагрузка", "/reboot_torrserver"] ],
-                [ ["🟢 MinimServer", "/start_minimserver"], ["🔴 Остановить", "/stop_minimserver"], ["🔄 Перезагрузка", "/reboot_minimserver"] ],
+                [ ["🔄 Обновить статус", "/pve_status_refresh"] ],
+                
+                [ ["🟢 HAOS12" if s_haos else "🔴 HAOS12", "/reboot_haos12"] ],
+
+                [ ["🟢 MariaDB" if s_maria else "🔴 MariaDB", "/start_mariadb"], 
+                  ["⏹ Стоп", "/stop_mariadb"], ["🔄 Ребут", "/reboot_mariadb"] ],
+
+                [ ["🟢 Jackett" if s_jack else "🔴 Jackett", "/start_jackett"], 
+                  ["⏹ Стоп", "/stop_jackett"], ["🔄 Ребут", "/reboot_jackett"] ],
+
+                [ ["🟢 Jellyfin" if s_jelly else "🔴 Jellyfin", "/start_jellyfin"], 
+                  ["⏹ Стоп", "/stop_jellyfin"], ["🔄 Ребут", "/reboot_jellyfin"] ],
+
+                [ ["🟢 Deluge" if s_deluge else "🔴 Deluge", "/start_deluge"], 
+                  ["⏹ Стоп", "/stop_deluge"], ["🔄 Ребут", "/reboot_deluge"] ],
+
+                [ ["🟢 TorrServer" if s_torr else "🔴 TorrServer", "/start_torrserver"], 
+                  ["⏹ Стоп", "/stop_torrserver"], ["🔄 Ребут", "/reboot_torrserver"] ],
+
+                [ ["🟢 Immich" if s_immich else "🔴 Immich", "/start_immich"], 
+                  ["⏹ Стоп", "/stop_immich"], ["🔄 Ребут", "/reboot_immich"] ],
+
+                [ ["🟢 Minim" if s_minim else "🔴 Minim", "/start_minimserver"], 
+                  ["⏹ Стоп", "/stop_minimserver"], ["🔄 Ребут", "/reboot_minimserver"] ],
+
+                [ ["🟢 Photoview" if s_photo else "🔴 Photoview", "/start_photoview"], 
+                  ["⏹ Стоп", "/stop_photoview"], ["🔄 Ребут", "/reboot_photoview"] ],
+
                 [ ["👈 В меню", "/menu_back"] ]
               ] | tojson }}
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: Send PVE Status to {{ user_id | default('unknown') }}"
-          level: info
-  pve_action:
-    alias: "PVE Action with Delay"
-    fields:
-      button: { required: true }
-      chat_id: { required: true }
-    sequence:
-      - service: button.press
-        target:
-          entity_id: "{{ button }}"
-      - delay:
-          seconds: 5
-      - service: script.send_pve_status
-        data:
-          target: "{{ chat_id }}"
-      - service: system_log.write
-        data:
-          message: "Telegram Bot: PVE Action with {{ button }} by {{ user_id | default('unknown') }}"
-          level: info
+
+##############################################################################
+#                             АВТОМАТИЗАЦИИ
+##############################################################################
+
 automation:
-  # Приветственное сообщение (при вводе команды /start)
+  # ==========================================================================
+  # Базовые обработчики (Start, Меню)
+  # ==========================================================================
   - id: "telegram_bot_start"
     alias: "Telegram Bot Start (Приветствие)"
     initial_state: true
@@ -401,10 +389,6 @@ automation:
         event_type: telegram_command
         event_data:
           command: "/start"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: telegram_bot.send_message
         data:
@@ -414,15 +398,7 @@ automation:
       - service: script.send_main_menu
         data:
           target: "{{ trigger.event.data.chat_id }}"
-      - service: system_log.write
-        data:
-          message: "Telegram бот запущен (user: {{ trigger.event.data.user_id }})"
-          level: info
 
-  ##############################################################################
-  # Обработчики меню
-  ##############################################################################
-  # Главное меню (при вводе команды /main_menu)
   - id: "telegram_bot_main_menu"
     alias: "Telegram Bot Main Menu"
     initial_state: true
@@ -431,16 +407,11 @@ automation:
         event_type: telegram_command
         event_data:
           command: "/main_menu"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.send_main_menu
         data:
           target: "{{ trigger.event.data.chat_id }}"
 
-  # Обработчик кнопки "В меню"
   - id: "telegram_bot_menu_back"
     alias: "Telegram Bot Menu Back"
     initial_state: true
@@ -449,10 +420,6 @@ automation:
         event_type: telegram_callback
         event_data:
           data: "/menu_back"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: telegram_bot.delete_message
         data:
@@ -462,175 +429,117 @@ automation:
         data:
           target: "{{ trigger.event.data.chat_id }}"
 
-  # Обработчик меню "Гостиная"
-  - id: "telegram_bot_livingroom_control"
-    alias: "Telegram Bot Living Room Menu"
+  # ==========================================================================
+  # Навигация по комнатам (Оптимизировано: вызов соответствующих скриптов)
+  # ==========================================================================
+  - id: "telegram_bot_room_navigation"
+    alias: "Telegram Bot: Навигация по комнатам"
     initial_state: true
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/livingroom_control"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    actions:
-      - service: telegram_bot.delete_message
-        data:
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-      - service: script.send_livingroom_status
-        data:
-          target: "{{ trigger.event.data.chat_id }}"
-
-  # Обработчик меню "Рабочий кабинет"
-  - id: "telegram_bot_workroom_control"
-    alias: "Telegram Bot Workroom Menu"
-    initial_state: true
-    triggers:
+        id: "livingroom"
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/workroom_control"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    actions:
-      - service: telegram_bot.delete_message
-        data:
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-      - service: script.send_workroom_status
-        data:
-          target: "{{ trigger.event.data.chat_id }}"
-
-  # Обработчик меню "Спальня"
-  - id: "telegram_bot_bedroom_control"
-    alias: "Telegram Bot Bedroom Menu"
-    initial_state: true
-    triggers:
+        id: "workroom"
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/bedroom_control"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    actions:
-      - service: telegram_bot.delete_message
-        data:
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-      - service: script.send_bedroom_status
-        data:
-          target: "{{ trigger.event.data.chat_id }}"
-
-  # Обработчик меню "Кухня"
-  - id: "telegram_bot_kitchen_control"
-    alias: "Telegram Bot Kitchen Menu"
-    initial_state: true
-    triggers:
+        id: "bedroom"
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/kitchen_control"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    actions:
-      - service: telegram_bot.delete_message
-        data:
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-      - service: script.send_kitchen_status
-        data:
-          target: "{{ trigger.event.data.chat_id }}"
-
-  # Обработчик меню "Ванная"
-  - id: "telegram_bot_bathroom_control"
-    alias: "Telegram Bot Bathroom Menu"
-    initial_state: true
-    triggers:
+        id: "kitchen"
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/bathroom_control"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    actions:
-      - service: telegram_bot.delete_message
-        data:
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-      - service: script.send_bathroom_status
-        data:
-          target: "{{ trigger.event.data.chat_id }}"
-
-  # Обработчик меню "Прихожая"
-  - id: "telegram_bot_hallway_control"
-    alias: "Telegram Bot Hallway Menu"
-    initial_state: true
-    triggers:
+        id: "bathroom"
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/hallway_control"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    actions:
-      - service: telegram_bot.delete_message
-        data:
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-      - service: script.send_hallway_status
-        data:
-          target: "{{ trigger.event.data.chat_id }}"
-
-  # Обработчик меню "Система"
-  - id: "telegram_bot_system_control"
-    alias: "Telegram Bot System Control"
-    initial_state: true
-    triggers:
+        id: "hallway"
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/system_control"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
+        id: "system"
     actions:
       - service: telegram_bot.delete_message
         data:
           message_id: "{{ trigger.event.data.message.message_id }}"
           chat_id: "{{ trigger.event.data.chat_id }}"
-      - service: script.send_system_status
-        data:
-          target: "{{ trigger.event.data.chat_id }}"
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: "livingroom"
+            sequence:
+              - service: script.send_livingroom_status
+                data:
+                  target: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "workroom"
+            sequence:
+              - service: script.send_workroom_status
+                data:
+                  target: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "bedroom"
+            sequence:
+              - service: script.send_bedroom_status
+                data:
+                  target: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "kitchen"
+            sequence:
+              - service: script.send_kitchen_status
+                data:
+                  target: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "bathroom"
+            sequence:
+              - service: script.send_bathroom_status
+                data:
+                  target: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "hallway"
+            sequence:
+              - service: script.send_hallway_status
+                data:
+                  target: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "system"
+            sequence:
+              - service: script.send_system_status
+                data:
+                  target: "{{ trigger.event.data.chat_id }}"
 
-  ##############################################################################
-  # Гостиная (используем общий toggle_device)
-  ##############################################################################
+  # ==========================================================================
+  # Управление устройствами по комнатам (Toggle)
+  # ==========================================================================
+  # Здесь каждый триггер вызывает общий скрипт toggle_device с нужными параметрами
+
+  # --- ГОСТИНАЯ ---
   - id: "telegram_bot_toggle_livingroom_main_switch_left"
-    alias: "Telegram Bot Toggle Livingroom Main Switch Left"
-    initial_state: true
+    alias: "TG: Livingroom Main Left"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_main_switch_left"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -642,17 +551,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_livingroom_main_switch_right"
-    alias: "Telegram Bot Toggle Livingroom Main Switch Right"
-    initial_state: true
+    alias: "TG: Livingroom Main Right"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_main_switch_right"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -664,17 +568,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_livingroom_scone_dimmer"
-    alias: "Telegram Bot Toggle Livingroom Scone Dimmer"
-    initial_state: true
+    alias: "TG: Livingroom Scone"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_scone_dimmer"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -685,19 +584,13 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
-  # Гостиная - розетки
   - id: "telegram_bot_toggle_livingroom_socket_corner_r"
-    alias: "Telegram Bot Toggle Livingroom Socket Corner R"
-    initial_state: true
+    alias: "TG: Livingroom Socket Corner R"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_socket_corner_r"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -709,17 +602,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_livingroom_socket_l"
-    alias: "Telegram Bot Toggle Livingroom Socket L"
-    initial_state: true
+    alias: "TG: Livingroom Socket L"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_socket_l"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -731,17 +619,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_livingroom_socket_r"
-    alias: "Telegram Bot Toggle Livingroom Socket R"
-    initial_state: true
+    alias: "TG: Livingroom Socket R"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_socket_r"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -751,19 +634,14 @@ automation:
           message_id: "{{ trigger.event.data.message.message_id }}"
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
-  # Гостиная - климатическая техника
+
   - id: "toggle_livingroom_humidifier"
-    alias: "Telegram Bot Toggle Livingroom Humidifier"
-    initial_state: true
+    alias: "TG: Livingroom Humidifier"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_humidifier"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -775,17 +653,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "toggle_livingroom_air_purifier"
-    alias: "Telegram Bot Toggle Livingroom Air Purifier"
-    initial_state: true
+    alias: "TG: Livingroom Air Purifier"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_air_purifier"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -797,17 +670,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "toggle_livingroom_konditsioner"
-    alias: "Telegram Bot Toggle Livingroom Konditsioner"
-    initial_state: true
+    alias: "TG: Livingroom Konditsioner"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_livingroom_konditsioner"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -818,21 +686,14 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
-  ##############################################################################
-  # Кабинет (используем общий toggle_device)
-  ##############################################################################
+  # --- КАБИНЕТ ---
   - id: "telegram_bot_toggle_workroom_light"
-    alias: "Telegram Bot Toggle Workroom Light"
-    initial_state: true
+    alias: "TG: Workroom Light"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_workroom_light"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -844,17 +705,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_workroom_led"
-    alias: "Telegram Bot Toggle Workroom LED"
-    initial_state: true
+    alias: "TG: Workroom LED"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_workroom_led"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -866,17 +722,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_workroom_plug"
-    alias: "Telegram Bot Toggle Workroom Plug"
-    initial_state: true
+    alias: "TG: Workroom Plug"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_workroom_plug"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -887,21 +738,14 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
-  ##############################################################################
-  # Спальня (используем общий toggle_device)
-  ##############################################################################
+  # --- СПАЛЬНЯ ---
   - id: "telegram_bot_toggle_bedroom_light"
-    alias: "Telegram Bot Toggle Bedroom Light"
-    initial_state: true
+    alias: "TG: Bedroom Light"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_light"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -913,17 +757,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_bedroom_scone_t"
-    alias: "Telegram Bot Toggle Bedroom Tatiana's Scone"
-    initial_state: true
+    alias: "TG: Bedroom Scone T"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_scone_t"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -935,17 +774,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_bedroom_scone_a_small"
-    alias: "Telegram Bot Toggle Bedroom Andrei's Scone Small"
-    initial_state: true
+    alias: "TG: Bedroom Scone A Small"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_scone_a_small"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -957,17 +791,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_bedroom_scone_a_big"
-    alias: "Telegram Bot Toggle Bedroom Andrei's Scone Big"
-    initial_state: true
+    alias: "TG: Bedroom Scone A Big"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_scone_a_big"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -979,17 +808,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_bedroom_plug_left"
-    alias: "Telegram Bot Toggle Bedroom Plug Left"
-    initial_state: true
+    alias: "TG: Bedroom Plug Left"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_plug_left"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1001,17 +825,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_bedroom_plug_right"
-    alias: "Telegram Bot Toggle Bedroom Plug Right"
-    initial_state: true
+    alias: "TG: Bedroom Plug Right"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bedroom_plug_right"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1022,21 +841,14 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
-  ##############################################################################
-  # Кухня (используем общий toggle_device)
-  ##############################################################################
+  # --- КУХНЯ ---
   - id: "telegram_bot_toggle_kitchen_main_light"
-    alias: "Telegram Bot Toggle Kitchen Main Light"
-    initial_state: true
+    alias: "TG: Kitchen Main Light"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_kitchen_main_light"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1048,17 +860,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_kitchen_fartuh"
-    alias: "Telegram Bot Toggle Kitchen Fartuh"
-    initial_state: true
+    alias: "TG: Kitchen Fartuh"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_kitchen_fartuh"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1070,17 +877,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_kitchen_fan"
-    alias: "Telegram Bot Toggle Kitchen Fan"
-    initial_state: true
+    alias: "TG: Kitchen Fan"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_kitchen_fan"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1091,21 +893,14 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
-  ##############################################################################
-  # Ванная (используем общий toggle_device)
-  ##############################################################################
+  # --- ВАННАЯ ---
   - id: "telegram_bot_toggle_bathroom_light"
-    alias: "Telegram Bot Toggle Bathroom Light"
-    initial_state: true
+    alias: "TG: Bathroom Light"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bathroom_light"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1117,17 +912,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_bathroom_fan"
-    alias: "Telegram Bot Toggle Bathroom Fan"
-    initial_state: true
+    alias: "TG: Bathroom Fan"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bathroom_fan"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1138,21 +928,14 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
-  ##############################################################################
-  # Прихожая (используем общий toggle_device)
-  ##############################################################################
+  # --- ПРИХОЖАЯ ---
   - id: "telegram_bot_toggle_hallway_light"
-    alias: "Telegram Bot Toggle Hallway Light"
-    initial_state: true
+    alias: "TG: Hallway Light"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_hallway_light"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1164,17 +947,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_hallway_gateway_light"
-    alias: "Telegram Bot Toggle Hallway Gateway Light"
-    initial_state: true
+    alias: "TG: Hallway Gateway"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_hallway_gateway_light"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1185,21 +963,14 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
-  ##############################################################################
-  # Система (используем общий toggle_device)
-  ##############################################################################
+  # --- СИСТЕМА ---
   - id: "telegram_bot_toggle_router_socket"
-    alias: "Telegram Bot Toggle Router Socket"
-    initial_state: true
+    alias: "TG: Router Socket"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_router_socket"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1211,17 +982,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_minipc_socket"
-    alias: "Telegram Bot Toggle MiniPC Socket"
-    initial_state: true
+    alias: "TG: MiniPC Socket"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_minipc_socket"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1233,17 +999,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_bathroom_power"
-    alias: "Telegram Bot Toggle Bathroom Power"
-    initial_state: true
+    alias: "TG: Bathroom Power"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_bathroom_power"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1255,17 +1016,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_silent_mode"
-    alias: "Telegram Bot Toggle Silent Mode"
-    initial_state: true
+    alias: "TG: Silent Mode"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_silent_mode"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1277,17 +1033,12 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_toggle_force_cctv_mode"
-    alias: "Telegram Bot Toggle Force CCTV Off Mode"
-    initial_state: true
+    alias: "TG: Force CCTV Off"
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_force_cctv_mode"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: script.toggle_device
         data:
@@ -1298,19 +1049,16 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
-  # Подтверждение перезагрузки системы
+  # ==========================================================================
+  # Подтверждение и перезагрузка
+  # ==========================================================================
   - id: "telegram_bot_confirm_reboot"
     alias: "Telegram Bot Confirm Reboot"
-    initial_state: true
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/confirm_reboot"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: telegram_bot.send_message
         data:
@@ -1322,24 +1070,14 @@ automation:
                 [ ["✅ Подтвердить", "/force_reboot"] ],
                 [ ["❌ Отмена", "/system_control"] ]
               ] | tojson }}
-      - service: system_log.write
-        data:
-          message: "Запрос на подтверждение reboot (user: {{ trigger.event.data.user_id }})"
-          level: warning
 
-  # Принудительная перезагрузка системы (после подтверждения)
   - id: "telegram_bot_force_reboot"
     alias: "Telegram Bot Force Reboot"
-    initial_state: true
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/force_reboot"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: telegram_bot.send_message
         data:
@@ -1354,22 +1092,16 @@ automation:
           message: "Система перезагружена через Telegram (user: {{ trigger.event.data.user_id }})"
           level: warning
 
-  ##############################################################################
-  # Управление системой виртуализации Proxmox
-  ##############################################################################
-  # Обработчик команды обновления статуса PVE
+  # ==========================================================================
+  # Управление PVE (All-in-One Optimization)
+  # ==========================================================================
   - id: "telegram_bot_pve_status_refresh"
     alias: "Telegram Bot PVE Status Refresh"
-    initial_state: true
     triggers:
       - platform: event
         event_type: telegram_callback
         event_data:
           data: "/pve_status_refresh"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
     actions:
       - service: telegram_bot.delete_message
         data:
@@ -1379,333 +1111,81 @@ automation:
         data:
           target: "{{ trigger.event.data.chat_id }}"
 
-  # Управление системой виртуализации
-  # === HAOS12 ===
-  - id: "telegram_bot_reboot_haos12"
-    alias: "Telegram Bot Reboot HAOS12"
-    trigger:
+  # --- МАГИЯ: Одна автоматизация вместо 24 ---
+  - id: "telegram_bot_pve_unified_control"
+    alias: "Telegram Bot PVE Unified Control"
+    triggers:
       - platform: event
         event_type: telegram_callback
-        event_data:
-          data: "/reboot_haos12"
     condition:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    action:
+      # Проверяем, что команда начинается со "/" и есть в нашем списке маппинга
+      - condition: template
+        value_template: >
+          {% set cmd = trigger.event.data.data %}
+          {% set map = {
+            "/reboot_haos12": "button.qemu_haos12_3_100_reboot",
+            "/start_mariadb": "button.lxc_mariadb_101_start",
+            "/stop_mariadb": "button.lxc_mariadb_101_stop",
+            "/reboot_mariadb": "button.lxc_mariadb_101_reboot",
+            "/start_jackett": "button.lxc_jackett_102_start",
+            "/stop_jackett": "button.lxc_jackett_102_stop",
+            "/reboot_jackett": "button.lxc_jackett_102_reboot",
+            "/start_jellyfin": "button.lxc_jellyfin_103_start",
+            "/stop_jellyfin": "button.lxc_jellyfin_103_stop",
+            "/reboot_jellyfin": "button.lxc_jellyfin_103_reboot",
+            "/start_deluge": "button.lxc_deluge_104_start",
+            "/stop_deluge": "button.lxc_deluge_104_stop",
+            "/reboot_deluge": "button.lxc_deluge_104_reboot",
+            "/start_torrserver": "button.lxc_debian_105_start",
+            "/stop_torrserver": "button.lxc_debian_105_stop",
+            "/reboot_torrserver": "button.lxc_debian_105_reboot",
+            "/start_minimserver": "button.lxc_minim_107_start",
+            "/stop_minimserver": "button.lxc_minim_107_stop",
+            "/reboot_minimserver": "button.lxc_minim_107_reboot",
+            "/start_immich": "button.lxc_immich_106_start",
+            "/stop_immich": "button.lxc_immich_106_stop",
+            "/reboot_immich": "button.lxc_immich_106_reboot",
+            "/start_photoview": "button.lxc_photoview_108_start",
+            "/stop_photoview": "button.lxc_photoview_108_stop",
+            "/reboot_photoview": "button.lxc_photoview_108_reboot"
+          } %}
+          {{ cmd in map }}
+    actions:
       - service: script.pve_action
         data:
-          button: button.qemu_haos12_3_100_reboot
+          # Динамически берем entity_id кнопки из маппинга
+          button: >
+            {% set cmd = trigger.event.data.data %}
+            {% set map = {
+              "/reboot_haos12": "button.qemu_haos12_3_100_reboot",
+              "/start_mariadb": "button.lxc_mariadb_101_start",
+              "/stop_mariadb": "button.lxc_mariadb_101_stop",
+              "/reboot_mariadb": "button.lxc_mariadb_101_reboot",
+              "/start_jackett": "button.lxc_jackett_102_start",
+              "/stop_jackett": "button.lxc_jackett_102_stop",
+              "/reboot_jackett": "button.lxc_jackett_102_reboot",
+              "/start_jellyfin": "button.lxc_jellyfin_103_start",
+              "/stop_jellyfin": "button.lxc_jellyfin_103_stop",
+              "/reboot_jellyfin": "button.lxc_jellyfin_103_reboot",
+              "/start_deluge": "button.lxc_deluge_104_start",
+              "/stop_deluge": "button.lxc_deluge_104_stop",
+              "/reboot_deluge": "button.lxc_deluge_104_reboot",
+              "/start_torrserver": "button.lxc_debian_105_start",
+              "/stop_torrserver": "button.lxc_debian_105_stop",
+              "/reboot_torrserver": "button.lxc_debian_105_reboot",
+              "/start_minimserver": "button.lxc_minim_107_start",
+              "/stop_minimserver": "button.lxc_minim_107_stop",
+              "/reboot_minimserver": "button.lxc_minim_107_reboot",
+              "/start_immich": "button.lxc_immich_106_start",
+              "/stop_immich": "button.lxc_immich_106_stop",
+              "/reboot_immich": "button.lxc_immich_106_reboot",
+              "/start_photoview": "button.lxc_photoview_108_start",
+              "/stop_photoview": "button.lxc_photoview_108_stop",
+              "/reboot_photoview": "button.lxc_photoview_108_reboot"
+            } %}
+            {{ map[cmd] }}
           chat_id: "{{ trigger.event.data.chat_id }}"
-
-  # === MariaDB ===
-  - id: "telegram_bot_start_mariadb"
-    alias: "Telegram Bot Start LXC MariaDB"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/start_mariadb"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_mariadb_101_start
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_stop_mariadb"
-    alias: "Telegram Bot Stop LXC MariaDB"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/stop_mariadb"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_mariadb_101_stop
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_reboot_mariadb"
-    alias: "Telegram Bot Reboot LXC MariaDB"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/reboot_mariadb"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_mariadb_101_reboot
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  # === Jackett ===
-  - id: "telegram_bot_start_jackett"
-    alias: "Telegram Bot Start LXC Jackett"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/start_jackett"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_jackett_102_start
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_stop_jackett"
-    alias: "Telegram Bot Stop LXC Jackett"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/stop_jackett"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_jackett_102_stop
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_reboot_jackett"
-    alias: "Telegram Bot Reboot LXC Jackett"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/reboot_jackett"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_jackett_102_reboot
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  # === Jellyfin ===
-  - id: "telegram_bot_start_jellyfin"
-    alias: "Telegram Bot Start LXC Jellyfin"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/start_jellyfin"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_jellyfin_103_start
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_stop_jellyfin"
-    alias: "Telegram Bot Stop LXC Jellyfin"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/stop_jellyfin"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_jellyfin_103_stop
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_reboot_jellyfin"
-    alias: "Telegram Bot Reboot LXC Jellyfin"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/reboot_jellyfin"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_jellyfin_103_reboot
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  # === Deluge ===
-  - id: "telegram_bot_start_deluge"
-    alias: "Telegram Bot Start LXC Deluge"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/start_deluge"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_deluge_104_start
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_stop_deluge"
-    alias: "Telegram Bot Stop LXC Deluge"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/stop_deluge"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_deluge_104 # или button.lxc_deluge_104_stop
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_reboot_deluge"
-    alias: "Telegram Bot Reboot LXC Deluge"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/reboot_deluge"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_deluge_104_reboot
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  # === TorrServer ===
-  - id: "telegram_bot_start_torrserver"
-    alias: "Telegram Bot Start LXC TorrServer"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/start_torrserver"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_debian_105_start
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_stop_torrserver"
-    alias: "Telegram Bot Stop LXC TorrServer"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/stop_torrserver"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_debian_105_stop
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_reboot_torrserver"
-    alias: "Telegram Bot Reboot LXC TorrServer"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/reboot_torrserver"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_debian_105_reboot
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  # === MinimServer ===
-  - id: "telegram_bot_start_minimserver"
-    alias: "Telegram Bot Start LXC MinimServer"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/start_minimserver"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_minim_107_start
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_stop_minimserver"
-    alias: "Telegram Bot Stop LXC MinimServer"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/stop_minimserver"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_minim_107_stop
-          chat_id: "{{ trigger.event.data.chat_id }}"
-
-  - id: "telegram_bot_reboot_minimserver"
-    alias: "Telegram Bot Reboot LXC MinimServer"
-    trigger:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/reboot_minimserver"
-    condition:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    action:
-      - service: script.pve_action
-        data:
-          button: button.lxc_minim_107_reboot
-          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
