@@ -30,7 +30,7 @@
 ## Конфигурационные Файлы
 
 - `configuration.yaml` — основной конфигурационный файл, связывающий все компоненты вместе.  
-- `helper.yaml`, `variables.yaml` — вспомогательные функции и сущности для мониторинга и управления умным домом.  
+- `helper_main.yaml`, `helper_mikrotik.yaml`, `helper_proxmox`, `variables.yaml` — вспомогательные функции и сущности для мониторинга и управления умным домом.  
 - `notifications_telegram.yaml` и `notifications_yandex.yaml` — настройки уведомлений через Telegram и Яндекс.  
 - Telegram (UI-интеграция):
     - `telegram_helper.yaml` — с версии 2026.5.0 настраивайка через UI, старые конфигурации сервисов: Telegram, `notify.*`, группы получателей.

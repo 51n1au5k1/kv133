@@ -29,7 +29,7 @@ This repository contains my Home Assistant configuration, designed to automate s
 ## Configuration Files
 
 - `configuration.yaml` — the main configuration file, linking all components together.
-- `helper.yaml`, `variables.yaml` — helper functions and entities for smart home monitoring and control.
+- `helper_main.yaml`,`helper_mikrotik.yaml`,`helper_proxmox.yaml`, `variables.yaml` — helper functions and entities for smart home monitoring and control.
 - `notifications_telegram.yaml` and `notifications_yandex.yaml`  — notification settings via Telegram and Yandex.
 - Telegram (UI integration):
     - `telegram_helper.yaml` — starting with version 2026.5.0, configuration via UI, old service configurations: Telegram, `notify.*`, recipient groups.
