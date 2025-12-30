@@ -3,11 +3,27 @@
 ################################################################################
 
 # ==============================================================================
+# НАСТРОЙКИ (ВКЛ/ВЫКЛ УВЕДОМЛЕНИЙ)
+# ==============================================================================
+input_boolean:
+  euphorbia_notify_soil:
+    name: "Молочай: Уведомлять о поливе"
+    icon: mdi:water
+    # initial: on  <-- Убрали, чтобы сохранялось состояние
+
+  euphorbia_notify_temp:
+    name: "Молочай: Уведомлять о температуре"
+    icon: mdi:thermometer
+    # initial: on
+
+  euphorbia_notify_lux:
+    name: "Молочай: Уведомлять о свете"
+    icon: mdi:brightness-6
+    # initial: on
+
+# ==============================================================================
 # ХРАНЕНИЕ СОСТОЯНИЯ (История и таймеры)
 # ==============================================================================
-# input_number мы НЕ создаем, так как используем существующие number.*
-# ==============================================================================
-
 input_text:
   notification_history_euphorbia_leuconeura:
     name: "Молочай: История уведомлений"
@@ -29,8 +45,6 @@ input_datetime:
 
 # ==============================================================================
 # СГЛАЖИВАЮЩИЕ ФИЛЬТРЫ
-# ==============================================================================
-# Берем данные с реальных датчиков (суффикс _2 согласно дампу)
 # ==============================================================================
 sensor:
   - platform: filter
@@ -57,7 +71,6 @@ sensor:
         window_size: "01:00"
         precision: 2
 
-  # Добавил влажность воздуха, так как она есть в дампе
   - platform: filter
     name: "euphorbia_leuconeura_filtered_air_humidity"
     entity_id: sensor.flower_euphorbia_leuconeura_humidity_2
@@ -69,29 +82,30 @@ sensor:
 # ==============================================================================
 # БИНАРНЫЕ СЕНСОРЫ (ЛОГИКА УВЕДОМЛЕНИЙ)
 # ==============================================================================
-# Используем number.* из вашего дампа
-# ==============================================================================
 template:
   - binary_sensor:
-      # --- ПОЧВА (НУЖЕН ПОЛИВ) ---
+      # --- ПОЧВА ---
       - unique_id: plant_alert_euphorbia_leuconeura_soil
         name: "Необходимость полива (Молочай)"
         device_class: problem
         availability: >-
           {{ states('sensor.euphorbia_leuconeura_filtered_soil_moisture') not in ['unknown','unavailable',''] }}
         state: >-
-          {% set moisture = states('sensor.euphorbia_leuconeura_filtered_soil_moisture') | float(0) %}
-          {# Используем существующие number.* #}
-          {% set min_thr  = states('number.euphorbia_leuconeura_min_soil_moisture') | float(10) %}
-          {% set max_thr  = states('number.euphorbia_leuconeura_max_soil_moisture') | float(50) %}
-          
-          {% set was_on   = is_state('binary_sensor.plant_alert_euphorbia_leuconeura_soil','on') %}
-          {% set release_thr = min_thr + 5 %}
-          
-          {# Логика: если перелив (>max) - молчим. Иначе гистерезис. #}
-          {% if moisture > max_thr %} false
-          {% elif was_on %} {{ moisture < release_thr }}
-          {% else %} {{ moisture < min_thr }}
+          {# Сначала проверяем мастер-переключатель #}
+          {% if is_state('input_boolean.euphorbia_notify_soil', 'off') %}
+            false
+          {% else %}
+            {% set moisture = states('sensor.euphorbia_leuconeura_filtered_soil_moisture') | float(0) %}
+            {% set min_thr  = states('number.euphorbia_leuconeura_min_soil_moisture') | float(10) %}
+            {% set max_thr  = states('number.euphorbia_leuconeura_max_soil_moisture') | float(50) %}
+            
+            {% set was_on   = is_state('binary_sensor.plant_alert_euphorbia_leuconeura_soil','on') %}
+            {% set release_thr = min_thr + 5 %}
+            
+            {% if moisture > max_thr %} false
+            {% elif was_on %} {{ moisture < release_thr }}
+            {% else %} {{ moisture < min_thr }}
+            {% endif %}
           {% endif %}
         icon: mdi:water-alert
 
@@ -100,10 +114,14 @@ template:
         name: "Необходимость согрева или охлаждения (Молочай)"
         device_class: problem
         state: >-
-          {% set t    = states('sensor.euphorbia_leuconeura_filtered_temperature') | float(0) %}
-          {% set tmin = states('number.euphorbia_leuconeura_min_temperature') | float(8) %}
-          {% set tmax = states('number.euphorbia_leuconeura_max_temperature') | float(35) %}
-          {{ (t > 0) and (t < tmin or t > tmax) }}
+          {% if is_state('input_boolean.euphorbia_notify_temp', 'off') %}
+            false
+          {% else %}
+            {% set t    = states('sensor.euphorbia_leuconeura_filtered_temperature') | float(0) %}
+            {% set tmin = states('number.euphorbia_leuconeura_min_temperature') | float(8) %}
+            {% set tmax = states('number.euphorbia_leuconeura_max_temperature') | float(35) %}
+            {{ (t > 0) and (t < tmin or t > tmax) }}
+          {% endif %}
         icon: mdi:sun-thermometer-outline
 
       # --- ОСВЕЩЕННОСТЬ ---
@@ -111,11 +129,14 @@ template:
         name: "Необходимость коррекции освещенности (Молочай)"
         device_class: problem
         state: >-
-          {% set lux     = states('sensor.euphorbia_leuconeura_filtered_illuminance') | float(0) %}
-          {% set min_lux = states('number.euphorbia_leuconeura_min_illuminance') | float(2800) %}
-          {% set max_lux = states('number.euphorbia_leuconeura_max_illuminance') | float(120000) %}
-          {# Уведомляем если СЛИШКОМ темно или СЛИШКОМ ярко #}
-          {{ lux < min_lux or lux > max_lux }}
+          {% if is_state('input_boolean.euphorbia_notify_lux', 'off') %}
+            false
+          {% else %}
+            {% set lux     = states('sensor.euphorbia_leuconeura_filtered_illuminance') | float(0) %}
+            {% set min_lux = states('number.euphorbia_leuconeura_min_illuminance') | float(2800) %}
+            {% set max_lux = states('number.euphorbia_leuconeura_max_illuminance') | float(120000) %}
+            {{ lux < min_lux or lux > max_lux }}
+          {% endif %}
 
 # ==============================================================================
 # АВТОМАТИЗАЦИИ
@@ -187,7 +208,7 @@ automation:
           plant_name: "Молочай"
           plant_name_latin: "euphorbia_leuconeura"
 
-  # 4. Периодическая проверка (раз в 6 часов)
+  # 4. Периодическая проверка
   - id: "euphorbia_periodic_check"
     alias: "Растение. Молочай: Периодическая проверка"
     trigger:

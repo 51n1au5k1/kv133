@@ -319,6 +319,8 @@ script:
 
             {# VM HAOS12 (вручную, так как это VM) #}
             {{ '🟢' if is_state('binary_sensor.qemu_haos12_3_100_status', 'on') else '🔴' }} <b>HAOS12:</b> {{ states('sensor.qemu_haos12_3_100_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_haos12_3_100_memory_used_percentage') | float(0) | round(0) }}%
+            {# VM CHR (вручную, так как это VM) #}
+            {{ '🟢' if is_state('binary_sensor.qemu_mikrotik_routeros_chr_200_status', 'on') else '🔴' }} <b>CHR:</b> {{ states('sensor.qemu_mikrotik_routeros_chr_200_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_mikrotik_routeros_chr_200_memory_used_percentage') | float(0) | round(0) }}%
 
             {# LXC Контейнеры (через макрос) #}
             {{ status('binary_sensor.lxc_mariadb_101_status', 'MariaDB', 'sensor.lxc_mariadb_101_cpu_used', 'sensor.lxc_mariadb_101_memory_used_percentage') }}
@@ -332,6 +334,7 @@ script:
 
           inline_keyboard: >
             {% set s_haos = is_state('binary_sensor.qemu_haos12_3_100_status', 'on') %}
+            {% set s_chr = is_state('binary_sensor.qemu_mikrotik_routeros_chr_200_status', 'on') %}
             {% set s_maria = is_state('binary_sensor.lxc_mariadb_101_status', 'on') %}
             {% set s_jack = is_state('binary_sensor.lxc_jackett_102_status', 'on') %}
             {% set s_jelly = is_state('binary_sensor.lxc_jellyfin_103_status', 'on') %}
@@ -345,6 +348,8 @@ script:
                 [ ["🔄 Обновить статус", "/pve_status_refresh"] ],
                 
                 [ ["🟢 HAOS12" if s_haos else "🔴 HAOS12", "/reboot_haos12"] ],
+
+                [ ["🟢 CHR" if s_chr else "🔴 CHR", "/reboot_chr"] ],
 
                 [ ["🟢 MariaDB" if s_maria else "🔴 MariaDB", "/start_mariadb"], 
                   ["⏹ Стоп", "/stop_mariadb"], ["🔄 Ребут", "/reboot_mariadb"] ],
@@ -1127,6 +1132,7 @@ automation:
           {% set cmd = trigger.event.data.data %}
           {% set map = {
             "/reboot_haos12": "button.qemu_haos12_3_100_reboot",
+            "/reboot_chr": "button.qemu_mikrotik_routeros_chr_200_reboot",
             "/start_mariadb": "button.lxc_mariadb_101_start",
             "/stop_mariadb": "button.lxc_mariadb_101_stop",
             "/reboot_mariadb": "button.lxc_mariadb_101_reboot",
@@ -1161,6 +1167,7 @@ automation:
             {% set cmd = trigger.event.data.data %}
             {% set map = {
               "/reboot_haos12": "button.qemu_haos12_3_100_reboot",
+              "/reboot_chr": "button.qemu_mikrotik_routeros_chr_200_reboot",
               "/start_mariadb": "button.lxc_mariadb_101_start",
               "/stop_mariadb": "button.lxc_mariadb_101_stop",
               "/reboot_mariadb": "button.lxc_mariadb_101_reboot",

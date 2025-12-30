@@ -1,5 +1,5 @@
 ################################################################################
-# /packages/proxmox_helper.yaml
+# /packages/helper_proxmox.yaml
 ################################################################################
 #
 # Пакет вспомогательных конфигураций для работы с Proxmox Virtual Environment
@@ -27,6 +27,13 @@ input_number:
   # Количество процессоров, выделенных для каждой VM или LXC
   cpu_100:
     name: "CPU 100 (HAOS)"
+    min: 1
+    max: 12
+    step: 1
+    initial: 2
+
+  cpu_200:
+    name: "CPU 200 (CHR)"
     min: 1
     max: 12
     step: 1
@@ -98,13 +105,20 @@ template:
       # НОРМАЛИЗОВАННАЯ ЗАГРУЗКА (относительно выделенных ядер)
       # ========================================================================
       # Proxmox уже возвращает проценты — просто пробрасываем
-      
+
       - name: "CPU VM HAOS12 Normalized"
         unique_id: cpu_vm_haos12_100_normalized
         unit_of_measurement: "%"
         icon: mdi:percent-outline
         state: >-
           {{ states('sensor.qemu_haos12_3_100_cpu_used') | float(0) | round(2) }}
+
+      - name: "CPU VM CHR Normalized"
+        unique_id: cpu_vm_chr_200_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: >-
+          {{ states('sensor.qemu_mikrotik_routeros_chr_200_cpu_used') | float(0) | round(2) }}
 
       - name: "CPU LXC MariaDB Normalized"
         unique_id: cpu_lxc_mariadb_101_normalized
@@ -166,7 +180,7 @@ template:
       # ВКЛАД В ЗАГРУЗКУ ХОСТА (какой % от всего сервера занимает гость)
       # ========================================================================
       # Формула: raw × выделенные_ядра / всего_ядер_хоста
-      
+
       - name: "CPU VM HAOS12 Host Percent"
         unique_id: cpu_vm_haos12_100_host_percent
         unit_of_measurement: "%"
@@ -174,6 +188,16 @@ template:
         state: >-
           {% set raw = states('sensor.qemu_haos12_3_100_cpu_used') | float(0) %}
           {% set cpus = states('input_number.cpu_100') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU VM CHR Host Percent"
+        unique_id: cpu_vm_chr_200_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.qemu_mikrotik_routeros_chr_200_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_200') | float(1) %}
           {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
           {{ (raw * cpus / host) | round(2) }}
 

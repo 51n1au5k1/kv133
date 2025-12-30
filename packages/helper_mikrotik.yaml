@@ -1,0 +1,250 @@
+################################################################################
+# /packages/helper_mikrotik.yaml
+################################################################################
+#
+# MIKROTIK / СЕТЬ — ХЕЛПЕРЫ И ДИАГНОСТИКА
+#
+# Назначение:
+# - Вынести полезные сенсоры и бинарные сенсоры из атрибутов Mikrotik-портов
+# - Быстро диагностировать: линк/кабель, аптайм, обрывы (flapping), autoneg, MTU
+#
+# Сейчас настроено для порта:
+#   switch.mikrotik_ether1_port  (ether1 / WAN-PCI)
+#
+################################################################################
+
+template:
+  - binary_sensor:
+      # Кабель/линк поднят
+      - name: "Mikrotik: WAN-PCI кабель подключен"
+        unique_id: mikrotik_wan_pci_cable_connected
+        device_class: connectivity
+        state: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'status') == 'link-ok' }}
+        icon: >
+          {% if is_state(this.entity_id, 'on') %}
+            mdi:lan-connect
+          {% else %}
+            mdi:lan-disconnect
+          {% endif %}
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'status') is not none }}
+
+      # Порт активен (running + link-ok)
+      - name: "Mikrotik: WAN-PCI порт активен"
+        unique_id: mikrotik_wan_pci_port_active
+        device_class: connectivity
+        state: >
+          {{
+            state_attr('switch.mikrotik_ether1_port', 'running') == true
+            and state_attr('switch.mikrotik_ether1_port', 'status') == 'link-ok'
+          }}
+        icon: >
+          {% if is_state(this.entity_id, 'on') %}
+            mdi:check-network
+          {% else %}
+            mdi:close-network
+          {% endif %}
+        availability: >
+          {{
+            state_attr('switch.mikrotik_ether1_port', 'running') is not none
+            and state_attr('switch.mikrotik_ether1_port', 'status') is not none
+          }}
+
+      # Автосогласование ОК
+      - name: "Mikrotik: WAN-PCI autoneg ОК"
+        unique_id: mikrotik_wan_pci_autoneg_ok
+        device_class: connectivity
+        state: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'auto_negotiation') == 'done' }}
+        icon: >
+          {% if is_state(this.entity_id, 'on') %}
+            mdi:auto-fix
+          {% else %}
+            mdi:alert-circle-outline
+          {% endif %}
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'auto_negotiation') is not none }}
+
+      # Нестабильный линк (простая эвристика по link_downs)
+      - name: "Mikrotik: WAN-PCI линк нестабилен"
+        unique_id: mikrotik_wan_pci_link_unstable
+        icon: mdi:alert-network
+        state: >
+          {{ (state_attr('switch.mikrotik_ether1_port', 'link_downs') | int(0)) >= 3 }}
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'link_downs') is not none }}
+
+  - sensor:
+      # Текстовый статус линка (link-ok / no-link / ...)
+      - name: "Mikrotik: WAN-PCI статус линка"
+        unique_id: mikrotik_wan_pci_link_status
+        state: "{{ state_attr('switch.mikrotik_ether1_port', 'status') | default('unknown') }}"
+        icon: >
+          {% set s = state_attr('switch.mikrotik_ether1_port', 'status') %}
+          {% if s == 'link-ok' %}
+            mdi:lan-connect
+          {% elif s in [none, 'unknown'] %}
+            mdi:help-network
+          {% else %}
+            mdi:lan-disconnect
+          {% endif %}
+        availability: >
+          {{ states('switch.mikrotik_ether1_port') not in ['unknown', 'unavailable'] }}
+
+      # Аптайм линка в секундах (сколько времени с последнего up)
+      - name: "Mikrotik: WAN-PCI аптайм линка"
+        unique_id: mikrotik_wan_pci_link_uptime_seconds
+        device_class: duration
+        unit_of_measurement: s
+        state: >
+          {% set t = state_attr('switch.mikrotik_ether1_port', 'last_link_up_time') %}
+          {% if t and state_attr('switch.mikrotik_ether1_port', 'status') == 'link-ok' %}
+            {{ (now() - as_datetime(t)).total_seconds() | int }}
+          {% else %}
+            0
+          {% endif %}
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'last_link_up_time') is not none }}
+
+      # Кол-во обрывов (link_downs)
+      - name: "Mikrotik: WAN-PCI обрывы линка"
+        unique_id: mikrotik_wan_pci_link_downs
+        state: "{{ state_attr('switch.mikrotik_ether1_port', 'link_downs') | int(0) }}"
+        icon: mdi:counter
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'link_downs') is not none }}
+
+      # Время последнего UP
+      - name: "Mikrotik: WAN-PCI последний линк UP"
+        unique_id: mikrotik_wan_pci_last_link_up_time
+        device_class: timestamp
+        state: >
+          {% set t = state_attr('switch.mikrotik_ether1_port', 'last_link_up_time') %}
+          {{ as_datetime(t) if t else none }}
+        icon: mdi:clock-check-outline
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'last_link_up_time') is not none }}
+
+      # Время последнего DOWN (если атрибут есть/заполнен)
+      - name: "Mikrotik: WAN-PCI последний линк DOWN"
+        unique_id: mikrotik_wan_pci_last_link_down_time
+        device_class: timestamp
+        state: >
+          {% set t = state_attr('switch.mikrotik_ether1_port', 'last_link_down_time') %}
+          {{ as_datetime(t) if t else none }}
+        icon: mdi:clock-remove-outline
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'last_link_down_time') is not none }}
+
+      # MTU
+      - name: "Mikrotik: WAN-PCI MTU"
+        unique_id: mikrotik_wan_pci_mtu
+        unit_of_measurement: "bytes"
+        state: "{{ state_attr('switch.mikrotik_ether1_port', 'actual_mtu') | int(0) }}"
+        icon: mdi:swap-horizontal
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'actual_mtu') is not none }}
+
+      # MAC порта
+      - name: "Mikrotik: WAN-PCI MAC порта"
+        unique_id: mikrotik_wan_pci_port_mac
+        state: "{{ state_attr('switch.mikrotik_ether1_port', 'port_mac_address') | default('unknown') }}"
+        icon: mdi:identifier
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'port_mac_address') is not none }}
+
+      # PoE
+      - name: "Mikrotik: WAN-PCI PoE"
+        unique_id: mikrotik_wan_pci_poe_out
+        state: "{{ state_attr('switch.mikrotik_ether1_port', 'poe_out') | default('unknown') }}"
+        icon: mdi:flash
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'poe_out') is not none }}
+
+      # Advertising (что порт рекламирует)
+      - name: "Mikrotik: WAN-PCI advertising"
+        unique_id: mikrotik_wan_pci_advertising
+        state: "{{ state_attr('switch.mikrotik_ether1_port', 'advertising') | default('unknown') }}"
+        icon: mdi:transit-connection-variant
+        availability: >
+          {{ state_attr('switch.mikrotik_ether1_port', 'advertising') is not none }}
+
+      # Имя порта (name / default_name)
+      - name: "Mikrotik: WAN-PCI имя порта"
+        unique_id: mikrotik_wan_pci_port_name
+        state: >
+          {% set n = state_attr('switch.mikrotik_ether1_port', 'name') %}
+          {% set dn = state_attr('switch.mikrotik_ether1_port', 'default_name') %}
+          {{ n if n else (dn if dn else 'unknown') }}
+        icon: mdi:tag-outline
+        availability: >
+          {{
+            state_attr('switch.mikrotik_ether1_port', 'name') is not none
+            or state_attr('switch.mikrotik_ether1_port', 'default_name') is not none
+          }}
+
+################################################################################
+# Уведомления
+################################################################################
+
+automation:
+  - id: "mikrotik_wan_pci_link_down_notify"
+    alias: "Уведомление. Телеграм: Mikrotik WAN-PCI — пропал линк"
+    mode: parallel
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.mikrotik_wan_pci_kabel_podklyuchen
+        from: "on"
+        to: "off"
+        for: "00:00:10" # Защита от ложных срабатываний (краткий флап/переключение)
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_master
+        data:
+          message: >
+            🔴 <b>Внимание! Пропал линк на порту MikroTik</b>
+
+            Порт: <b>{{ state_attr('switch.mikrotik_ether1_port', 'name') | default('ether1') }}</b>
+            Сущность: <b>{{ state_attr('switch.mikrotik_ether1_port', 'friendly_name') | default('Mikrotik ether1 Port') }}</b>
+
+            Статус: ❌ <b>{{ state_attr('switch.mikrotik_ether1_port', 'status') | default('unknown') }}</b>
+            Обрывы (link_downs): <b>{{ state_attr('switch.mikrotik_ether1_port', 'link_downs') | int(0) }}</b>
+            Последний UP: <b>{{ state_attr('switch.mikrotik_ether1_port', 'last_link_up_time') | default('') }}</b>
+
+  - id: "mikrotik_wan_pci_link_up_notify"
+    alias: "Уведомление. Телеграм: Mikrotik WAN-PCI — линк восстановлен"
+    mode: parallel
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.mikrotik_wan_pci_kabel_podklyuchen
+        from: "off"
+        to: "on"
+        for: "00:00:10" # Защита от ложных срабатываний (краткий флап)
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+    actions:
+      - action: notify.send_message
+        target:
+          entity_id: notify.telegram_master
+        data:
+          message: >
+            🟢 <b>Линк восстановлен на порту MikroTik</b>
+
+            Порт: <b>{{ state_attr('switch.mikrotik_ether1_port', 'name') | default('ether1') }}</b>
+            Сущность: <b>{{ state_attr('switch.mikrotik_ether1_port', 'friendly_name') | default('Mikrotik ether1 Port') }}</b>
+
+            Статус: ✅ <b>{{ state_attr('switch.mikrotik_ether1_port', 'status') | default('unknown') }}</b>
+            Autoneg: <b>{{ state_attr('switch.mikrotik_ether1_port', 'auto_negotiation') | default('unknown') }}</b>
+            MTU: <b>{{ state_attr('switch.mikrotik_ether1_port', 'actual_mtu') | int(0) }}</b>
+            Обрывы (link_downs): <b>{{ state_attr('switch.mikrotik_ether1_port', 'link_downs') | int(0) }}</b>
+            Время UP: <b>{{ state_attr('switch.mikrotik_ether1_port', 'last_link_up_time') | default('') }}</b>

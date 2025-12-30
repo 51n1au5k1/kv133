@@ -125,6 +125,8 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          # ИСПРАВЛЕНО: Безопасная логика без .append()
           open_doors: >-
             {% set pairs = [
               ('в гостиной', 'binary_sensor.gostinaia_balkon_contact'),
@@ -132,13 +134,9 @@ script:
               ('на кухне', 'binary_sensor.0x00158d0003ce9922_contact'),
               ('в спальне', 'binary_sensor.0x00158d00044d5d11_contact')
             ] %}
-            {% set res = [] %}
-            {% for name, ent in pairs %}
-              {% if is_state(ent, 'on') %}
-                {% set _ = res.append(name) %}
-              {% endif %}
-            {% endfor %}
-            {{ res }}
+            {# Фильтруем список, оставляя только открытые, и берем их названия #}
+            {{ pairs | selectattr(1, 'is_state', 'on') | map(attribute=0) | list }}
+
           door_message: >-
             {% if open_doors | length > 0 %}
               {% if open_doors | length == 1 %}
@@ -149,7 +147,7 @@ script:
             {% else %}
               Все двери закрыты
             {% endif %}
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"

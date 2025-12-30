@@ -236,53 +236,6 @@ automation:
   # --------------------------------------------------------------------------
   - id: "9f1229c2-0ce2-4483-9953-1f6cdc6fa18e"
     alias: "Спальня: уведомление о низкой температуре (при открытом окне)"
-    description: >
-      Отправляет уведомление, когда температура опускается ниже 20°C при открытом балконе.
-
-      ТРИГГЕР:
-      • Сглаженная температура < 20°C (устойчиво 1 минуту)
-
-      УСЛОВИЯ (ВСЕ ДОЛЖНЫ БЫТЬ ВЫПОЛНЕНЫ):
-      • Фаза запуска завершена
-      • Режим тишины выключен (не будит ночью)
-      • Балкон/окно открыто (есть причина холода)
-      • Кто-то дома (есть кому получить уведомление)
-      • Датчик температуры доступен
-      • Флаг антиспама выключен (не было уведомления недавно)
-
-      ДЕЙСТВИЯ:
-      1. Telegram-уведомление (если мастер дома)
-      2. Голосовое уведомление (script.yandex_tts_temp_status)
-      3. Установка флага антиспама = ON
-      4. Запуск таймера сброса флага (20 мин)
-      5. Запись в лог
-
-      ЛОГИКА АНТИСПАМА:
-      1. Уведомление отправлено
-      2. Флаг антиспама = ON
-      3. Таймер 20 минут
-      4.Флаг антиспама = OFF
-      5. Возможно новое уведомление
-
-
-      СГЛАЖИВАНИЕ ТЕМПЕРАТУРЫ:
-      • Скользящее среднее за 2 минуты
-      • Защита от кратковременных скачков
-      • Стабильные показания
-
-      УСЛОВИЕ "БАЛКОН ОТКРЫТ":
-      • Логично: холодно потому что проветриваете
-      • Без открытого окна уведомление не отправляется (может быть поломка отопления)
-
-      ЗАДЕРЖКА 1 МИНУТА:
-      • Подтверждение устойчиво низкой температуры
-      • Защита от ложных срабатываний
-
-      ПРИМЕРЫ:
-      1. T = 19°C, балкон открыт, мастер дома → Уведомление
-      2. T = 18°C, балкон закрыт → Уведомление НЕ отправляется
-      3. T = 19°C, балкон открыт, никого нет → Уведомление НЕ отправляется
-      4. T = 19°C, балкон открыт, было уведомление 10 мин назад → Уведомление НЕ отправляется
     mode: single
     triggers:
       - trigger: numeric_state
@@ -292,32 +245,25 @@ automation:
           minutes: 1
       - trigger: time_pattern
         minutes: "/15"
-
     conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
-
       - condition: state
         entity_id: binary_sensor.0x00158d00044d5d11_contact
         state: "on"
-
       - condition: state
         entity_id: binary_sensor.someone_is_home
         state: "on"
-
       - condition: template
         value_template: >-
           {{ states('sensor.temperatura_v_spalne_sglazhennaia') not in ['unknown', 'unavailable', ''] }}
-
       - condition: state
         entity_id: input_boolean.bedroom_th_notice
         state: "off"
-
       - condition: numeric_state
         entity_id: sensor.temperatura_v_spalne_sglazhennaia
         below: 20
@@ -326,10 +272,8 @@ automation:
           current_temp: "{{ states('sensor.temperatura_v_spalne_sglazhennaia') }}"
           message: >-
             ❄️ Низкая температура в спальне!
-
             Температура: {{ current_temp }}°C (< 20°C)
             Балкон/окно: ОТКРЫТО
-
             Рекомендация: закройте балкон/окно в спальне.
 
       - choose:
@@ -338,6 +282,7 @@ automation:
                 entity_id: person.master
                 state: "home"
             sequence:
+              # ИСПРАВЛЕНО: Прямой вызов сервиса уведомлений (более надежно для старых конфигов)
               - action: notify.send_message
                 target:
                   entity_id: notify.telegram_master

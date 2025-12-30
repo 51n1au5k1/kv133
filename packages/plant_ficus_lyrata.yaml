@@ -3,6 +3,20 @@
 ################################################################################
 
 # ==============================================================================
+# НАСТРОЙКИ (ВКЛ/ВЫКЛ УВЕДОМЛЕНИЙ)
+# ==============================================================================
+input_boolean:
+  ficus_notify_soil:
+    name: "Фикус: Уведомлять о поливе"
+    icon: mdi:water
+    # initial: on
+
+  ficus_notify_temp:
+    name: "Фикус: Уведомлять о температуре"
+    icon: mdi:thermometer
+    # initial: on
+
+# ==============================================================================
 # ХРАНЕНИЕ СОСТОЯНИЯ (История уведомлений)
 # ==============================================================================
 input_text:
@@ -26,7 +40,6 @@ input_datetime:
 sensor:
   - platform: filter
     name: "ficus_lyrata_filtered_temperature"
-    # Ссылаемся на реальный сенсор Efekta
     entity_id: sensor.flower_ficus_efekta_sensor_temperature
     filters:
       - filter: time_simple_moving_average
@@ -35,17 +48,11 @@ sensor:
 
   - platform: filter
     name: "ficus_lyrata_filtered_soil_moisture"
-    # Ссылаемся на реальный сенсор Efekta
     entity_id: sensor.flower_ficus_efekta_sensor_soil_moisture
     filters:
       - filter: time_simple_moving_average
         window_size: "01:00"
         precision: 2
-
-  # Добавляем фильтр для влажности воздуха (раз он есть в дампе и может пригодиться)
-  # В дампе видно, что ficus использует внешний sensor.livingroom_average_humidity,
-  # поэтому здесь фильтр можно не делать, либо фильтровать его же.
-  # Оставим пока без фильтра, если логика пакета его не требует.
 
 # ==============================================================================
 # БИНАРНЫЕ СЕНСОРЫ (ЛОГИКА УВЕДОМЛЕНИЙ)
@@ -59,18 +66,20 @@ template:
         availability: >-
           {{ states('sensor.ficus_lyrata_filtered_soil_moisture') not in ['unknown','unavailable',''] }}
         state: >-
-          {% set moisture = states('sensor.ficus_lyrata_filtered_soil_moisture') | float(0) %}
-          {# Используем существующие number.* от Efekta #}
-          {% set min_thr  = states('number.ficus_lyrata_min_soil_moisture') | float(15) %}
-          {% set max_thr  = states('number.ficus_lyrata_max_soil_moisture') | float(60) %}
-
-          {% set was_on   = is_state('binary_sensor.plant_alert_ficus_lyrata_soil','on') %}
-          {% set release_thr = min_thr + 5 %}
-
-          {# Логика: если перелив (>max) - молчим. Иначе гистерезис. #}
-          {% if moisture > max_thr %} false
-          {% elif was_on %} {{ moisture < release_thr }}
-          {% else %} {{ moisture < min_thr }}
+          {% if is_state('input_boolean.ficus_notify_soil', 'off') %}
+            false
+          {% else %}
+            {% set moisture = states('sensor.ficus_lyrata_filtered_soil_moisture') | float(0) %}
+            {% set min_thr  = states('number.ficus_lyrata_min_soil_moisture') | float(15) %}
+            {% set max_thr  = states('number.ficus_lyrata_max_soil_moisture') | float(60) %}
+            
+            {% set was_on   = is_state('binary_sensor.plant_alert_ficus_lyrata_soil','on') %}
+            {% set release_thr = min_thr + 5 %}
+            
+            {% if moisture > max_thr %} false
+            {% elif was_on %} {{ moisture < release_thr }}
+            {% else %} {{ moisture < min_thr }}
+            {% endif %}
           {% endif %}
         icon: mdi:water-alert
 
@@ -79,13 +88,15 @@ template:
         name: "Температура (Фикус)"
         device_class: problem
         state: >-
-          {% set t    = states('sensor.ficus_lyrata_filtered_temperature') | float(0) %}
-          {% set tmin = states('number.ficus_lyrata_min_temperature') | float(12) %}
-          {% set tmax = states('number.ficus_lyrata_max_temperature') | float(32) %}
-          {{ (t > 0) and (t < tmin or t > tmax) }}
+          {% if is_state('input_boolean.ficus_notify_temp', 'off') %}
+            false
+          {% else %}
+            {% set t    = states('sensor.ficus_lyrata_filtered_temperature') | float(0) %}
+            {% set tmin = states('number.ficus_lyrata_min_temperature') | float(12) %}
+            {% set tmax = states('number.ficus_lyrata_max_temperature') | float(32) %}
+            {{ (t > 0) and (t < tmin or t > tmax) }}
+          {% endif %}
         icon: mdi:sun-thermometer-outline
-
-      # СВЕТА НЕТ (Удалено, так как датчик не отдает lux)
 
 # ==============================================================================
 # АВТОМАТИЗАЦИИ
