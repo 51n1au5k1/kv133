@@ -6,8 +6,8 @@
 # и уведомлений.
 #
 # Изменения/уточнения:
-#  - Убраны упоминания про input_boolean.washing_machine_finished (остаётся только
-#    binary_sensor.washing_machine_finished).
+#  - Убраны упоминания про input_boolean.stiralnaia_mashina_zavershila_stirku (остаётся только
+#    binary_sensor.stiralnaia_mashina_zavershila_stirku).
 #  - Уведомление о завершении теперь отправляется в Telegram + TTS на Яндекс-колонку.
 #  - Сброшен сервис notify.notify.
 #
@@ -47,7 +47,7 @@ template:
       # delay_off не поддерживается в новом формате — логику задержки
       # можно реализовать через for: в триггерах автоматизаций.
       # ----------------------------------------------------------------------
-      - unique_id: washing_machine_active
+      - unique_id: stiralnaia_mashina_aktivna
         name: "Стиральная машина активна"
         availability: >
           {{ states('sensor.bathroom_washing_machine_power') not in ['unknown', 'unavailable', ''] }}
@@ -62,7 +62,7 @@ template:
       # delay_on не поддерживается в новом формате — задержка 2 минуты
       # реализована через for: в триггере автоматизации уведомления.
       # ----------------------------------------------------------------------
-      - unique_id: washing_machine_finished
+      - unique_id: stiralnaia_mashina_zavershila_stirku
         name: "Стиральная машина завершила стирку"
         availability: >
           {{ states('sensor.bathroom_washing_machine_power') not in ['unknown', 'unavailable', ''] }}
@@ -93,7 +93,7 @@ automation:
               - choose:
                   - conditions:
                       - condition: state
-                        entity_id: binary_sensor.washing_machine_active
+                        entity_id: binary_sensor.stiralnaia_mashina_aktivna
                         state: "on"
                     sequence:
                       - action: input_boolean.turn_on
@@ -201,7 +201,7 @@ automation:
                                 entity_id: binary_sensor.someone_is_home
                                 state: "on"
                             sequence:
-                              - action: script.yandex_tts_washing_machine_finished
+                              - action: script.yandex_tts_stiralnaia_mashina_zavershila_stirku
                               - action: notify.send_message
                                 target:
                                   entity_id: notify.telegram_master
@@ -224,7 +224,7 @@ automation:
     triggers:
       # Триггеримся по бинарному сенсору, т.к. флаги уже сброшены
       - trigger: state
-        entity_id: binary_sensor.washing_machine_finished
+        entity_id: binary_sensor.stiralnaia_mashina_zavershila_stirku
         to: "on"
         for:
           minutes: 15

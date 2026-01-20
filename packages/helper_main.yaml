@@ -59,36 +59,54 @@ template:
       # 2. ИЛИ включен Гостевой режим
       # Это позволяет свету и розеткам работать, когда вас нет, но есть гости.
       # ----------------------------------------------------------------------
-      - name: "Someone is Home"
-        unique_id: someone_is_home
+      - unique_id: someone_is_home
+        name: someone_is_home
         device_class: occupancy
-        availability: >
-          {{ expand('group.all_residents') | list | count > 0 }}
         state: >
-          {{ 
-             (expand('group.all_residents') | selectattr('state', 'eq', 'home') | list | count > 0)
+          {{
+             (expand('group.all_residents')
+               | selectattr('state', 'eq', 'home')
+               | list
+               | count > 0)
              or is_state('input_boolean.guest_mode', 'on')
           }}
+        icon: mdi:home-account
 
-      # Андрей дома
-      - name: "Andrei is Home"
-        unique_id: andrei_is_home
+      # Андрей дома (устойчиво к unavailable)
+      - unique_id: andrei_is_home
+        name: andrei_is_home
         device_class: occupancy
-        availability: >
-          {{ states('sensor.pixel_8_pro_wi_fi_connection') not in ['unknown', 'unavailable'] }}
         state: >
-          {{ is_state('person.master', 'home') or is_state('sensor.pixel_8_pro_wi_fi_connection', 'mdhouse') }}
+          {% set p_home = is_state('person.master', 'home') %}
+          {% set wifi = states('sensor.pixel_8_pro_wi_fi_connection') %}
+          {% set wifi_home = (wifi == 'mdhouse') %}
+          {{ p_home or wifi_home }}
+        icon: mdi:account
+
+        # availability убираем полностью, чтобы сенсор не становился unavailable
+        # из-за проблем с Wi-Fi сенсором телефона.
 
       # Любая балконная дверь открыта
-      - name: "Doors in Kitchen Livingroom"
-        unique_id: doors_in_kitchen_livingroom
+      # - name: "Doors in Kitchen Livingroom"
+      #   unique_id: doors_in_kitchen_livingroom
+      #   device_class: door
+      #   availability: >
+      #     {{ states('binary_sensor.gostinaia_balkon_contact') not in ['unknown', 'unavailable']
+      #        and states('binary_sensor.0x00158d0003ce9922_contact') not in ['unknown', 'unavailable'] }}
+      #   state: >
+      #     {{ is_state('binary_sensor.gostinaia_balkon_contact', 'on')
+      #        or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') }}
+      - unique_id: doors_in_kitchen_livingroom
+        name: doors_in_kitchen_livingroom
         device_class: door
-        availability: >
-          {{ states('binary_sensor.gostinaia_balkon_contact') not in ['unknown', 'unavailable']
-             and states('binary_sensor.0x00158d0003ce9922_contact') not in ['unknown', 'unavailable'] }}
         state: >
-          {{ is_state('binary_sensor.gostinaia_balkon_contact', 'on')
-             or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') }}
+          {% set a = states('binary_sensor.gostinaia_balkon_contact') %}
+          {% set b = states('binary_sensor.0x00158d0003ce9922_contact') %}
+
+          {% set a_on = (a == 'on') %}
+          {% set b_on = (b == 'on') %}
+
+          {{ a_on or b_on }}
 
   - sensor:
       - name: "Суммарная мощность розеток гостиной"
@@ -331,6 +349,10 @@ automation:
             {% set home_users = [] %}
             {% if is_state('binary_sensor.andrei_is_home', 'on') %}{% set home_users = home_users + ['Andrei'] %}{% endif %}
             {{ home_users | join(', ') }}
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
 
   - id: "38ea50fb-09bc-4d39-a771-1727ab72f265"
     alias: "HELPER: Фаза: Включение датчика загрузки"

@@ -53,7 +53,7 @@ template:
         name: "Температура ниже 20°C"
         device_class: cold
         state: >
-          {% set temp1 = states('sensor.temperatura_v_gostinnoi_sglazhennaia') %}
+          {% set temp1 = states('sensor.temperatura_v_gostinoi_sglazhennaia') %}
           {% set temp2 = states('sensor.temperatura_v_spalne_sglazhennaia') %}
           {% set temp3 = states('sensor.srednee_znachenie_temperatury_v_masterskoi_2') %}
           {{ (temp1 not in ['unknown','unavailable'] and temp1|float <= 20)

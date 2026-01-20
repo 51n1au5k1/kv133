@@ -139,3 +139,39 @@ automation:
       - action: light.toggle
         target:
           entity_id: light.livingroom_main_switch_right
+
+  - id: livingroom_cabinet_light_master_logic
+    alias: "Гостиная: тумба включена если ТВ или свет включены"
+    mode: restart
+
+    trigger:
+      - platform: state
+        entity_id:
+          - media_player.home_theater
+          - light.kitchen_lights
+          - light.livingroom_lights
+
+    action:
+      - variables:
+          theater_on: >
+            {{ states('media_player.home_theater') not in ['off','standby','unavailable','unknown'] }}
+          any_room_light_on: >
+            {{ is_state('light.kitchen_lights','on') or is_state('light.livingroom_lights','on') }}
+          want_on: >
+            {{ theater_on or any_room_light_on }}
+
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ want_on }}"
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.livingroom_cabinet_light
+          - conditions:
+              - condition: template
+                value_template: "{{ not want_on }}"
+            sequence:
+              - service: light.turn_off
+                target:
+                  entity_id: light.livingroom_cabinet_light

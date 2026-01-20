@@ -64,7 +64,7 @@ sensor:
   # Статистический сенсор для сглаживания (среднее за 5 минут)
   - platform: statistics
     name: "Living Room PM2.5 Avg"
-    unique_id: living_room_pm25_avg
+    unique_id: living_room_pm2_5_avg
     entity_id: sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6
     state_characteristic: mean
     sampling_size: 120

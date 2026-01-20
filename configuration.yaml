@@ -31,17 +31,9 @@ logger:
     homeassistant.components.telegram_bot: error
     homeassistant.components.notify: error
     homeassistant.components.sql: info
-# # Для мониторинга
-# influxdb:
-#   host: !secret influxdb_host
-#   port: !secret influxdb_port
-#   database: !secret influxdb_database
-#   username: !secret influxdb_username
-#   password: !secret influxdb_password
-#   max_retries: 3
-#   default_measurement: state
-#   tags_attributes:
-#     - friendly_name
-#   include:
-#     entities:
-#       - media_player.denon_avr_x1700h
+
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - !secret npmplus_link
+

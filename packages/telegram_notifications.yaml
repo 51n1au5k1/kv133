@@ -244,27 +244,27 @@ automation:
               v{{ entity.attributes.installed_version }} ➡️ v{{ entity.attributes.latest_version }}
             {% endif %}
 
-  # --- БАТАРЕЙКИ ---
-  - id: "ab45665b-4995-448d-b180-c0e1d77184e9"
-    alias: "Уведомление. Телеграм: Массажёр (батарея)"
-    mode: single
-    triggers:
-      - trigger: numeric_state
-        entity_id: sensor.soocare_cn_1083009681_m14_battery_level_p_3_1
-        below: 30
-    conditions:
-      - condition: state
-        entity_id: person.master
-        state: "home"
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    actions:
-      - action: notify.send_message
-        target:
-          entity_id: notify.telegram_master
-        data:
-          message: "🔋 <b>Массажёр разряжен (&lt;30%)</b>"
+  # # --- БАТАРЕЙКИ ---
+  # - id: "ab45665b-4995-448d-b180-c0e1d77184e9"
+  #   alias: "Уведомление. Телеграм: Массажёр (батарея)"
+  #   mode: single
+  #   triggers:
+  #     - trigger: numeric_state
+  #       entity_id: sensor.soocare_cn_1083009681_m14_battery_level_p_3_1
+  #       below: 30
+  #   conditions:
+  #     - condition: state
+  #       entity_id: person.master
+  #       state: "home"
+  #     - condition: state
+  #       entity_id: input_boolean.system_startup_phase
+  #       state: "off"
+  #   actions:
+  #     - action: notify.send_message
+  #       target:
+  #         entity_id: notify.telegram_master
+  #       data:
+  #         message: "🔋 <b>Массажёр разряжен (&lt;30%)</b>"
 
   # ----------------------------------------------------------------------------
   # Уведомление: Проблемы с жесткими дисками Proxmox (S.M.A.R.T)

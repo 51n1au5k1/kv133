@@ -100,14 +100,15 @@ template:
         state: >
           {% set t = state_attr('switch.mikrotik_ether1_port', 'last_link_up_time') %}
           {% if t and state_attr('switch.mikrotik_ether1_port', 'status') == 'link-ok' %}
-            {{ (now() - as_datetime(t)).total_seconds() | int }}
+            {% set dt = as_local(as_datetime(t)) %}
+            {{ (now() - dt).total_seconds() | int(0) }}
           {% else %}
             0
           {% endif %}
         availability: >
           {{ state_attr('switch.mikrotik_ether1_port', 'last_link_up_time') is not none }}
 
-      # Кол-во обрывов (link_downs)
+          # Кол-во обрывов (link_downs)
       - name: "Mikrotik: WAN-PCI обрывы линка"
         unique_id: mikrotik_wan_pci_link_downs
         state: "{{ state_attr('switch.mikrotik_ether1_port', 'link_downs') | int(0) }}"
@@ -195,7 +196,7 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - binary_sensor.mikrotik_wan_pci_kabel_podklyuchen
+          - binary_sensor.mikrotik_wan_pci_kabel_podkliuchen
         from: "on"
         to: "off"
         for: "00:00:10" # Защита от ложных срабатываний (краткий флап/переключение)

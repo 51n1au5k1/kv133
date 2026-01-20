@@ -49,6 +49,7 @@ include:
     - sensor.*_pve_*
     # Скорость интернета
     - sensor.speedtest_*
+    - sensor.cloudflare_speed_test_*
     # Фильтры климатическойц техники
     - sensor.*_filter_*
     # Контроль уровня воды
