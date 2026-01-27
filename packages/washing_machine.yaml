@@ -201,7 +201,7 @@ automation:
                                 entity_id: binary_sensor.someone_is_home
                                 state: "on"
                             sequence:
-                              - action: script.yandex_tts_stiralnaia_mashina_zavershila_stirku
+                              - action: script.yandex_tts_washing_machine_finished
                               - action: notify.send_message
                                 target:
                                   entity_id: notify.telegram_master

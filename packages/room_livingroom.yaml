@@ -175,3 +175,94 @@ automation:
               - service: light.turn_off
                 target:
                   entity_id: light.livingroom_cabinet_light
+
+  - id: livingroom_cabinet_master_with_illuminance
+    alias: "Гостиная: тумба (ТВ/свет) + яркость по illuminance"
+    mode: restart
+
+    trigger:
+      - platform: state
+        entity_id:
+          - media_player.home_theater
+          - light.kitchen_lights
+          - light.livingroom_lights
+          - sensor.livingroom_light_sensor_illuminance
+      - platform: time_pattern
+        minutes: "/2"
+
+    action:
+      - variables:
+          theater_on: >
+            {{ states('media_player.home_theater') not in ['off','standby','unavailable','unknown'] }}
+          any_room_light_on: >
+            {{ is_state('light.kitchen_lights','on') or is_state('light.livingroom_lights','on') }}
+          want_on: >
+            {{ theater_on or any_room_light_on }}
+
+          lux: "{{ states('sensor.livingroom_light_sensor_illuminance') | float(0) }}"
+
+          # Кривая lux -> brightness (чем светлее, тем ярче)
+          min_lux: 5
+          max_lux: 250
+          min_bri: 8 # ~3%
+          max_bri: 200 # при желании можно 255
+
+          target_bri: >-
+            {% set x = lux %}
+            {% if x <= min_lux %}
+              {{ min_bri }}
+            {% elif x >= max_lux %}
+              {{ max_bri }}
+            {% else %}
+              {{ (min_bri + (x - min_lux) * (max_bri - min_bri) / (max_lux - min_lux)) | round(0) | int }}
+            {% endif %}
+
+          current_bri: "{{ state_attr('light.livingroom_cabinet_light', 'brightness') | int(0) }}"
+          diff_ok: "{{ (target_bri - current_bri) | abs >= 6 }}"
+
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ want_on }}"
+            sequence:
+              - choose:
+                  - conditions:
+                      - condition: state
+                        entity_id: light.livingroom_cabinet_light
+                        state: "off"
+                    sequence:
+                      - service: light.turn_on
+                        target:
+                          entity_id: light.livingroom_cabinet_light
+                        data:
+                          brightness: "{{ target_bri }}"
+                          transition: 2
+
+                  - conditions:
+                      - condition: state
+                        entity_id: light.livingroom_cabinet_light
+                        state: "on"
+                      - condition: template
+                        value_template: "{{ diff_ok }}"
+                    sequence:
+                      - service: light.turn_on
+                        target:
+                          entity_id: light.livingroom_cabinet_light
+                        data:
+                          brightness: "{{ target_bri }}"
+                          transition: 2
+
+        default:
+          - delay: "00:00:05"
+          - variables:
+              theater_on: >
+                {{ states('media_player.home_theater') not in ['off','standby','unavailable','unknown'] }}
+              any_room_light_on: >
+                {{ is_state('light.kitchen_lights','on') or is_state('light.livingroom_lights','on') }}
+              want_on: >
+                {{ theater_on or any_room_light_on }}
+          - condition: template
+            value_template: "{{ not want_on }}"
+          - service: light.turn_off
+            target:
+              entity_id: light.livingroom_cabinet_light

@@ -95,6 +95,27 @@ input_number:
     step: 2
     initial: 1
 
+  cpu_109:
+    name: "CPU 109 (NPMplus)"
+    min: 1
+    max: 12
+    step: 2
+    initial: 1
+
+  cpu_110:
+    name: "CPU 110 (VaultWarden)"
+    min: 1
+    max: 12
+    step: 2
+    initial: 1
+
+  cpu_111:
+    name: "CPU 111 (PiHole)"
+    min: 1
+    max: 12
+    step: 2
+    initial: 1
+
 ##############################################################################
 #                                 СЕНСОРЫ
 ##############################################################################
@@ -175,6 +196,27 @@ template:
         icon: mdi:percent-outline
         state: >-
           {{ states('sensor.lxc_photoview_108_cpu_used') | float(0) | round(2) }}
+
+      - name: "CPU LXC NPMplus Normalized"
+        unique_id: cpu_lxc_npmplus_109_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: >-
+          {{ states('sensor.lxc_npmplus_109_cpu_used') | float(0) | round(2) }}
+
+      - name: "CPU LXC Vaultwarden Normalized"
+        unique_id: cpu_lxc_alpine_vaultwarden_110_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: >-
+          {{ states('sensor.lxc_alpine_vaultwarden_110_cpu_used') | float(0) | round(2) }}
+
+      - name: "CPU LXC PiHole Normalized"
+        unique_id: cpu_lxc_pihole_111_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: >-
+          {{ states('sensor.lxc_pihole_111_cpu_used') | float(0) | round(2) }}
 
       # ========================================================================
       # ВКЛАД В ЗАГРУЗКУ ХОСТА (какой % от всего сервера занимает гость)
@@ -278,5 +320,35 @@ template:
         state: >-
           {% set raw = states('sensor.lxc_photoview_108_cpu_used') | float(0) %}
           {% set cpus = states('input_number.cpu_108') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC NPMplus Host Percent"
+        unique_id: cpu_lxc_npmplus_109_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_npmplus_109_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_109') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC VaultWarden Host Percent"
+        unique_id: cpu_lxc_vaultwarden_110_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_alpine_vaultwarden_110_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_110') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC PiHole Host Percent"
+        unique_id: cpu_lxc_pihole_111_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_pihole_111_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_111') | float(1) %}
           {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
           {{ (raw * cpus / host) | round(2) }}

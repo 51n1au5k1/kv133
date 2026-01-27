@@ -331,6 +331,9 @@ script:
             {{ status('binary_sensor.lxc_immich_106_status', 'Immich', 'sensor.lxc_immich_106_cpu_used', 'sensor.lxc_immich_106_memory_used_percentage') }}
             {{ status('binary_sensor.lxc_minim_107_status', 'MinimServer', 'sensor.lxc_minim_107_cpu_used', 'sensor.lxc_minim_107_memory_used_percentage') }}
             {{ status('binary_sensor.lxc_photoview_108_status', 'Photoview', 'sensor.lxc_photoview_108_cpu_used', 'sensor.lxc_photoview_108_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_npmplus_109_status', 'NPMplus', 'sensor.lxc_npmplus_109_cpu_used', 'sensor.lxc_npmplus_109_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_alpine_vaultwarden_110_status', 'MinimServer', 'sensor.lxc_alpine_vaultwarden_110_cpu_used', 'sensor.lxc_alpine_vaultwarden_110_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_pihole_111_status', 'Photoview', 'sensor.lxc_pihole_111_cpu_used', 'sensor.lxc_pihole_111_memory_used_percentage') }}
 
           inline_keyboard: >
             {% set s_haos = is_state('binary_sensor.qemu_haos12_3_100_status', 'on') %}
@@ -343,6 +346,9 @@ script:
             {% set s_immich = is_state('binary_sensor.lxc_immich_106_status', 'on') %}
             {% set s_minim = is_state('binary_sensor.lxc_minim_107_status', 'on') %}
             {% set s_photo = is_state('binary_sensor.lxc_photoview_108_status', 'on') %}
+            {% set s_immich = is_state('binary_sensor.lxc_npmplus_109_status', 'on') %}
+            {% set s_minim = is_state('binary_sensor.lxc_alpine_vaultwarden_110_status', 'on') %}
+            {% set s_photo = is_state('binary_sensor.lxc_pihole_111_status', 'on') %}
 
             {{ [
                 [ ["🔄 Обновить статус", "/pve_status_refresh"] ],
@@ -374,6 +380,15 @@ script:
 
                 [ ["🟢 Photoview" if s_photo else "🔴 Photoview", "/start_photoview"], 
                   ["⏹ Стоп", "/stop_photoview"], ["🔄 Ребут", "/reboot_photoview"] ],
+
+                [ ["🟢 NPMplus" if s_npmplus else "🔴 NPMplus", "/start_npmplus"], 
+                  ["⏹ Стоп", "/stop_npmplus"], ["🔄 Ребут", "/reboot_npmplus"] ],
+
+                [ ["🟢 VaultWarden" if s_vaultwarden else "🔴 VaultWarden", "/start_vaultwarden"], 
+                  ["⏹ Стоп", "/stop_vaultwarden"], ["🔄 Ребут", "/reboot_vaultwarden"] ],
+
+                [ ["🟢 PiHole" if s_pihole else "🔴 PiHole", "/start_pihole"], 
+                  ["⏹ Стоп", "/stop_pihole"], ["🔄 Ребут", "/reboot_pihole"] ],
 
                 [ ["👈 В меню", "/menu_back"] ]
               ] | tojson }}
@@ -1156,7 +1171,16 @@ automation:
             "/reboot_immich": "button.lxc_immich_106_reboot",
             "/start_photoview": "button.lxc_photoview_108_start",
             "/stop_photoview": "button.lxc_photoview_108_stop",
-            "/reboot_photoview": "button.lxc_photoview_108_reboot"
+            "/reboot_photoview": "button.lxc_photoview_108_reboot",
+            "/start_npmplus": "button.lxc_npmplus_109_start",
+            "/stop_npmplus": "button.lxc_npmplus_109_stop",
+            "/reboot_npmplus": "button.lxc_npmplus_109_reboot",
+            "/start_vaultwarden": "button.lxc_alpine_vaultwarden_110_start",
+            "/stop_vaultwarden": "button.lxc_alpine_vaultwarden_110_stop",
+            "/reboot_vaultwarden": "button.lxc_alpine_vaultwarden_110_reboot",
+            "/start_pihole": "button.lxc_pihole_111_start",
+            "/stop_pihole": "button.lxc_pihole_111_stop",
+            "/reboot_pihole": "button.lxc_pihole_111_reboot"
           } %}
           {{ cmd in map }}
     actions:
@@ -1191,7 +1215,16 @@ automation:
               "/reboot_immich": "button.lxc_immich_106_reboot",
               "/start_photoview": "button.lxc_photoview_108_start",
               "/stop_photoview": "button.lxc_photoview_108_stop",
-              "/reboot_photoview": "button.lxc_photoview_108_reboot"
+              "/reboot_photoview": "button.lxc_photoview_108_reboot",
+              "/start_npmplus": "button.lxc_npmplus_109_start",
+              "/stop_npmplus": "button.lxc_npmplus_109_stop",
+              "/reboot_npmplus": "button.lxc_npmplus_109_reboot",
+              "/start_vaultwarden": "button.lxc_alpine_vaultwarden_110_start",
+              "/stop_vaultwarden": "button.lxc_alpine_vaultwarden_110_stop",
+              "/reboot_vaultwarden": "button.lxc_alpine_vaultwarden_110_reboot",
+              "/start_pihole": "button.lxc_pihole_111_start",
+              "/stop_pihole": "button.lxc_pihole_111_stop",
+              "/reboot_pihole": "button.lxc_pihole_111_reboot"
             } %}
             {{ map[cmd] }}
           chat_id: "{{ trigger.event.data.chat_id }}"

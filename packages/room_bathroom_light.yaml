@@ -149,13 +149,13 @@ template:
   # Ванная: ночной режим освещения
   - binary_sensor:
       - unique_id: bathroom_is_night_mode
-        name: bathroom_is_night_mode
+        name: is_night_mode
         device_class: light
         state: >-
           {% set current_time = now().strftime('%H:%M') %}
           {{ '00:30' <= current_time < '06:00' }}
         icon: >-
-          {% if is_state('binary_sensor.is_night_mode', 'on') %}
+          {% if is_state(this.entity_id, 'on') %}
             mdi:weather-night
           {% else %}
             mdi:weather-sunny
@@ -245,6 +245,10 @@ script:
     sequence:
       - action: light.turn_on
         target:
+          entity_id: light.bathroom_main
+
+      - action: light.turn_on
+        target:
           entity_id: light.bathroom_spot_l1_philips
         data:
           brightness_pct: 10
@@ -253,6 +257,10 @@ script:
     alias: "Ванная: включение дневного освещения"
     icon: mdi:lightbulb-on-outline
     sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.bathroom_main
+
       - action: light.turn_on
         target:
           entity_id: light.bathroom_relay_l2
@@ -400,39 +408,8 @@ automation:
           tr_to: >-
             {{ trigger.to_state.state if trigger is defined and 'to_state' in trigger and trigger.to_state is not none else '' }}
 
-  - id: "b30b7ad8-6563-4279-a78f-1a113f9cb252"
-    alias: "Ванная: выключение света по таймеру"
-    mode: single
-    triggers:
-      - trigger: event
-        event_type: timer.finished
-        event_data:
-          entity_id: timer.timer_bathroom
-
-    conditions:
-      - condition: state
-        entity_id: input_boolean.bathroom_cleaning_mode
-        state: "off"
-      - condition: state
-        entity_id: binary_sensor.bathroom_motions
-        state: "off"
-    actions:
-      - action: light.turn_off
-        target:
-          entity_id: group.bathroom_all_lights
-
-      - action: script.log_helper_event
-        data:
-          level: info
-          message: "Ванная: свет выключен по таймеру (отсутствие активности)."
-          source: "{{ this.entity_id }}"
-          trigger_entity: "timer.timer_bathroom"
-          trigger_from: "active"
-          trigger_to: "finished"
-          extra: "action=timer_off;group=group.bathroom_all_lights"
-
   - id: "0c5020c3-e674-4789-8086-38dbc07253d7"
-    alias: "Ванная: резервный свет (споты недоступны)"
+    alias: "Ванная: резерв питания спотов (антидребезг)"
     mode: single
     triggers:
       - trigger: state
@@ -453,61 +430,75 @@ automation:
       - condition: state
         entity_id: input_boolean.bathroom_lights_startup_protection
         state: "off"
-      - condition: state
-        entity_id: light.bathroom_relay_l2
-        state: "off"
       - condition: template
         value_template: >-
-          {% set unavailable_count =
-            [ states.light.bathroom_spot_r1_philips,
-              states.light.bathroom_spot_r2_philips,
-              states.light.bathroom_spot_l1_philips,
-              states.light.bathroom_spot_c1_philips,
-              states.light.bathroom_spot_c2_philips ]
-            | selectattr('state', 'eq', 'unavailable')
-            | list | length %}
-          {{ unavailable_count >= 2 }}
+          {% set spots = [
+            'light.bathroom_spot_r1_philips',
+            'light.bathroom_spot_r2_philips',
+            'light.bathroom_spot_l1_philips',
+            'light.bathroom_spot_c1_philips',
+            'light.bathroom_spot_c2_philips'
+          ] %}
+          {{ (spots | map('states') | select('eq','unavailable') | list | length) >= 2 }}
 
     actions:
-      - action: light.turn_on
-        target:
-          entity_id: light.bathroom_relay_l2
-
-      - action: notify.send_message
-        target:
-          entity_id: notify.telegram_master
-        data:
-          message: >-
-            ⚠️ Ванная: резервный свет включён автоматически.
-            Причина: {{
-              [ states.light.bathroom_spot_r1_philips,
-                states.light.bathroom_spot_r2_philips,
-                states.light.bathroom_spot_l1_philips,
-                states.light.bathroom_spot_c1_philips,
-                states.light.bathroom_spot_c2_philips ]
-              | selectattr('state', 'eq', 'unavailable')
-              | list | length
-            }} точечных спотов недоступны.
-
       - variables:
-          tr_ent: >-
-            {{ trigger.entity_id if trigger is defined and 'entity_id' in trigger else '' }}
-          tr_from: >-
-            {{ trigger.from_state.state if trigger is defined and 'from_state' in trigger and trigger.from_state is not none else '' }}
-          tr_to: >-
-            {{ trigger.to_state.state if trigger is defined and 'to_state' in trigger and trigger.to_state is not none else '' }}
-          unavailable_list: >-
+          spots: >-
             {{
-              [ states.light.bathroom_spot_r1_philips,
-                states.light.bathroom_spot_r2_philips,
-                states.light.bathroom_spot_l1_philips,
-                states.light.bathroom_spot_c1_philips,
-                states.light.bathroom_spot_c2_philips ]
-              | selectattr('state', 'eq', 'unavailable')
-              | map(attribute='entity_id')
-              | list
+              [ 'light.bathroom_spot_r1_philips',
+                'light.bathroom_spot_r2_philips',
+                'light.bathroom_spot_l1_philips',
+                'light.bathroom_spot_c1_philips',
+                'light.bathroom_spot_c2_philips' ]
             }}
-          unavailable_count: "{{ unavailable_list | length }}"
+          unavailable_count_initial: >-
+            {{
+              spots
+              | map('states')
+              | select('eq', 'unavailable')
+              | list
+              | length
+            }}
+
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: light.bathroom_main
+                state: "on"
+            sequence: []
+
+          - conditions:
+              - condition: state
+                entity_id: light.bathroom_main
+                state: "off"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: light.bathroom_main
+
+              - delay: "00:00:20"
+
+              - variables:
+                  unavailable_count_after: >-
+                    {{
+                      spots
+                      | map('states')
+                      | select('eq', 'unavailable')
+                      | list
+                      | length
+                    }}
+
+              - condition: template
+                value_template: "{{ unavailable_count_after >= 2 }}"
+
+              - action: notify.send_message
+                target:
+                  entity_id: notify.telegram_master
+                data:
+                  message: >-
+                    ⚠️ Ванная: питание спотов было выключено — включил bathroom_main.
+                    До: недоступно {{ unavailable_count_initial }} спотов.
+                    После: недоступно {{ unavailable_count_after }} спотов (спустя 20с).
 
   - id: "14a6f0ef-8217-4fc6-8dca-067875b950a7"
     alias: "Ванная: сброс света после рестарта HA"
@@ -532,7 +523,6 @@ automation:
         target:
           entity_id:
             - group.bathroom_all_lights
-            - light.bathroom_relay_l2
 
   - id: "048bc34f-9e6d-475c-84ed-0af54dedeed9"
     alias: "Ванная: защита от ложных срабатываний (5 мин после старта)"

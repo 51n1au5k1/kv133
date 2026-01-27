@@ -39,6 +39,7 @@ include:
     - sensor.cpu_*_host_percent
     - sensor.*_energy
     - sensor.*_power
+    - sensor.*_illuminance
     # Цветы
     - sensor.ficus_*
     - sensor.euphorbia_*
@@ -64,6 +65,7 @@ include:
   entities:
     # Системные и специфические сенсоры
     - sensor.maria_db_size
+    - sensor.cpu_lxc_npmplus
     # Климатические кастомные (точные имена)
     - sensor.vlazhnost_vannoi_usrednennaia_za_1_minutu
     - sensor.uroven_co2_sglazhennyi
@@ -73,6 +75,8 @@ include:
     - sensor.srednee_znachenie_temperatury_v_masterskoi_2
     # Электроэнергия
     - sensor.potreblenie_stiralnoi_mashiny
+    # Освещенность
+    - sensor.livingroom_light_sensor_illuminance
     # Кто был дома
     - input_text.currently_home
     # Тестовая секция (точный сенсор)
