@@ -138,27 +138,27 @@ automation:
         data:
           text: "Фильтр увлажнителя требует замены. Его ресурс менее десяти процентов."
 
-  # Гостиная: увлажнитель — низкий уровень воды
-  - id: "abee01b3-024f-4e26-9c64-384a1634449f"
-    alias: "Яндекс: увлажнитель — низкий уровень воды"
-    mode: single
-    triggers:
-      - trigger: state
-        entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
-    conditions:
-      - condition: state
-        entity_id: input_boolean.silent_mode
-        state: "off"
-      - condition: state
-        entity_id: binary_sensor.someone_is_home
-        state: "on"
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.xiaomi_home_integration_unstable
-        state: "off"
-    actions:
-      - action: script.yandex_tts_generic
-        data:
-          text: "Внимание! В увлажнителе закончилась вода. Пожалуйста, долейте."
+  # # Гостиная: увлажнитель — низкий уровень воды
+  # - id: "abee01b3-024f-4e26-9c64-384a1634449f"
+  #   alias: "Яндекс: увлажнитель — низкий уровень воды"
+  #   mode: single
+  #   triggers:
+  #     - trigger: state
+  #       entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
+  #   conditions:
+  #     - condition: state
+  #       entity_id: input_boolean.silent_mode
+  #       state: "off"
+  #     - condition: state
+  #       entity_id: binary_sensor.someone_is_home
+  #       state: "on"
+  #     - condition: state
+  #       entity_id: input_boolean.system_startup_phase
+  #       state: "off"
+  #     - condition: state
+  #       entity_id: input_boolean.xiaomi_home_integration_unstable
+  #       state: "off"
+  #   actions:
+  #     - action: script.yandex_tts_generic
+  #       data:
+  #         text: "Внимание! В увлажнителе закончилась вода. Пожалуйста, долейте."

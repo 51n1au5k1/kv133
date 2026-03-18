@@ -9,12 +9,14 @@
 # 2. Блок управления PVE (Proxmox) переписан в одну умную автоматизацию
 #    вместо 30 отдельных (используется mapping команд).
 # 3. Исправлена ошибка в кнопке Stop для Deluge.
+# 4. Убрано устаревшее использование target в telegram_bot.send_message:
+#    теперь везде используется chat_id.
 #
 ################################################################################
 
 input_number:
   telegram_delay_ms:
-    name: "Задержка PVE действий (сек)" # Переименовал для ясности
+    name: "Задержка PVE действий (сек)"
     min: 1
     max: 10
     step: 1
@@ -76,7 +78,7 @@ script:
       # 3. Отправляем обновленное меню
       - service: "{{ menu_script }}"
         data:
-          target: "{{ chat_id }}"
+          chat_id: "{{ chat_id }}"
 
       # 4. Логируем (если включено)
       - choose:
@@ -96,20 +98,25 @@ script:
   pve_action:
     alias: "PVE Action with Delay"
     fields:
-      button: { required: true }
-      chat_id: { required: true }
-      user_id: { required: false }
+      button:
+        required: true
+      chat_id:
+        required: true
+      user_id:
+        required: false
     sequence:
       - service: button.press
         target:
           entity_id: "{{ button }}"
-      # Используем настройку задержки из input_number
+
       - delay:
           seconds: "{{ states('input_number.telegram_delay_ms') | int(5) }}"
-      - service: script.send_pve_status
+
+      - service: script.send_pve_status_paged
         data:
-          target: "{{ chat_id }}"
-      # Логирование
+          chat_id: "{{ chat_id }}"
+          page: 1
+
       - choose:
           - conditions:
               - condition: state
@@ -126,10 +133,13 @@ script:
   # --------------------------------------------------------------------------
   send_main_menu:
     alias: "Send Main Menu"
+    fields:
+      chat_id:
+        required: true
     sequence:
       - service: telegram_bot.send_message
         data:
-          target: "{{ target }}"
+          chat_id: "{{ chat_id }}"
           parse_mode: html
           message: |
             <b>💻 Выбрать комнату для управления :</b>
@@ -143,10 +153,13 @@ script:
 
   send_livingroom_status:
     alias: "Send Living Room Status"
+    fields:
+      chat_id:
+        required: true
     sequence:
       - service: telegram_bot.send_message
         data:
-          target: "{{ target }}"
+          chat_id: "{{ chat_id }}"
           parse_mode: html
           message: |
             <b>🏠 Текущее состояние в гостиной:</b>
@@ -161,8 +174,8 @@ script:
                   ["🔴 Свет над диваном" if is_state("light.livingroom_main_switch_right", "off") else "🟢 Свет над диваном", "/toggle_livingroom_main_switch_right"],
                   ["🔴 Бра" if is_state("light.livingroom_scone_dimmer", "off") else "🟢 Бра", "/toggle_livingroom_scone_dimmer"] ],
                 [ ["🔴 Кондиционер" if is_state("climate.konditsioner", "off") else "🟢 Кондиционер", "/toggle_livingroom_konditsioner"],
-                  ["🔴 Очиститель" if is_state("fan.zhimi_cn_271517251_mb3_s_2_air_purifier", "off") else "🟢 Очиститель", "/toggle_livingroom_air_purifier"],
-                  ["🔴 Увлажнитель" if is_state("humidifier.xiaomi_cn_823407205_p3", "off") else "🟢 Увлажнитель", "/toggle_livingroom_humidifier"] ],
+                  ["🔴 Очиститель" if is_state("fan.zhimi_mb3_a5d3_air_purifier", "off") else "🟢 Очиститель", "/toggle_livingroom_air_purifier"],
+                  ["🔴 Увлажнитель" if is_state("humidifier.xiaomi_p3_946a_humidifier", "off") else "🟢 Увлажнитель", "/toggle_livingroom_humidifier"] ],
                 [ ["🔴 Угловая розетка" if is_state("switch.livingroom_socket_corner_r", "off") else "🟢 Угловая розетка", "/toggle_livingroom_socket_corner_r"],
                   ["🔴 Левая розетка" if is_state("switch.livingroom_socket_l", "off") else "🟢 Левая розетка", "/toggle_livingroom_socket_l"],
                   ["🔴 Правая розетка" if is_state("switch.livingroom_socket_r", "off") else "🟢 Правая розетка", "/toggle_livingroom_socket_r"] ],
@@ -171,10 +184,13 @@ script:
 
   send_workroom_status:
     alias: "Send Workroom Status"
+    fields:
+      chat_id:
+        required: true
     sequence:
       - service: telegram_bot.send_message
         data:
-          target: "{{ target }}"
+          chat_id: "{{ chat_id }}"
           parse_mode: html
           message: |
             <b>🏢 Текущее состояние в рабочем кабинете:</b>
@@ -191,10 +207,13 @@ script:
 
   send_bedroom_status:
     alias: "Send Bedroom Status"
+    fields:
+      chat_id:
+        required: true
     sequence:
       - service: telegram_bot.send_message
         data:
-          target: "{{ target }}"
+          chat_id: "{{ chat_id }}"
           parse_mode: html
           message: |
             <b>🛏 Текущее состояние в спальне:</b>
@@ -214,10 +233,13 @@ script:
 
   send_bathroom_status:
     alias: "Send Bathroom Status"
+    fields:
+      chat_id:
+        required: true
     sequence:
       - service: telegram_bot.send_message
         data:
-          target: "{{ target }}"
+          chat_id: "{{ chat_id }}"
           parse_mode: html
           message: |
             <b>🛁 Текущее состояние в ванной:</b>
@@ -234,10 +256,13 @@ script:
 
   send_kitchen_status:
     alias: "Send Kitchen Status"
+    fields:
+      chat_id:
+        required: true
     sequence:
       - service: telegram_bot.send_message
         data:
-          target: "{{ target }}"
+          chat_id: "{{ chat_id }}"
           parse_mode: html
           message: |
             <b>🍽 Текущее состояние на кухне:</b>
@@ -254,10 +279,13 @@ script:
 
   send_hallway_status:
     alias: "Send Hallway Status"
+    fields:
+      chat_id:
+        required: true
     sequence:
       - service: telegram_bot.send_message
         data:
-          target: "{{ target }}"
+          chat_id: "{{ chat_id }}"
           parse_mode: html
           message: |
             <b>🚪 Текущее состояние в прихожей:</b>
@@ -271,10 +299,13 @@ script:
 
   send_system_status:
     alias: "Send System Status"
+    fields:
+      chat_id:
+        required: true
     sequence:
       - service: telegram_bot.send_message
         data:
-          target: "{{ target }}"
+          chat_id: "{{ chat_id }}"
           parse_mode: html
           message: |
             <b>🖥 Текущее состояние системы:</b>
@@ -291,38 +322,56 @@ script:
                 [ ["🔴 Питание ванной" if is_state("light.bathroom_main", "off") else "🟢 Питание ванной", "/toggle_bathroom_power"] ],
                 [ ["🔴 Режим тишины" if is_state("input_boolean.silent_mode", "off") else "🟢 Режим тишины", "/toggle_silent_mode"] ],
                 [ ["🔴 Режим Force CCTV Off" if is_state("input_boolean.force_camera_off", "off") else "🟢 Режим Force CCTV Off", "/toggle_force_cctv_mode"] ],
-                [ ["⚠️ Система виртуализации", "/pve_status_refresh"] ],
+                [ ["⚠️ Система виртуализации", "/pve_page_1"] ],
                 [ ["⚠️ Перезагрузить систему", "/confirm_reboot"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/system_control"] ]
               ] | tojson }}
 
-  send_pve_status:
-    alias: "Отправить статус PVE"
+  send_pve_status_paged:
+    alias: "Отправить статус PVE (постранично)"
+    fields:
+      chat_id:
+        required: true
+      page:
+        required: false
+      delete_message_id:
+        required: false
+      delete_chat_id:
+        required: false
     sequence:
+      - variables:
+          page_n: "{{ [2, [1, (page | default(1) | int(1))] | max] | min }}"
+
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ delete_message_id is defined and delete_chat_id is defined and (delete_message_id | string | length > 0) and (delete_chat_id | string | length > 0) }}"
+            sequence:
+              - service: telegram_bot.delete_message
+                data:
+                  message_id: "{{ delete_message_id }}"
+                  chat_id: "{{ delete_chat_id }}"
+
       - service: telegram_bot.send_message
         data:
-          target: "{{ target }}"
+          chat_id: "{{ chat_id }}"
           parse_mode: html
           message: |
             <b>🖥 Статус Proxmox (Node: pve)</b>
 
             <b>📊 Сводка:</b>
             ВМ: {{ states('sensor.node_pve_virtual_machines_running') }} | LXC: {{ states('sensor.node_pve_containers_running') }}
-            CPU: {{ states('sensor.node_pve_cpu_used') | round(1) }}% | RAM: {{ states('sensor.node_pve_memory_used_percentage') | round(1) }}%
+            CPU: {{ states('sensor.node_pve_cpu_used') | float(0) | round(1) }}% | RAM: {{ states('sensor.node_pve_memory_used_percentage') | float(0) | round(1) }}%
 
             <b>📦 Состояние (CPU | RAM):</b>
 
-            {# Макрос для вывода строки статуса LXC #}
             {%- macro status(entity_id, name, cpu_sensor, ram_sensor) -%}
             {{ '🟢' if is_state(entity_id, 'on') else '🔴' }} <b>{{ name }}:</b> {{ states(cpu_sensor) | float(0) | round(0) }}% | {{ states(ram_sensor) | float(0) | round(0) }}%
             {%- endmacro -%}
 
-            {# VM HAOS12 (вручную, так как это VM) #}
             {{ '🟢' if is_state('binary_sensor.qemu_haos12_3_100_status', 'on') else '🔴' }} <b>HAOS12:</b> {{ states('sensor.qemu_haos12_3_100_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_haos12_3_100_memory_used_percentage') | float(0) | round(0) }}%
-            {# VM CHR (вручную, так как это VM) #}
             {{ '🟢' if is_state('binary_sensor.qemu_mikrotik_routeros_chr_200_status', 'on') else '🔴' }} <b>CHR:</b> {{ states('sensor.qemu_mikrotik_routeros_chr_200_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_mikrotik_routeros_chr_200_memory_used_percentage') | float(0) | round(0) }}%
 
-            {# LXC Контейнеры (через макрос) #}
             {{ status('binary_sensor.lxc_mariadb_101_status', 'MariaDB', 'sensor.lxc_mariadb_101_cpu_used', 'sensor.lxc_mariadb_101_memory_used_percentage') }}
             {{ status('binary_sensor.lxc_jackett_102_status', 'Jackett', 'sensor.lxc_jackett_102_cpu_used', 'sensor.lxc_jackett_102_memory_used_percentage') }}
             {{ status('binary_sensor.lxc_jellyfin_103_status', 'Jellyfin', 'sensor.lxc_jellyfin_103_cpu_used', 'sensor.lxc_jellyfin_103_memory_used_percentage') }}
@@ -332,12 +381,16 @@ script:
             {{ status('binary_sensor.lxc_minim_107_status', 'MinimServer', 'sensor.lxc_minim_107_cpu_used', 'sensor.lxc_minim_107_memory_used_percentage') }}
             {{ status('binary_sensor.lxc_photoview_108_status', 'Photoview', 'sensor.lxc_photoview_108_cpu_used', 'sensor.lxc_photoview_108_memory_used_percentage') }}
             {{ status('binary_sensor.lxc_npmplus_109_status', 'NPMplus', 'sensor.lxc_npmplus_109_cpu_used', 'sensor.lxc_npmplus_109_memory_used_percentage') }}
-            {{ status('binary_sensor.lxc_alpine_vaultwarden_110_status', 'MinimServer', 'sensor.lxc_alpine_vaultwarden_110_cpu_used', 'sensor.lxc_alpine_vaultwarden_110_memory_used_percentage') }}
-            {{ status('binary_sensor.lxc_pihole_111_status', 'Photoview', 'sensor.lxc_pihole_111_cpu_used', 'sensor.lxc_pihole_111_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_alpine_vaultwarden_110_status', 'VaultWarden', 'sensor.lxc_alpine_vaultwarden_110_cpu_used', 'sensor.lxc_alpine_vaultwarden_110_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_pihole_111_status', 'PiHole', 'sensor.lxc_pihole_111_cpu_used', 'sensor.lxc_pihole_111_memory_used_percentage') }}
 
           inline_keyboard: >
+            {% set page_n = (page | default(1) | int(1)) %}
+            {% set page_n = 1 if page_n < 1 else (2 if page_n > 2 else page_n) %}
+
             {% set s_haos = is_state('binary_sensor.qemu_haos12_3_100_status', 'on') %}
             {% set s_chr = is_state('binary_sensor.qemu_mikrotik_routeros_chr_200_status', 'on') %}
+
             {% set s_maria = is_state('binary_sensor.lxc_mariadb_101_status', 'on') %}
             {% set s_jack = is_state('binary_sensor.lxc_jackett_102_status', 'on') %}
             {% set s_jelly = is_state('binary_sensor.lxc_jellyfin_103_status', 'on') %}
@@ -346,61 +399,50 @@ script:
             {% set s_immich = is_state('binary_sensor.lxc_immich_106_status', 'on') %}
             {% set s_minim = is_state('binary_sensor.lxc_minim_107_status', 'on') %}
             {% set s_photo = is_state('binary_sensor.lxc_photoview_108_status', 'on') %}
-            {% set s_immich = is_state('binary_sensor.lxc_npmplus_109_status', 'on') %}
-            {% set s_minim = is_state('binary_sensor.lxc_alpine_vaultwarden_110_status', 'on') %}
-            {% set s_photo = is_state('binary_sensor.lxc_pihole_111_status', 'on') %}
+            {% set s_npmplus = is_state('binary_sensor.lxc_npmplus_109_status', 'on') %}
+            {% set s_vaultwarden = is_state('binary_sensor.lxc_alpine_vaultwarden_110_status', 'on') %}
+            {% set s_pihole = is_state('binary_sensor.lxc_pihole_111_status', 'on') %}
 
-            {{ [
-                [ ["🔄 Обновить статус", "/pve_status_refresh"] ],
-                
-                [ ["🟢 HAOS12" if s_haos else "🔴 HAOS12", "/reboot_haos12"] ],
+            {% set prev_page = 1 if page_n <= 1 else page_n - 1 %}
+            {% set next_page = 2 if page_n >= 2 else page_n + 1 %}
 
-                [ ["🟢 CHR" if s_chr else "🔴 CHR", "/reboot_chr"] ],
+            {% set kb = [
+              [ ["🔄 Обновить статус", "/pve_page_" ~ page_n ] ],
+              [ ["🟢 HAOS12" if s_haos else "🔴 HAOS12", "/reboot_haos12"],
+                ["🟢 CHR" if s_chr else "🔴 CHR", "/reboot_chr"] ]
+            ] %}
 
-                [ ["🟢 MariaDB" if s_maria else "🔴 MariaDB", "/start_mariadb"], 
-                  ["⏹ Стоп", "/stop_mariadb"], ["🔄 Ребут", "/reboot_mariadb"] ],
+            {% if page_n == 1 %}
+              {% set kb = kb + [
+                [ ["🟢 MariaDB" if s_maria else "🔴 MariaDB", "/start_mariadb"], ["⏹ Стоп", "/stop_mariadb"], ["🔄 Ребут", "/reboot_mariadb"] ],
+                [ ["🟢 Jackett" if s_jack else "🔴 Jackett", "/start_jackett"], ["⏹ Стоп", "/stop_jackett"], ["🔄 Ребут", "/reboot_jackett"] ],
+                [ ["🟢 Jellyfin" if s_jelly else "🔴 Jellyfin", "/start_jellyfin"], ["⏹ Стоп", "/stop_jellyfin"], ["🔄 Ребут", "/reboot_jellyfin"] ],
+                [ ["🟢 Deluge" if s_deluge else "🔴 Deluge", "/start_deluge"], ["⏹ Стоп", "/stop_deluge"], ["🔄 Ребут", "/reboot_deluge"] ],
+                [ ["🟢 TorrServer" if s_torr else "🔴 TorrServer", "/start_torrserver"], ["⏹ Стоп", "/stop_torrserver"], ["🔄 Ребут", "/reboot_torrserver"] ],
+                [ ["🟢 Immich" if s_immich else "🔴 Immich", "/start_immich"], ["⏹ Стоп", "/stop_immich"], ["🔄 Ребут", "/reboot_immich"] ]
+              ] %}
+            {% else %}
+              {% set kb = kb + [
+                [ ["🟢 Minim" if s_minim else "🔴 Minim", "/start_minimserver"], ["⏹ Стоп", "/stop_minimserver"], ["🔄 Ребут", "/reboot_minimserver"] ],
+                [ ["🟢 Photoview" if s_photo else "🔴 Photoview", "/start_photoview"], ["⏹ Стоп", "/stop_photoview"], ["🔄 Ребут", "/reboot_photoview"] ],
+                [ ["🟢 NPMplus" if s_npmplus else "🔴 NPMplus", "/start_npmplus"], ["⏹ Стоп", "/stop_npmplus"], ["🔄 Ребут", "/reboot_npmplus"] ],
+                [ ["🟢 VaultWarden" if s_vaultwarden else "🔴 VaultWarden", "/start_vaultwarden"], ["⏹ Стоп", "/stop_vaultwarden"], ["🔄 Ребут", "/reboot_vaultwarden"] ],
+                [ ["🟢 PiHole" if s_pihole else "🔴 PiHole", "/start_pihole"], ["⏹ Стоп", "/stop_pihole"], ["🔄 Ребут", "/reboot_pihole"] ]
+              ] %}
+            {% endif %}
 
-                [ ["🟢 Jackett" if s_jack else "🔴 Jackett", "/start_jackett"], 
-                  ["⏹ Стоп", "/stop_jackett"], ["🔄 Ребут", "/reboot_jackett"] ],
+            {% set kb = kb + [
+              [ ["◀️", "/pve_page_" ~ prev_page], ["📄 " ~ page_n ~ "/2", "/pve_page_" ~ page_n], ["▶️", "/pve_page_" ~ next_page] ],
+              [ ["👈 В меню", "/menu_back"] ]
+            ] %}
 
-                [ ["🟢 Jellyfin" if s_jelly else "🔴 Jellyfin", "/start_jellyfin"], 
-                  ["⏹ Стоп", "/stop_jellyfin"], ["🔄 Ребут", "/reboot_jellyfin"] ],
-
-                [ ["🟢 Deluge" if s_deluge else "🔴 Deluge", "/start_deluge"], 
-                  ["⏹ Стоп", "/stop_deluge"], ["🔄 Ребут", "/reboot_deluge"] ],
-
-                [ ["🟢 TorrServer" if s_torr else "🔴 TorrServer", "/start_torrserver"], 
-                  ["⏹ Стоп", "/stop_torrserver"], ["🔄 Ребут", "/reboot_torrserver"] ],
-
-                [ ["🟢 Immich" if s_immich else "🔴 Immich", "/start_immich"], 
-                  ["⏹ Стоп", "/stop_immich"], ["🔄 Ребут", "/reboot_immich"] ],
-
-                [ ["🟢 Minim" if s_minim else "🔴 Minim", "/start_minimserver"], 
-                  ["⏹ Стоп", "/stop_minimserver"], ["🔄 Ребут", "/reboot_minimserver"] ],
-
-                [ ["🟢 Photoview" if s_photo else "🔴 Photoview", "/start_photoview"], 
-                  ["⏹ Стоп", "/stop_photoview"], ["🔄 Ребут", "/reboot_photoview"] ],
-
-                [ ["🟢 NPMplus" if s_npmplus else "🔴 NPMplus", "/start_npmplus"], 
-                  ["⏹ Стоп", "/stop_npmplus"], ["🔄 Ребут", "/reboot_npmplus"] ],
-
-                [ ["🟢 VaultWarden" if s_vaultwarden else "🔴 VaultWarden", "/start_vaultwarden"], 
-                  ["⏹ Стоп", "/stop_vaultwarden"], ["🔄 Ребут", "/reboot_vaultwarden"] ],
-
-                [ ["🟢 PiHole" if s_pihole else "🔴 PiHole", "/start_pihole"], 
-                  ["⏹ Стоп", "/stop_pihole"], ["🔄 Ребут", "/reboot_pihole"] ],
-
-                [ ["👈 В меню", "/menu_back"] ]
-              ] | tojson }}
+            {{ kb | tojson }}
 
 ##############################################################################
 #                             АВТОМАТИЗАЦИИ
 ##############################################################################
 
 automation:
-  # ==========================================================================
-  # Базовые обработчики (Start, Меню)
-  # ==========================================================================
   - id: "telegram_bot_start"
     alias: "Telegram Bot Start (Приветствие)"
     initial_state: true
@@ -412,12 +454,12 @@ automation:
     actions:
       - service: telegram_bot.send_message
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
           parse_mode: html
           message: "<b>Добро пожаловать в умный дом!</b>"
       - service: script.send_main_menu
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_main_menu"
     alias: "Telegram Bot Main Menu"
@@ -430,7 +472,7 @@ automation:
     actions:
       - service: script.send_main_menu
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
   - id: "telegram_bot_menu_back"
     alias: "Telegram Bot Menu Back"
@@ -447,11 +489,8 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
       - service: script.send_main_menu
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
 
-  # ==========================================================================
-  # Навигация по комнатам (Оптимизировано: вызов соответствующих скриптов)
-  # ==========================================================================
   - id: "telegram_bot_room_navigation"
     alias: "Telegram Bot: Навигация по комнатам"
     initial_state: true
@@ -503,54 +542,49 @@ automation:
             sequence:
               - service: script.send_livingroom_status
                 data:
-                  target: "{{ trigger.event.data.chat_id }}"
+                  chat_id: "{{ trigger.event.data.chat_id }}"
           - conditions:
               - condition: trigger
                 id: "workroom"
             sequence:
               - service: script.send_workroom_status
                 data:
-                  target: "{{ trigger.event.data.chat_id }}"
+                  chat_id: "{{ trigger.event.data.chat_id }}"
           - conditions:
               - condition: trigger
                 id: "bedroom"
             sequence:
               - service: script.send_bedroom_status
                 data:
-                  target: "{{ trigger.event.data.chat_id }}"
+                  chat_id: "{{ trigger.event.data.chat_id }}"
           - conditions:
               - condition: trigger
                 id: "kitchen"
             sequence:
               - service: script.send_kitchen_status
                 data:
-                  target: "{{ trigger.event.data.chat_id }}"
+                  chat_id: "{{ trigger.event.data.chat_id }}"
           - conditions:
               - condition: trigger
                 id: "bathroom"
             sequence:
               - service: script.send_bathroom_status
                 data:
-                  target: "{{ trigger.event.data.chat_id }}"
+                  chat_id: "{{ trigger.event.data.chat_id }}"
           - conditions:
               - condition: trigger
                 id: "hallway"
             sequence:
               - service: script.send_hallway_status
                 data:
-                  target: "{{ trigger.event.data.chat_id }}"
+                  chat_id: "{{ trigger.event.data.chat_id }}"
           - conditions:
               - condition: trigger
                 id: "system"
             sequence:
               - service: script.send_system_status
                 data:
-                  target: "{{ trigger.event.data.chat_id }}"
-
-  # ==========================================================================
-  # Управление устройствами по комнатам (Toggle)
-  # ==========================================================================
-  # Здесь каждый триггер вызывает общий скрипт toggle_device с нужными параметрами
+                  chat_id: "{{ trigger.event.data.chat_id }}"
 
   # --- ГОСТИНАЯ ---
   - id: "telegram_bot_toggle_livingroom_main_switch_left"
@@ -665,7 +699,7 @@ automation:
     actions:
       - service: script.toggle_device
         data:
-          entity: humidifier.xiaomi_cn_823407205_p3
+          entity: humidifier.xiaomi_p3_946a_humidifier
           domain: humidifier
           menu_script: script.send_livingroom_status
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -682,7 +716,7 @@ automation:
     actions:
       - service: script.toggle_device
         data:
-          entity: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+          entity: fan.zhimi_mb3_a5d3_air_purifier
           domain: fan
           menu_script: script.send_livingroom_status
           message_id: "{{ trigger.event.data.message.message_id }}"
@@ -1069,9 +1103,9 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
-  # ==========================================================================
+  # ========================================================================
   # Подтверждение и перезагрузка
-  # ==========================================================================
+  # ========================================================================
   - id: "telegram_bot_confirm_reboot"
     alias: "Telegram Bot Confirm Reboot"
     triggers:
@@ -1082,7 +1116,7 @@ automation:
     actions:
       - service: telegram_bot.send_message
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
           parse_mode: html
           message: "<b>⚠️ Подтвердите перезагрузку системы!</b>"
           inline_keyboard: >
@@ -1101,7 +1135,7 @@ automation:
     actions:
       - service: telegram_bot.send_message
         data:
-          target: "{{ trigger.event.data.chat_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
           parse_mode: html
           message: "<b>⚠️ Система будет перезагружена через 5 секунд!</b>"
       - delay:
@@ -1112,9 +1146,9 @@ automation:
           message: "Система перезагружена через Telegram (user: {{ trigger.event.data.user_id }})"
           level: warning
 
-  # ==========================================================================
-  # Управление PVE (All-in-One Optimization)
-  # ==========================================================================
+  # ========================================================================
+  # Управление PVE
+  # ========================================================================
   - id: "telegram_bot_pve_status_refresh"
     alias: "Telegram Bot PVE Status Refresh"
     triggers:
@@ -1123,15 +1157,13 @@ automation:
         event_data:
           data: "/pve_status_refresh"
     actions:
-      - service: telegram_bot.delete_message
+      - service: script.send_pve_status_paged
         data:
-          message_id: "{{ trigger.event.data.message.message_id }}"
           chat_id: "{{ trigger.event.data.chat_id }}"
-      - service: script.send_pve_status
-        data:
-          target: "{{ trigger.event.data.chat_id }}"
+          page: 1
+          delete_message_id: "{{ trigger.event.data.message.message_id }}"
+          delete_chat_id: "{{ trigger.event.data.chat_id }}"
 
-  # --- МАГИЯ: Одна автоматизация вместо 24 ---
   - id: "telegram_bot_pve_unified_control"
     alias: "Telegram Bot PVE Unified Control"
     triggers:
@@ -1141,7 +1173,6 @@ automation:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-      # Проверяем, что команда начинается со "/" и есть в нашем списке маппинга
       - condition: template
         value_template: >
           {% set cmd = trigger.event.data.data %}
@@ -1186,7 +1217,6 @@ automation:
     actions:
       - service: script.pve_action
         data:
-          # Динамически берем entity_id кнопки из маппинга
           button: >
             {% set cmd = trigger.event.data.data %}
             {% set map = {
@@ -1229,3 +1259,27 @@ automation:
             {{ map[cmd] }}
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_pve_pagination"
+    alias: "Telegram Bot PVE Pagination"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+    condition:
+      - condition: template
+        value_template: >
+          {% set d = trigger.event.data.data | default('') %}
+          {{ d.startswith('/pve_page_') }}
+    actions:
+      - variables:
+          d: "{{ trigger.event.data.data }}"
+          page: >
+            {% set p = (d.split('_')[-1] | int(1)) %}
+            {{ 1 if p < 1 else (2 if p > 2 else p) }}
+      - service: script.send_pve_status_paged
+        data:
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          page: "{{ page }}"
+          delete_message_id: "{{ trigger.event.data.message.message_id }}"
+          delete_chat_id: "{{ trigger.event.data.chat_id }}"

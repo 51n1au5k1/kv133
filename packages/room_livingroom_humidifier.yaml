@@ -155,11 +155,11 @@ automation:
 
       - condition: template
         value_template: >
-          {{ states('humidifier.xiaomi_cn_823407205_p3') not in ['unavailable', 'unknown', ''] }}
+          {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable', 'unknown', ''] }}
 
     action:
       - variables:
-          hum: humidifier.xiaomi_cn_823407205_p3
+          hum: humidifier.xiaomi_p3_946a_humidifier
 
           # --- безопасные поля триггера (time_pattern не имеет from/to) ---
           trig_platform: "{{ trigger.platform if trigger is defined and trigger.platform is defined else '' }}"
@@ -274,7 +274,7 @@ automation:
         state: "off"
       - condition: template
         value_template: >
-          {{ states('humidifier.xiaomi_cn_823407205_p3') not in ['unavailable', 'unknown', ''] }}
+          {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable', 'unknown', ''] }}
     action:
       - variables:
           trig_platform: "{{ trigger.platform if trigger is defined and trigger.platform is defined else '' }}"
@@ -310,7 +310,7 @@ automation:
     mode: restart
     trigger:
       - platform: state
-        entity_id: humidifier.xiaomi_cn_823407205_p3
+        entity_id: humidifier.xiaomi_p3_946a_humidifier
         to: "on"
         for: "00:00:10"
     condition:

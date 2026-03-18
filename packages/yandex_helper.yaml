@@ -13,6 +13,7 @@
 conversation:
   intents:
     media_player.yandex_station_ff98f0294437799304d0788d: [.+]
+    media_player.yandex_station_m0p4kj400s7j7k: [.+]
 
 # Настройка языка распознавания и сервиса текста в речь от Алисы.
 yandex_station:
@@ -20,10 +21,12 @@ yandex_station:
   tts_service_name: alice_say # Сервис текста в речь от Алисы
 
 input_text:
-  yandex_station_entity:
-    name: "Yandex Station Entity"
+  yandex_station_entity_bathroom:
+    name: "Yandex Station Entity Bathroom"
     initial: "media_player.yandex_station_ff98f0294437799304d0788d"
-
+  yandex_station_entity_livingroom:
+    name: "Yandex Station Entity Livingroom"
+    initial: "media_player.yandex_station_m0p4kj400s7j7k"
 ################################################################################
 # Скрипты в Home Assistant представляют собой последовательности действий,
 # запускаемые в ответ на определённые события или команды.
@@ -56,7 +59,7 @@ script:
         description: "Текст для воспроизведения"
     sequence:
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -71,7 +74,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -89,7 +92,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -107,7 +110,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -125,8 +128,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
-          # ИСПРАВЛЕНО: Безопасная логика без .append()
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
           open_doors: >-
             {% set pairs = [
               ('в гостиной', 'binary_sensor.gostinaia_balkon_contact'),
@@ -134,7 +136,6 @@ script:
               ('на кухне', 'binary_sensor.0x00158d0003ce9922_contact'),
               ('в спальне', 'binary_sensor.0x00158d00044d5d11_contact')
             ] %}
-            {# Фильтруем список, оставляя только открытые, и берем их названия #}
             {{ pairs | selectattr(1, 'is_state', 'on') | map(attribute=0) | list }}
 
           door_message: >-
@@ -164,7 +165,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -181,10 +182,12 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entities:
+            - "{{ states('input_text.yandex_station_entity_bathroom') }}"
+            - "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
-          entity_id: "{{ yandex_station_entity }}"
+          entity_id: "{{ yandex_station_entities }}"
         data:
           media_content_id: >
             {{ ["Тук-тук!", "Па-бам!", "Динь-дон!", "Кто там?", "Внимание!", "На пороге гость!", "Привет!", "Открывай!"] | random }}
@@ -200,7 +203,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -218,7 +221,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -237,7 +240,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -255,7 +258,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -272,7 +275,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -289,7 +292,7 @@ script:
         entity_id: input_boolean.silent_mode
         state: "off"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -312,7 +315,7 @@ script:
         entity_id: binary_sensor.someone_is_home
         state: "on"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
@@ -332,7 +335,7 @@ script:
         entity_id: binary_sensor.someone_is_home
         state: "on"
       - variables:
-          yandex_station_entity: "{{ states('input_text.yandex_station_entity') }}"
+          yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
       - service: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"

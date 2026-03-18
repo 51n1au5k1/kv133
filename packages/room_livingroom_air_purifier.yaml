@@ -11,7 +11,7 @@
 # • Автоматизация: ЕДИНАЯ, проверяет условия по событиям и по таймеру.
 #
 # УСТРОЙСТВО:
-# • fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+# • fan.zhimi_mb3_a5d3_air_purifier
 #
 ################################################################################
 
@@ -89,10 +89,10 @@ template:
             mdi:check-circle-outline
           {% endif %}
         availability: >-
-          {{ states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') not in ['unknown','unavailable','']
+          {{ states('sensor.zhimi_mb3_a5d3_pm25') not in ['unknown','unavailable','']
              or states('sensor.living_room_pm2_5_avg') not in ['unknown','unavailable',''] }}
         state: >-
-          {% set pm_raw = states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') | float(default=none) %}
+          {% set pm_raw = states('sensor.zhimi_mb3_a5d3_pm25') | float(default=none) %}
           {% set pm_avg = states('sensor.living_room_pm2_5_avg') | float(default=none) %}
           {% set pm = pm_avg if pm_avg is not none else pm_raw %}
           {% if pm is none %}
@@ -168,7 +168,7 @@ automation:
       # 4. Устройство должно быть доступно
       - condition: template
         value_template: >-
-          {{ states('fan.zhimi_cn_271517251_mb3_s_2_air_purifier')
+          {{ states('fan.zhimi_mb3_a5d3_air_purifier')
              not in ['unavailable', 'unknown'] }}
 
     actions:
@@ -182,7 +182,7 @@ automation:
                 entity_id: binary_sensor.livingroom_need_air_purify
                 state: "on"
               - condition: state
-                entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
                 state: "off"
 
               # Б. Антидребезг (Min OFF time)
@@ -206,7 +206,7 @@ automation:
             sequence:
               - service: fan.turn_on
                 target:
-                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
               # Обновляем таймер последнего включения
               - service: input_datetime.set_datetime
                 target:
@@ -223,7 +223,7 @@ automation:
                 entity_id: binary_sensor.livingroom_need_air_purify
                 state: "off"
               - condition: state
-                entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
                 state: "on"
 
               # Б. Антидребезг (Min ON time)
@@ -248,7 +248,7 @@ automation:
             sequence:
               - service: fan.turn_off
                 target:
-                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
               # Обновляем таймер последнего выключения
               - service: input_datetime.set_datetime
                 target:
@@ -275,7 +275,7 @@ automation:
         state: "off"
       - condition: template
         value_template: >-
-          {{ states('fan.zhimi_cn_271517251_mb3_s_2_air_purifier')
+          {{ states('fan.zhimi_mb3_a5d3_air_purifier')
              not in ['unavailable', 'unknown'] }}
     actions: []
 
@@ -293,6 +293,6 @@ automation:
         state: "off"
       - condition: template
         value_template: >-
-          {{ states('fan.zhimi_cn_271517251_mb3_s_2_air_purifier')
+          {{ states('fan.zhimi_mb3_a5d3_air_purifier')
              not in ['unavailable', 'unknown'] }}
     actions: []

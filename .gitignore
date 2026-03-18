@@ -1,6 +1,7 @@
 /.HA_VERSION
 /.cloud
 /.storage
+/.cache
 /blueprints
 /custom_components
 /deps
@@ -35,3 +36,4 @@
 /packages/new
 /ps5-mqtt
 .ha_run.lock
+.watchman_report.txt

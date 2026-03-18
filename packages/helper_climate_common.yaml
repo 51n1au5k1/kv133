@@ -349,7 +349,7 @@ automation:
       при каждом изменении состояния увлажнителя.
     trigger:
       - platform: state
-        entity_id: humidifier.xiaomi_cn_823407205_p3
+        entity_id: humidifier.xiaomi_p3_946a_humidifier
     action:
       - choose:
           - conditions:
@@ -361,7 +361,7 @@ automation:
 
       - service: script.climate_update_timers
         data:
-          device_on_entity: humidifier.xiaomi_cn_823407205_p3
+          device_on_entity: humidifier.xiaomi_p3_946a_humidifier
           last_on_entity: input_datetime.humidifier_last_on
           last_off_entity: input_datetime.humidifier_last_off
           force_update: true
@@ -373,7 +373,7 @@ automation:
       при каждом изменении состояния очистителя воздуха.
     trigger:
       - platform: state
-        entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+        entity_id: fan.zhimi_mb3_a5d3_air_purifier
     action:
       - choose:
           - conditions:
@@ -385,7 +385,7 @@ automation:
 
       - service: script.climate_update_timers
         data:
-          device_on_entity: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+          device_on_entity: fan.zhimi_mb3_a5d3_air_purifier
           last_on_entity: input_datetime.air_purifier_last_on
           last_off_entity: input_datetime.air_purifier_last_off
           force_update: true
@@ -410,13 +410,13 @@ automation:
 
       - service: script.climate_update_timers
         data:
-          device_on_entity: humidifier.xiaomi_cn_823407205_p3
+          device_on_entity: humidifier.xiaomi_p3_946a_humidifier
           last_on_entity: input_datetime.humidifier_last_on
           last_off_entity: input_datetime.humidifier_last_off
 
       - service: script.climate_update_timers
         data:
-          device_on_entity: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+          device_on_entity: fan.zhimi_mb3_a5d3_air_purifier
           last_on_entity: input_datetime.air_purifier_last_on
           last_off_entity: input_datetime.air_purifier_last_off
 
@@ -473,7 +473,7 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
@@ -487,7 +487,7 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: humidifier.xiaomi_cn_823407205_p3
+                entity_id: humidifier.xiaomi_p3_946a_humidifier
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
@@ -526,7 +526,7 @@ automation:
             sequence:
               - service: fan.turn_on
                 target:
-                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
 
       - choose:
           - conditions:
@@ -536,7 +536,7 @@ automation:
             sequence:
               - service: humidifier.turn_on
                 target:
-                  entity_id: humidifier.xiaomi_cn_823407205_p3
+                  entity_id: humidifier.xiaomi_p3_946a_humidifier
 
       - service: input_boolean.turn_off
         target:
@@ -575,7 +575,7 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
@@ -583,12 +583,12 @@ automation:
                   entity_id: input_boolean.door_open_fan_pre_state
               - service: fan.turn_off
                 target:
-                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
 
       - choose:
           - conditions:
               - condition: state
-                entity_id: humidifier.xiaomi_cn_823407205_p3
+                entity_id: humidifier.xiaomi_p3_946a_humidifier
                 state: "on"
             sequence:
               - service: input_boolean.turn_on
@@ -596,7 +596,7 @@ automation:
                   entity_id: input_boolean.door_open_humidifier_pre_state
               - service: humidifier.turn_off
                 target:
-                  entity_id: humidifier.xiaomi_cn_823407205_p3
+                  entity_id: humidifier.xiaomi_p3_946a_humidifier
 
   - id: "0347cae6-1b2f-436a-a54c-792feafa9620"
     alias: "HELPER: Гостиная: Климат, восстановление состояния устройств"
@@ -634,7 +634,7 @@ automation:
             sequence:
               - service: fan.turn_on
                 target:
-                  entity_id: fan.zhimi_cn_271517251_mb3_s_2_air_purifier
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
 
       - choose:
           - conditions:
@@ -652,11 +652,11 @@ automation:
                 state: "off"
               - condition: template
                 value_template: >
-                  {{ states('humidifier.xiaomi_cn_823407205_p3') not in ['unavailable','unknown',''] }}
+                  {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable','unknown',''] }}
             sequence:
               - service: humidifier.turn_on
                 target:
-                  entity_id: humidifier.xiaomi_cn_823407205_p3
+                  entity_id: humidifier.xiaomi_p3_946a_humidifier
 
       - service: input_boolean.turn_off
         target:
