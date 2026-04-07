@@ -4,59 +4,18 @@
 #
 # УПРАВЛЕНИЕ ОСВЕЩЕНИЕМ ВАННОЙ КОМНАТЫ
 #
-# ФУНКЦИИ:
-# 1. Автоматическое управление освещением
-#    • Автоматическое включение по движению/открытию двери
-#    • Выбор режима освещения (дневной/ночной) по времени суток
-#    • Таймер автоматического выключения (настраиваемый)
-#    • Режим уборки (бесконечное горение)
-#    • Защита от ложных срабатываний при запуске HA
+# АРХИТЕКТУРА:
+# • switch.bathroom_spots_power         — служебное питание Wi-Fi-спотов
+#                                         Должен быть постоянно включён
+# • light.bathroom_shower_illumination  — отдельный основной свет ванной
+# • Wi-Fi-споты Philips                 — управляются только при наличии питания
+#                                         от switch.bathroom_spots_power
 #
-# 2. Резервное освещение
-#    • Автоматическое включение основного света при недоступности спотов
-#    • Уведомления о проблемах с освещением
-#
-# 3. Ручное управление
-#    • MQTT-выключатель (левая кнопка)
-#    • Переключение дневной/ночной режим
-#
-# УСТРОЙСТВА:
-# • 5x Philips Downlight (точечные светильники)
-# • 1x Relay L2 (основной потолочный свет)
-# • MQTT Switch (настенный выключатель)
-# • 2x датчика движения (см. room_bathroom.yaml)
-# • 2x датчика открытия двери (см. room_bathroom.yaml)
-#
-# РЕЖИМЫ ОСВЕЩЕНИЯ:
-# ┌──────────────────────────────────────────────────────────────────┐
-# │ НОЧНОЙ (00:30-06:00):                                            │
-# │ • 1 спот (L1) на 10% яркости                                     │
-# │ • Мягкий свет для комфорта ночью                                 │
-# ├──────────────────────────────────────────────────────────────────┤
-# │ ДНЕВНОЙ (06:00-00:30):                                           │
-# │ • 5 спотов на 100% яркости                                       │
-# │ • Основной свет (relay L2)                                       │
-# │ • Максимальная освещённость                                      │
-# └──────────────────────────────────────────────────────────────────┘
-#
-# ЛОГИКА ТАЙМЕРА:
-# ┌──────────────────────────────────────────────────────────────────┐
-# │ 1. Движение обнаружено                                           │
-# │    ↓                                                             │
-# │ 2. Включение света (дневной/ночной режим)                        │
-# │    ↓                                                             │
-# │ 3. Движение прекратилось                                         │
-# │    ↓                                                             │
-# │ 4. Ожидание 1 минута (защита от ложных срабатываний)             │
-# │    ↓                                                             │
-# │ 5. Запуск таймера (настраиваемый, по умолчанию 3 минуты)         │
-# │    ↓                                                             │
-# │ 6. Таймер истёк → Выключение света                               │
-# │                                                                  │
-# │ ПРЕРЫВАНИЕ ТАЙМЕРА:                                              │
-# │ • Новое движение → Отмена таймера                                │
-# │ • Режим уборки → Таймер не запускается                           │
-# └──────────────────────────────────────────────────────────────────┘
+# ВАЖНО:
+# • switch.bathroom_spots_power НЕ считается "обычным светом" для пользователя
+# • Его нельзя выключать при автоотключении, ручном выключении, рестарте и т.д.
+# • Если споты становятся unavailable — пробуем восстановить их через
+#   переподачу питания на switch.bathroom_spots_power
 #
 ################################################################################
 
@@ -65,9 +24,6 @@
 ##############################################################################
 
 input_number:
-  # ==========================================================================
-  # Длительность таймера автоматического выключения
-  # ==========================================================================
   bathroom_timer_duration:
     name: "Ванная: таймер автовыключения света (мин)"
     min: 0.5
@@ -113,22 +69,22 @@ light:
     model: philips.light.downlight
 
 ##############################################################################
-#                                 ГРУППЫ
+#                                  ГРУППЫ
 ##############################################################################
 
 group:
   bathroom_all_lights:
-    name: "Ванная: все светильники"
+    name: "Ванная: свет"
     entities:
       - light.bathroom_spot_r1_philips
       - light.bathroom_spot_r2_philips
       - light.bathroom_spot_l1_philips
       - light.bathroom_spot_c1_philips
       - light.bathroom_spot_c2_philips
-      - light.bathroom_relay_l2
+      - light.bathroom_shower_illumination
 
   bathroom_spots:
-    name: "Ванная: точечные светильники"
+    name: "Ванная: споты"
     entities:
       - light.bathroom_spot_r1_philips
       - light.bathroom_spot_r2_philips
@@ -137,23 +93,21 @@ group:
       - light.bathroom_spot_c2_philips
 
   bathroom_night_lights:
-    name: "Ванная: ночное освещение"
+    name: "Ванная: ночной свет"
     entities:
       - light.bathroom_spot_l1_philips
 
 ##############################################################################
-#                          БИНАРНЫЕ СЕНСОРЫ
+#                            ШАБЛОННЫЕ СЕНСОРЫ
 ##############################################################################
 
 template:
-  # Ванная: ночной режим освещения
   - binary_sensor:
       - unique_id: bathroom_is_night_mode
-        name: is_night_mode
+        name: bathroom_is_night_mode
         device_class: light
         state: >-
-          {% set current_time = now().strftime('%H:%M') %}
-          {{ '00:30' <= current_time < '06:00' }}
+          {{ (now().hour == 0 and now().minute >= 30) or (1 <= now().hour < 6) }}
         icon: >-
           {% if is_state(this.entity_id, 'on') %}
             mdi:weather-night
@@ -161,8 +115,27 @@ template:
             mdi:weather-sunny
           {% endif %}
 
+      - unique_id: bathroom_spots_problem
+        name: bathroom_spots_problem
+        device_class: problem
+        state: >-
+          {% set spots = [
+            'light.bathroom_spot_r1_philips',
+            'light.bathroom_spot_r2_philips',
+            'light.bathroom_spot_l1_philips',
+            'light.bathroom_spot_c1_philips',
+            'light.bathroom_spot_c2_philips'
+          ] %}
+          {{ (spots | map('states') | select('eq', 'unavailable') | list | length) >= 2 }}
+        icon: >-
+          {% if is_state(this.entity_id, 'on') %}
+            mdi:alert-circle-outline
+          {% else %}
+            mdi:check-circle-outline
+          {% endif %}
+
 ##############################################################################
-#                                ТАЙМЕРЫ
+#                                  ТАЙМЕР
 ##############################################################################
 
 timer:
@@ -172,10 +145,27 @@ timer:
     icon: mdi:timer-off-outline
 
 ##############################################################################
-#                                СКРИПТЫ
+#                                  СКРИПТЫ
 ##############################################################################
 
 script:
+  bathroom_ensure_spots_power:
+    alias: "Ванная: обеспечить питание спотов"
+    icon: mdi:power-plug-outline
+    sequence:
+      - choose:
+          - conditions:
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: switch.bathroom_spots_power
+                    state: "on"
+            sequence:
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.bathroom_spots_power
+              - delay: "00:00:03"
+
   bathroom_toggle_night_mode:
     alias: "Ванная: переключение ночного режима"
     icon: mdi:weather-night
@@ -185,20 +175,57 @@ script:
               - condition: or
                 conditions:
                   - condition: state
+                    entity_id: light.bathroom_shower_illumination
+                    state: "on"
+                  - condition: state
+                    entity_id: light.bathroom_spot_r1_philips
+                    state: "on"
+                  - condition: state
+                    entity_id: light.bathroom_spot_r2_philips
+                    state: "on"
+                  - condition: state
                     entity_id: light.bathroom_spot_l1_philips
                     state: "on"
                   - condition: state
-                    entity_id: light.bathroom_relay_l2
+                    entity_id: light.bathroom_spot_c1_philips
+                    state: "on"
+                  - condition: state
+                    entity_id: light.bathroom_spot_c2_philips
                     state: "on"
             sequence:
+              - action: timer.cancel
+                target:
+                  entity_id: timer.timer_bathroom
+
               - action: light.turn_off
                 target:
-                  entity_id: group.bathroom_all_lights
+                  entity_id:
+                    - light.bathroom_shower_illumination
+                    - light.bathroom_spot_r1_philips
+                    - light.bathroom_spot_r2_philips
+                    - light.bathroom_spot_l1_philips
+                    - light.bathroom_spot_c1_philips
+                    - light.bathroom_spot_c2_philips
 
         default:
+          - action: script.turn_on
+            target:
+              entity_id: script.bathroom_ensure_spots_power
+
+          - delay: "00:00:02"
+
+          - action: light.turn_off
+            target:
+              entity_id:
+                - light.bathroom_shower_illumination
+                - light.bathroom_spot_r1_philips
+                - light.bathroom_spot_r2_philips
+                - light.bathroom_spot_c1_philips
+                - light.bathroom_spot_c2_philips
+
           - action: light.turn_on
             target:
-              entity_id: light.bathroom_spot_l1_philips
+              entity_id: group.bathroom_night_lights
             data:
               brightness_pct: 10
 
@@ -218,14 +245,30 @@ script:
                 entity_id: group.bathroom_all_lights
                 state: "on"
             sequence:
+              - action: timer.cancel
+                target:
+                  entity_id: timer.timer_bathroom
+
               - action: light.turn_off
                 target:
-                  entity_id: group.bathroom_all_lights
+                  entity_id:
+                    - light.bathroom_shower_illumination
+                    - light.bathroom_spot_r1_philips
+                    - light.bathroom_spot_r2_philips
+                    - light.bathroom_spot_l1_philips
+                    - light.bathroom_spot_c1_philips
+                    - light.bathroom_spot_c2_philips
 
         default:
+          - action: script.turn_on
+            target:
+              entity_id: script.bathroom_ensure_spots_power
+
+          - delay: "00:00:02"
+
           - action: light.turn_on
             target:
-              entity_id: light.bathroom_relay_l2
+              entity_id: light.bathroom_shower_illumination
 
           - action: light.turn_on
             target:
@@ -240,30 +283,43 @@ script:
               duration: "{{ (states('input_number.bathroom_timer_duration') | float(3) * 60) | int }}"
 
   bathroom_turn_on_night_mode:
-    alias: "Ванная: включение ночного освещения"
+    alias: "Ванная: включение ночного режима"
     icon: mdi:lightbulb-night-outline
     sequence:
-      - action: light.turn_on
+      - action: script.turn_on
         target:
-          entity_id: light.bathroom_main
+          entity_id: script.bathroom_ensure_spots_power
+
+      - delay: "00:00:02"
+
+      - action: light.turn_off
+        target:
+          entity_id:
+            - light.bathroom_shower_illumination
+            - light.bathroom_spot_r1_philips
+            - light.bathroom_spot_r2_philips
+            - light.bathroom_spot_c1_philips
+            - light.bathroom_spot_c2_philips
 
       - action: light.turn_on
         target:
-          entity_id: light.bathroom_spot_l1_philips
+          entity_id: group.bathroom_night_lights
         data:
           brightness_pct: 10
 
   bathroom_turn_on_day_mode:
-    alias: "Ванная: включение дневного освещения"
+    alias: "Ванная: включение дневного режима"
     icon: mdi:lightbulb-on-outline
     sequence:
-      - action: light.turn_on
+      - action: script.turn_on
         target:
-          entity_id: light.bathroom_main
+          entity_id: script.bathroom_ensure_spots_power
+
+      - delay: "00:00:02"
 
       - action: light.turn_on
         target:
-          entity_id: light.bathroom_relay_l2
+          entity_id: light.bathroom_shower_illumination
 
       - action: light.turn_on
         target:
@@ -272,7 +328,7 @@ script:
           brightness_pct: 100
 
 ##############################################################################
-#                             АВТОМАТИЗАЦИИ
+#                               АВТОМАТИЗАЦИИ
 ##############################################################################
 
 automation:
@@ -313,10 +369,6 @@ automation:
     mode: restart
     triggers:
       - trigger: state
-        entity_id: binary_sensor.bathroom_open_door
-        from: "off"
-        to: "on"
-      - trigger: state
         entity_id: binary_sensor.bathroom_motions
         from: "off"
         to: "on"
@@ -338,6 +390,10 @@ automation:
             state: "on"
 
     actions:
+      - action: timer.cancel
+        target:
+          entity_id: timer.timer_bathroom
+
       - choose:
           - conditions:
               - condition: state
@@ -370,13 +426,6 @@ automation:
       - action: timer.cancel
         target:
           entity_id: timer.timer_bathroom
-      - variables:
-          tr_ent: >-
-            {{ trigger.entity_id if trigger is defined and 'entity_id' in trigger else '' }}
-          tr_from: >-
-            {{ trigger.from_state.state if trigger is defined and 'from_state' in trigger and trigger.from_state is not none else '' }}
-          tr_to: >-
-            {{ trigger.to_state.state if trigger is defined and 'to_state' in trigger and trigger.to_state is not none else '' }}
 
   - id: "e519fa4c-bbad-4b0d-b06c-8521b3b10131"
     alias: "Ванная: запуск таймера (нет движения 1 мин)"
@@ -400,16 +449,35 @@ automation:
           entity_id: timer.timer_bathroom
         data:
           duration: "{{ (states('input_number.bathroom_timer_duration') | float(3) * 60) | int }}"
-      - variables:
-          tr_ent: >-
-            {{ trigger.entity_id if trigger is defined and 'entity_id' in trigger else '' }}
-          tr_from: >-
-            {{ trigger.from_state.state if trigger is defined and 'from_state' in trigger and trigger.from_state is not none else '' }}
-          tr_to: >-
-            {{ trigger.to_state.state if trigger is defined and 'to_state' in trigger and trigger.to_state is not none else '' }}
+
+  - id: "c5af2cfe-5445-4d39-9d1b-1468db6cf001"
+    alias: "Ванная: выключение света по таймеру"
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.timer_bathroom
+    conditions:
+      - condition: state
+        entity_id: input_boolean.bathroom_cleaning_mode
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.bathroom_motions
+        state: "off"
+    actions:
+      - action: light.turn_off
+        target:
+          entity_id:
+            - light.bathroom_shower_illumination
+            - light.bathroom_spot_r1_philips
+            - light.bathroom_spot_r2_philips
+            - light.bathroom_spot_l1_philips
+            - light.bathroom_spot_c1_philips
+            - light.bathroom_spot_c2_philips
 
   - id: "0c5020c3-e674-4789-8086-38dbc07253d7"
-    alias: "Ванная: резерв питания спотов (антидребезг)"
+    alias: "Ванная: восстановление питания спотов"
     mode: single
     triggers:
       - trigger: state
@@ -430,26 +498,21 @@ automation:
       - condition: state
         entity_id: input_boolean.bathroom_lights_startup_protection
         state: "off"
-      - condition: template
-        value_template: >-
-          {% set spots = [
-            'light.bathroom_spot_r1_philips',
-            'light.bathroom_spot_r2_philips',
-            'light.bathroom_spot_l1_philips',
-            'light.bathroom_spot_c1_philips',
-            'light.bathroom_spot_c2_philips'
-          ] %}
-          {{ (spots | map('states') | select('eq','unavailable') | list | length) >= 2 }}
+      - condition: state
+        entity_id: binary_sensor.bathroom_spots_problem
+        state: "on"
 
     actions:
       - variables:
           spots: >-
             {{
-              [ 'light.bathroom_spot_r1_philips',
+              [
+                'light.bathroom_spot_r1_philips',
                 'light.bathroom_spot_r2_philips',
                 'light.bathroom_spot_l1_philips',
                 'light.bathroom_spot_c1_philips',
-                'light.bathroom_spot_c2_philips' ]
+                'light.bathroom_spot_c2_philips'
+              ]
             }}
           unavailable_count_initial: >-
             {{
@@ -463,42 +526,89 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: light.bathroom_main
-                state: "on"
-            sequence: []
-
-          - conditions:
-              - condition: state
-                entity_id: light.bathroom_main
+                entity_id: switch.bathroom_spots_power
                 state: "off"
             sequence:
-              - action: light.turn_on
+              - action: switch.turn_on
                 target:
-                  entity_id: light.bathroom_main
+                  entity_id: switch.bathroom_spots_power
 
               - delay: "00:00:20"
 
-              - variables:
-                  unavailable_count_after: >-
-                    {{
-                      spots
-                      | map('states')
-                      | select('eq', 'unavailable')
-                      | list
-                      | length
-                    }}
+        default:
+          - action: switch.turn_off
+            target:
+              entity_id: switch.bathroom_spots_power
 
+          - delay: "00:00:03"
+
+          - action: switch.turn_on
+            target:
+              entity_id: switch.bathroom_spots_power
+
+          - delay: "00:00:20"
+
+      - variables:
+          unavailable_count_after: >-
+            {{
+              spots
+              | map('states')
+              | select('eq', 'unavailable')
+              | list
+              | length
+            }}
+
+      - choose:
+          - conditions:
               - condition: template
                 value_template: "{{ unavailable_count_after >= 2 }}"
-
+            sequence:
               - action: notify.send_message
                 target:
                   entity_id: notify.telegram_master
                 data:
                   message: >-
-                    ⚠️ Ванная: питание спотов было выключено — включил bathroom_main.
-                    До: недоступно {{ unavailable_count_initial }} спотов.
-                    После: недоступно {{ unavailable_count_after }} спотов (спустя 20с).
+                    ⚠️ Ванная: после восстановления питания спотов они всё ещё недоступны.
+                    До восстановления: {{ unavailable_count_initial }} недоступно.
+                    После восстановления: {{ unavailable_count_after }} недоступно.
+
+  - id: "4ecf691e-0f5c-4d4f-8f74-c6a4e7d1f251"
+    alias: "Ванная: поддержание питания спотов включённым"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: switch.bathroom_spots_power
+        to: "off"
+        for:
+          seconds: 5
+
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.bathroom_lights_startup_protection
+        state: "off"
+
+    actions:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.bathroom_spots_power
+
+      - delay: "00:00:10"
+
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: switch.bathroom_spots_power
+                state: "off"
+            sequence:
+              - action: notify.send_message
+                target:
+                  entity_id: notify.telegram_master
+                data:
+                  message: >-
+                    ⚠️ Ванная: не удалось удержать включённым питание спотов (switch.bathroom_spots_power).
 
   - id: "14a6f0ef-8217-4fc6-8dca-067875b950a7"
     alias: "Ванная: сброс света после рестарта HA"
@@ -509,6 +619,10 @@ automation:
 
     actions:
       - delay: "00:01:30"
+
+      - action: switch.turn_on
+        target:
+          entity_id: switch.bathroom_spots_power
 
       - condition: and
         conditions:
@@ -522,7 +636,12 @@ automation:
       - action: light.turn_off
         target:
           entity_id:
-            - group.bathroom_all_lights
+            - light.bathroom_shower_illumination
+            - light.bathroom_spot_r1_philips
+            - light.bathroom_spot_r2_philips
+            - light.bathroom_spot_l1_philips
+            - light.bathroom_spot_c1_philips
+            - light.bathroom_spot_c2_philips
 
   - id: "048bc34f-9e6d-475c-84ed-0af54dedeed9"
     alias: "Ванная: защита от ложных срабатываний (5 мин после старта)"
@@ -534,7 +653,9 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.bathroom_lights_startup_protection
+
       - delay: "00:05:00"
+
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.bathroom_lights_startup_protection

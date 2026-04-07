@@ -238,7 +238,7 @@ automation:
                           transition: 2
 
         default:
-          - delay: "00:00:05"
+          - delay: "00:00:07"
 
           - variables:
               theater_on: >

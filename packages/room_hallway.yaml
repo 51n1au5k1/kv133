@@ -125,13 +125,13 @@ input_boolean:
   # Флаг первого открытия двери после прибытия домой
   hallway_first_door_open:
     name: "Прихожая: первое открытие двери"
-    initial: off
+    initial: false
     icon: mdi:door-open
 
   # Флаг уведомления о микроклимате сейфа
   strongbox_hum_text_notified:
     name: "Сейф: уведомление отправлено"
-    initial: off
+    initial: false
     icon: mdi:message-alert
 
 ##############################################################################

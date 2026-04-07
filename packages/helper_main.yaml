@@ -132,47 +132,47 @@ input_boolean:
 
   system_startup_phase:
     name: "Фаза загрузки системы"
-    initial: on
+    initial: true
     icon: mdi:timer-sand
 
   silent_mode:
     name: "Режим тишины"
-    initial: off
+    initial: false
     icon: mdi:emoticon-neutral-outline
 
   bathroom_cleaning_mode:
     name: "Режим уборки в ванной"
-    initial: off
+    initial: false
     icon: mdi:broom
 
   force_camera_off:
     name: "Форсированное отключение камер"
-    initial: off
+    initial: false
     icon: mdi:cctv-off
 
   bathroom_lights_startup_protection:
     name: "Защита освещения ванной при запуске"
-    initial: on
+    initial: true
     icon: mdi:shield-home
 
   wm_cycle_seen_start:
     name: "Стиралка: цикл начинался после текущего старта HA"
-    initial: off
+    initial: false
     icon: mdi:flag-outline
 
   washing_machine_running:
     name: "Стиральная машина работает"
-    initial: off
+    initial: false
     icon: mdi:washing-machine
 
   washing_machine_pre_restart_state:
     name: "Washing Machine Pre-Restart State"
-    initial: off
+    initial: false
     icon: mdi:washing-machine
 
   wm_socket_outage_active:
     name: "Стиралка: авария питания активна"
-    initial: off
+    initial: false
     icon: mdi:power-plug-off
 
   doorbell_spam_guard:
@@ -181,7 +181,7 @@ input_boolean:
 
   xiaomi_home_integration_unstable:
     name: "Xiaomi Home: интеграция нестабильна"
-    initial: off
+    initial: false
     icon: mdi:alert-circle
 
 ##############################################################################

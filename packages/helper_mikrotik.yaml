@@ -225,7 +225,7 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - binary_sensor.mikrotik_wan_pci_kabel_podklyuchen
+          - binary_sensor.mikrotik_wan_pci_kabel_podkliuchen
         from: "off"
         to: "on"
         for: "00:00:10" # Защита от ложных срабатываний (краткий флап)

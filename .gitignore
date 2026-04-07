@@ -28,12 +28,10 @@
 /!temp
 /custom_components
 /packages/a5in_lab.yaml
-/packages/_plant_spathiphyllum.yaml_
-/packages/_room_hallway.yaml_
-/packages/_plant_ficus_lyrata.yaml_
-/packages/_plant_euphorbia_leuconeura.yaml_
 /packages/del
 /packages/new
 /ps5-mqtt
 .ha_run.lock
 .watchman_report.txt
+_*.*_
+*.*_

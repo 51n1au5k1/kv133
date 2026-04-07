@@ -50,13 +50,15 @@ include:
     - sensor.*_pve_*
     # Скорость интернета
     - sensor.speedtest_*
-    - sensor.cloudflare_speed_test_*
+    - sensor.cloudflare_*
     # Фильтры климатическойц техники
     - sensor.*_filter_*
     # Контроль уровня воды
     - event.*_low_water_*
     # Сейф
     - sensor.strongbox_*
+    # Miktotik
+    - sensor.mikrotik_*
     # Эксперементальные
     - sensor.vremia_igry_*
     - sensor.*_ps5_*

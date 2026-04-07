@@ -102,6 +102,12 @@ script:
         required: true
       chat_id:
         required: true
+      page:
+        required: false
+      delete_message_id:
+        required: false
+      delete_chat_id:
+        required: false
       user_id:
         required: false
     sequence:
@@ -115,7 +121,9 @@ script:
       - service: script.send_pve_status_paged
         data:
           chat_id: "{{ chat_id }}"
-          page: 1
+          page: "{{ [3, [1, (page | default(1) | int(1))] | max] | min }}"
+          delete_message_id: "{{ delete_message_id | default('') }}"
+          delete_chat_id: "{{ delete_chat_id | default('') }}"
 
       - choose:
           - conditions:
@@ -125,9 +133,8 @@ script:
             sequence:
               - service: system_log.write
                 data:
-                  message: "TG: PVE Action {{ button }} by {{ user_id | default('unknown') }}"
+                  message: "TG: PVE Action {{ button }} by {{ user_id | default('unknown') }} on page {{ page | default(1) }}"
                   level: info
-
   # --------------------------------------------------------------------------
   # Генераторы меню (Send Status Scripts)
   # --------------------------------------------------------------------------
@@ -166,7 +173,7 @@ script:
             🌡 <b>Температура:</b> {{ states('sensor.livingroom_climat_sensor_temperature') | default('N/A') }}°C
             💧 <b>Влажность:</b> {{ states('sensor.livingroom_climat_sensor_humidity') | default('N/A') }}%
             🌿 <b>CO₂:</b> {{ states('sensor.co2_monitor_co2') | default('N/A') }} ppm
-            💨 <b>PM2.5:</b> {{ states('sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6') | default('N/A') }} µg/m³
+            💨 <b>PM2.5:</b> {{ states('sensor.zhimi_mb3_a5d3_pm25') | default('N/A') }} µg/m³
             🚪 <b>Статус дверей:</b> {% if is_state('binary_sensor.gostinaia_balkon_contact','on') or is_state('binary_sensor.0x00158d0003ce9922_contact','on') %}Открыта{% else %}Закрыта{% endif %}
           inline_keyboard: >
             {{ [
@@ -194,8 +201,8 @@ script:
           parse_mode: html
           message: |
             <b>🏢 Текущее состояние в рабочем кабинете:</b>
-            <b>🌡 Температура:</b> {{ states('sensor.cgllc_cn_blt_3_15gd8656slo00_dove_temperature_p_2_1') | default('N/A') }}°C
-            <b>💧 Влажность:</b> {{ states('sensor.cgllc_cn_blt_3_15gd8656slo00_dove_relative_humidity_p_2_2') | default('N/A') }}%
+            <b>🌡 Температура:</b> {{ states('sensor.cgllc_dove_f637_temperature') | default('N/A') }}°C
+            <b>💧 Влажность:</b> {{ states('sensor.cgllc_dove_f637_relative_humidity') | default('N/A') }}%
             <b>🚪 Статус двери:</b> {% if is_state('binary_sensor.masterskaia_balkon_contact', 'on') %}Открыта{% else %}Закрыта{% endif %}
           inline_keyboard: >
             {{ [
@@ -319,7 +326,7 @@ script:
             <b>⬆️ Передача:</b> {{ states('sensor.speedtest_upload') | default('N/A') }} Mbps
           inline_keyboard: >
             {{ [
-                [ ["🔴 Питание ванной" if is_state("light.bathroom_main", "off") else "🟢 Питание ванной", "/toggle_bathroom_power"] ],
+                [ ["🔴 Питание ванной" if is_state("switch.bathroom_spots_power", "off") else "🟢 Питание ванной", "/toggle_bathroom_power"] ],
                 [ ["🔴 Режим тишины" if is_state("input_boolean.silent_mode", "off") else "🟢 Режим тишины", "/toggle_silent_mode"] ],
                 [ ["🔴 Режим Force CCTV Off" if is_state("input_boolean.force_camera_off", "off") else "🟢 Режим Force CCTV Off", "/toggle_force_cctv_mode"] ],
                 [ ["⚠️ Система виртуализации", "/pve_page_1"] ],
@@ -340,7 +347,7 @@ script:
         required: false
     sequence:
       - variables:
-          page_n: "{{ [2, [1, (page | default(1) | int(1))] | max] | min }}"
+          page_n: "{{ [3, [1, (page | default(1) | int(1))] | max] | min }}"
 
       - choose:
           - conditions:
@@ -371,6 +378,7 @@ script:
 
             {{ '🟢' if is_state('binary_sensor.qemu_haos12_3_100_status', 'on') else '🔴' }} <b>HAOS12:</b> {{ states('sensor.qemu_haos12_3_100_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_haos12_3_100_memory_used_percentage') | float(0) | round(0) }}%
             {{ '🟢' if is_state('binary_sensor.qemu_mikrotik_routeros_chr_200_status', 'on') else '🔴' }} <b>CHR:</b> {{ states('sensor.qemu_mikrotik_routeros_chr_200_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_mikrotik_routeros_chr_200_memory_used_percentage') | float(0) | round(0) }}%
+            {{ '🟢' if is_state('binary_sensor.qemu_wp_alfaradon_stage_300_status', 'on') else '🔴' }} <b>WP_AR:</b> {{ states('sensor.qemu_wp_alfaradon_stage_300_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_wp_alfaradon_stage_300_memory_used_percentage') | float(0) | round(0) }}%
 
             {{ status('binary_sensor.lxc_mariadb_101_status', 'MariaDB', 'sensor.lxc_mariadb_101_cpu_used', 'sensor.lxc_mariadb_101_memory_used_percentage') }}
             {{ status('binary_sensor.lxc_jackett_102_status', 'Jackett', 'sensor.lxc_jackett_102_cpu_used', 'sensor.lxc_jackett_102_memory_used_percentage') }}
@@ -383,13 +391,20 @@ script:
             {{ status('binary_sensor.lxc_npmplus_109_status', 'NPMplus', 'sensor.lxc_npmplus_109_cpu_used', 'sensor.lxc_npmplus_109_memory_used_percentage') }}
             {{ status('binary_sensor.lxc_alpine_vaultwarden_110_status', 'VaultWarden', 'sensor.lxc_alpine_vaultwarden_110_cpu_used', 'sensor.lxc_alpine_vaultwarden_110_memory_used_percentage') }}
             {{ status('binary_sensor.lxc_pihole_111_status', 'PiHole', 'sensor.lxc_pihole_111_cpu_used', 'sensor.lxc_pihole_111_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_bookstack_112_status', 'BookStack', 'sensor.lxc_bookstack_112_cpu_used', 'sensor.lxc_bookstack_112_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_uptimekuma_113_status', 'UptimeKuma', 'sensor.lxc_uptimekuma_113_cpu_used', 'sensor.lxc_uptimekuma_113_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_alpine_adguard_114_status', 'AdGuard', 'sensor.lxc_alpine_adguard_114_cpu_used', 'sensor.lxc_alpine_adguard_114_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_mqtt_115_status', 'MQTT', 'sensor.lxc_mqtt_115_cpu_used', 'sensor.lxc_mqtt_115_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_alpine_zigbee2mqtt_116_status', 'Zigbee2MQTT', 'sensor.lxc_alpine_zigbee2mqtt_116_cpu_used', 'sensor.lxc_alpine_zigbee2mqtt_116_memory_used_percentage') }}
 
           inline_keyboard: >
             {% set page_n = (page | default(1) | int(1)) %}
-            {% set page_n = 1 if page_n < 1 else (2 if page_n > 2 else page_n) %}
+            {% set page_n = 1 if page_n < 1 else (3 if page_n > 3 else page_n) %}
+            {% set cb_suffix = "?p=" ~ page_n %}
 
             {% set s_haos = is_state('binary_sensor.qemu_haos12_3_100_status', 'on') %}
             {% set s_chr = is_state('binary_sensor.qemu_mikrotik_routeros_chr_200_status', 'on') %}
+            {% set s_arst = is_state('binary_sensor.qemu_wp_alfaradon_stage_300_status', 'on') %}
 
             {% set s_maria = is_state('binary_sensor.lxc_mariadb_101_status', 'on') %}
             {% set s_jack = is_state('binary_sensor.lxc_jackett_102_status', 'on') %}
@@ -402,37 +417,51 @@ script:
             {% set s_npmplus = is_state('binary_sensor.lxc_npmplus_109_status', 'on') %}
             {% set s_vaultwarden = is_state('binary_sensor.lxc_alpine_vaultwarden_110_status', 'on') %}
             {% set s_pihole = is_state('binary_sensor.lxc_pihole_111_status', 'on') %}
+            {% set s_bookstack = is_state('binary_sensor.lxc_bookstack_112_status', 'on') %}
+            {% set s_uptimekuma = is_state('binary_sensor.lxc_uptimekuma_113_status', 'on') %}
+            {% set s_adguard = is_state('binary_sensor.lxc_alpine_adguard_114_status', 'on') %}
+            {% set s_mqtt = is_state('binary_sensor.lxc_mqtt_115_status', 'on') %}
+            {% set s_zigbee2mqtt = is_state('binary_sensor.lxc_alpine_zigbee2mqtt_116_status', 'on') %}
 
             {% set prev_page = 1 if page_n <= 1 else page_n - 1 %}
-            {% set next_page = 2 if page_n >= 2 else page_n + 1 %}
+            {% set next_page = 3 if page_n >= 3 else page_n + 1 %}
 
             {% set kb = [
-              [ ["🔄 Обновить статус", "/pve_page_" ~ page_n ] ],
-              [ ["🟢 HAOS12" if s_haos else "🔴 HAOS12", "/reboot_haos12"],
-                ["🟢 CHR" if s_chr else "🔴 CHR", "/reboot_chr"] ]
+              [ ["🔄 Обновить статус", "/pve_status_refresh" ~ cb_suffix ] ],
+              [ ["🟢 HAOS12" if s_haos else "🔴 HAOS12", "/reboot_haos12" ~ cb_suffix],
+                ["🟢 CHR" if s_chr else "🔴 CHR", "/reboot_chr" ~ cb_suffix],
+                ["🟢 WP_AR" if s_arst else "🔴 WP_AR", "/reboot_arst" ~ cb_suffix] ]
             ] %}
 
             {% if page_n == 1 %}
               {% set kb = kb + [
-                [ ["🟢 MariaDB" if s_maria else "🔴 MariaDB", "/start_mariadb"], ["⏹ Стоп", "/stop_mariadb"], ["🔄 Ребут", "/reboot_mariadb"] ],
-                [ ["🟢 Jackett" if s_jack else "🔴 Jackett", "/start_jackett"], ["⏹ Стоп", "/stop_jackett"], ["🔄 Ребут", "/reboot_jackett"] ],
-                [ ["🟢 Jellyfin" if s_jelly else "🔴 Jellyfin", "/start_jellyfin"], ["⏹ Стоп", "/stop_jellyfin"], ["🔄 Ребут", "/reboot_jellyfin"] ],
-                [ ["🟢 Deluge" if s_deluge else "🔴 Deluge", "/start_deluge"], ["⏹ Стоп", "/stop_deluge"], ["🔄 Ребут", "/reboot_deluge"] ],
-                [ ["🟢 TorrServer" if s_torr else "🔴 TorrServer", "/start_torrserver"], ["⏹ Стоп", "/stop_torrserver"], ["🔄 Ребут", "/reboot_torrserver"] ],
-                [ ["🟢 Immich" if s_immich else "🔴 Immich", "/start_immich"], ["⏹ Стоп", "/stop_immich"], ["🔄 Ребут", "/reboot_immich"] ]
+                [ ["🟢 MariaDB" if s_maria else "🔴 MariaDB", "/start_mariadb" ~ cb_suffix], ["⏹ Стоп", "/stop_mariadb" ~ cb_suffix], ["🔄 Ребут", "/reboot_mariadb" ~ cb_suffix] ],
+                [ ["🟢 Jackett" if s_jack else "🔴 Jackett", "/start_jackett" ~ cb_suffix], ["⏹ Стоп", "/stop_jackett" ~ cb_suffix], ["🔄 Ребут", "/reboot_jackett" ~ cb_suffix] ],
+                [ ["🟢 Jellyfin" if s_jelly else "🔴 Jellyfin", "/start_jellyfin" ~ cb_suffix], ["⏹ Стоп", "/stop_jellyfin" ~ cb_suffix], ["🔄 Ребут", "/reboot_jellyfin" ~ cb_suffix] ],
+                [ ["🟢 Deluge" if s_deluge else "🔴 Deluge", "/start_deluge" ~ cb_suffix], ["⏹ Стоп", "/stop_deluge" ~ cb_suffix], ["🔄 Ребут", "/reboot_deluge" ~ cb_suffix] ],
+                [ ["🟢 TorrServer" if s_torr else "🔴 TorrServer", "/start_torrserver" ~ cb_suffix], ["⏹ Стоп", "/stop_torrserver" ~ cb_suffix], ["🔄 Ребут", "/reboot_torrserver" ~ cb_suffix] ],
+                [ ["🟢 Immich" if s_immich else "🔴 Immich", "/start_immich" ~ cb_suffix], ["⏹ Стоп", "/stop_immich" ~ cb_suffix], ["🔄 Ребут", "/reboot_immich" ~ cb_suffix] ]
+              ] %}
+            {% elif page_n == 2 %}
+              {% set kb = kb + [
+                [ ["🟢 Minim" if s_minim else "🔴 Minim", "/start_minimserver" ~ cb_suffix], ["⏹ Стоп", "/stop_minimserver" ~ cb_suffix], ["🔄 Ребут", "/reboot_minimserver" ~ cb_suffix] ],
+                [ ["🟢 Photoview" if s_photo else "🔴 Photoview", "/start_photoview" ~ cb_suffix], ["⏹ Стоп", "/stop_photoview" ~ cb_suffix], ["🔄 Ребут", "/reboot_photoview" ~ cb_suffix] ],
+                [ ["🟢 NPMplus" if s_npmplus else "🔴 NPMplus", "/start_npmplus" ~ cb_suffix], ["⏹ Стоп", "/stop_npmplus" ~ cb_suffix], ["🔄 Ребут", "/reboot_npmplus" ~ cb_suffix] ],
+                [ ["🟢 VaultWarden" if s_vaultwarden else "🔴 VaultWarden", "/start_vaultwarden" ~ cb_suffix], ["⏹ Стоп", "/stop_vaultwarden" ~ cb_suffix], ["🔄 Ребут", "/reboot_vaultwarden" ~ cb_suffix] ],
+                [ ["🟢 PiHole" if s_pihole else "🔴 PiHole", "/start_pihole" ~ cb_suffix], ["⏹ Стоп", "/stop_pihole" ~ cb_suffix], ["🔄 Ребут", "/reboot_pihole" ~ cb_suffix] ],
+                [ ["🟢 BookStack" if s_bookstack else "🔴 BookStack", "/start_bookstack" ~ cb_suffix], ["⏹ Стоп", "/stop_bookstack" ~ cb_suffix], ["🔄 Ребут", "/reboot_bookstack" ~ cb_suffix] ]
               ] %}
             {% else %}
               {% set kb = kb + [
-                [ ["🟢 Minim" if s_minim else "🔴 Minim", "/start_minimserver"], ["⏹ Стоп", "/stop_minimserver"], ["🔄 Ребут", "/reboot_minimserver"] ],
-                [ ["🟢 Photoview" if s_photo else "🔴 Photoview", "/start_photoview"], ["⏹ Стоп", "/stop_photoview"], ["🔄 Ребут", "/reboot_photoview"] ],
-                [ ["🟢 NPMplus" if s_npmplus else "🔴 NPMplus", "/start_npmplus"], ["⏹ Стоп", "/stop_npmplus"], ["🔄 Ребут", "/reboot_npmplus"] ],
-                [ ["🟢 VaultWarden" if s_vaultwarden else "🔴 VaultWarden", "/start_vaultwarden"], ["⏹ Стоп", "/stop_vaultwarden"], ["🔄 Ребут", "/reboot_vaultwarden"] ],
-                [ ["🟢 PiHole" if s_pihole else "🔴 PiHole", "/start_pihole"], ["⏹ Стоп", "/stop_pihole"], ["🔄 Ребут", "/reboot_pihole"] ]
+                [ ["🟢 UptimeKuma" if s_uptimekuma else "🔴 UptimeKuma", "/start_uptimekuma" ~ cb_suffix], ["⏹ Стоп", "/stop_uptimekuma" ~ cb_suffix], ["🔄 Ребут", "/reboot_uptimekuma" ~ cb_suffix] ],
+                [ ["🟢 AdGuard" if s_adguard else "🔴 AdGuard", "/start_adguard" ~ cb_suffix], ["⏹ Стоп", "/stop_adguard" ~ cb_suffix], ["🔄 Ребут", "/reboot_adguard" ~ cb_suffix] ],
+                [ ["🟢 MQTT" if s_mqtt else "🔴 MQTT", "/start_mqtt" ~ cb_suffix], ["⏹ Стоп", "/stop_mqtt" ~ cb_suffix], ["🔄 Ребут", "/reboot_mqtt" ~ cb_suffix] ],
+                [ ["🟢 Zigbee2MQTT" if s_zigbee2mqtt else "🔴 Zigbee2MQTT", "/start_zigbee2mqtt" ~ cb_suffix], ["⏹ Стоп", "/stop_zigbee2mqtt" ~ cb_suffix], ["🔄 Ребут", "/reboot_zigbee2mqtt" ~ cb_suffix] ]
               ] %}
             {% endif %}
 
             {% set kb = kb + [
-              [ ["◀️", "/pve_page_" ~ prev_page], ["📄 " ~ page_n ~ "/2", "/pve_page_" ~ page_n], ["▶️", "/pve_page_" ~ next_page] ],
+              [ ["◀️", "/pve_page_" ~ prev_page], ["📄 " ~ page_n ~ "/3", "/pve_page_" ~ page_n], ["▶️", "/pve_page_" ~ next_page] ],
               [ ["👈 В меню", "/menu_back"] ]
             ] %}
 
@@ -1062,8 +1091,8 @@ automation:
     actions:
       - service: script.toggle_device
         data:
-          entity: light.bathroom_main
-          domain: light
+          entity: switch.bathroom_spots_power
+          domain: switch
           menu_script: script.send_system_status
           message_id: "{{ trigger.event.data.message.message_id }}"
           chat_id: "{{ trigger.event.data.chat_id }}"
@@ -1154,13 +1183,21 @@ automation:
     triggers:
       - platform: event
         event_type: telegram_callback
-        event_data:
-          data: "/pve_status_refresh"
+    condition:
+      - condition: template
+        value_template: >
+          {% set d = trigger.event.data.data | default('') %}
+          {{ d.startswith('/pve_status_refresh') }}
     actions:
+      - variables:
+          d: "{{ trigger.event.data.data | default('') }}"
+          page: >
+            {% set p = (d.split('p=')[-1] | int(1)) %}
+            {{ 1 if p < 1 else (3 if p > 3 else p) }}
       - service: script.send_pve_status_paged
         data:
           chat_id: "{{ trigger.event.data.chat_id }}"
-          page: 1
+          page: "{{ page }}"
           delete_message_id: "{{ trigger.event.data.message.message_id }}"
           delete_chat_id: "{{ trigger.event.data.chat_id }}"
 
@@ -1175,10 +1212,12 @@ automation:
         state: "off"
       - condition: template
         value_template: >
-          {% set cmd = trigger.event.data.data %}
+          {% set raw = trigger.event.data.data | default('') %}
+          {% set cmd = raw.split('?')[0] %}
           {% set map = {
             "/reboot_haos12": "button.qemu_haos12_3_100_reboot",
             "/reboot_chr": "button.qemu_mikrotik_routeros_chr_200_reboot",
+            "/reboot_arst": "button.qemu_wp_alfaradon_stage_300_reboot",
             "/start_mariadb": "button.lxc_mariadb_101_start",
             "/stop_mariadb": "button.lxc_mariadb_101_stop",
             "/reboot_mariadb": "button.lxc_mariadb_101_reboot",
@@ -1211,17 +1250,38 @@ automation:
             "/reboot_vaultwarden": "button.lxc_alpine_vaultwarden_110_reboot",
             "/start_pihole": "button.lxc_pihole_111_start",
             "/stop_pihole": "button.lxc_pihole_111_stop",
-            "/reboot_pihole": "button.lxc_pihole_111_reboot"
+            "/reboot_pihole": "button.lxc_pihole_111_reboot",
+            "/start_bookstack": "button.lxc_bookstack_112_start",
+            "/stop_bookstack": "button.lxc_bookstack_112_stop",
+            "/reboot_bookstack": "button.lxc_bookstack_112_reboot",
+            "/start_uptimekuma": "button.lxc_uptimekuma_113_start",
+            "/stop_uptimekuma": "button.lxc_uptimekuma_113_stop",
+            "/reboot_uptimekuma": "button.lxc_uptimekuma_113_reboot",
+            "/start_adguard": "button.lxc_alpine_adguard_114_start",
+            "/stop_adguard": "button.lxc_alpine_adguard_114_stop",
+            "/reboot_adguard": "button.lxc_alpine_adguard_114_reboot",
+            "/start_mqtt": "button.lxc_mqtt_115_start",
+            "/stop_mqtt": "button.lxc_mqtt_115_stop",
+            "/reboot_mqtt": "button.lxc_mqtt_115_reboot",
+            "/start_zigbee2mqtt": "button.lxc_alpine_zigbee2mqtt_116_start",
+            "/stop_zigbee2mqtt": "button.lxc_alpine_zigbee2mqtt_116_stop",
+            "/reboot_zigbee2mqtt": "button.lxc_alpine_zigbee2mqtt_116_reboot"
           } %}
           {{ cmd in map }}
     actions:
+      - variables:
+          raw: "{{ trigger.event.data.data | default('') }}"
+          cmd: "{{ raw.split('?')[0] }}"
+          page: >
+            {% set p = (raw.split('p=')[-1] | int(1)) %}
+            {{ 1 if p < 1 else (3 if p > 3 else p) }}
       - service: script.pve_action
         data:
           button: >
-            {% set cmd = trigger.event.data.data %}
             {% set map = {
               "/reboot_haos12": "button.qemu_haos12_3_100_reboot",
               "/reboot_chr": "button.qemu_mikrotik_routeros_chr_200_reboot",
+              "/reboot_arst": "button.qemu_wp_alfaradon_stage_300_reboot",
               "/start_mariadb": "button.lxc_mariadb_101_start",
               "/stop_mariadb": "button.lxc_mariadb_101_stop",
               "/reboot_mariadb": "button.lxc_mariadb_101_reboot",
@@ -1254,10 +1314,28 @@ automation:
               "/reboot_vaultwarden": "button.lxc_alpine_vaultwarden_110_reboot",
               "/start_pihole": "button.lxc_pihole_111_start",
               "/stop_pihole": "button.lxc_pihole_111_stop",
-              "/reboot_pihole": "button.lxc_pihole_111_reboot"
+              "/reboot_pihole": "button.lxc_pihole_111_reboot",
+              "/start_bookstack": "button.lxc_bookstack_112_start",
+              "/stop_bookstack": "button.lxc_bookstack_112_stop",
+              "/reboot_bookstack": "button.lxc_bookstack_112_reboot",
+              "/start_uptimekuma": "button.lxc_uptimekuma_113_start",
+              "/stop_uptimekuma": "button.lxc_uptimekuma_113_stop",
+              "/reboot_uptimekuma": "button.lxc_uptimekuma_113_reboot",
+              "/start_adguard": "button.lxc_alpine_adguard_114_start",
+              "/stop_adguard": "button.lxc_alpine_adguard_114_stop",
+              "/reboot_adguard": "button.lxc_alpine_adguard_114_reboot",
+              "/start_mqtt": "button.lxc_mqtt_115_start",
+              "/stop_mqtt": "button.lxc_mqtt_115_stop",
+              "/reboot_mqtt": "button.lxc_mqtt_115_reboot",
+              "/start_zigbee2mqtt": "button.lxc_alpine_zigbee2mqtt_116_start",
+              "/stop_zigbee2mqtt": "button.lxc_alpine_zigbee2mqtt_116_stop",
+              "/reboot_zigbee2mqtt": "button.lxc_alpine_zigbee2mqtt_116_reboot"
             } %}
             {{ map[cmd] }}
           chat_id: "{{ trigger.event.data.chat_id }}"
+          page: "{{ page }}"
+          delete_message_id: "{{ trigger.event.data.message.message_id }}"
+          delete_chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
   - id: "telegram_bot_pve_pagination"
@@ -1276,7 +1354,7 @@ automation:
           d: "{{ trigger.event.data.data }}"
           page: >
             {% set p = (d.split('_')[-1] | int(1)) %}
-            {{ 1 if p < 1 else (2 if p > 2 else p) }}
+            {{ 1 if p < 1 else (3 if p > 3 else p) }}
       - service: script.send_pve_status_paged
         data:
           chat_id: "{{ trigger.event.data.chat_id }}"

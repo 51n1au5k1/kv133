@@ -19,21 +19,34 @@ homeassistant:
   # Используем пакеты для определенных групп
   packages: !include_dir_named packages
 
-# Разносим по папкам
+############################################################
+#                       ЗОНЫ
+############################################################
+zone:
+  - name: Home
+    latitude: !secret latitude_coord
+    longitude: !secret longitude_coord
+    radius: 100
+    icon: mdi:home
+
+############################################################
+#                   РАЗНЕСЁННЫЕ НАСТРОЙКИ
+############################################################
 recorder: !include includes/recorder.yaml
 
 # Уровень логирования - только ошибки
 logger:
   default: error
   logs:
-    homeassistant.components.mqtt: error
     homeassistant.components.automation: error
     homeassistant.components.telegram_bot: error
     homeassistant.components.notify: error
-    homeassistant.components.sql: info
+    homeassistant.components.sql: warning
 
+############################################################
+#                       HTTP
+############################################################
 http:
   use_x_forwarded_for: true
   trusted_proxies:
     - !secret npmplus_link
-

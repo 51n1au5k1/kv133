@@ -65,7 +65,7 @@ sensor:
   - platform: statistics
     name: "Living Room PM2.5 Avg"
     unique_id: living_room_pm2_5_avg
-    entity_id: sensor.zhimi_cn_271517251_mb3_pm2_5_density_p_3_6
+    entity_id: sensor.zhimi_mb3_a5d3_pm25
     state_characteristic: mean
     sampling_size: 120
     max_age:

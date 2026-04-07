@@ -217,15 +217,11 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - update.file_editor_update
           - update.home_assistant_core_update
           - update.home_assistant_google_drive_backup_update
           - update.home_assistant_operating_system_update
           - update.home_assistant_supervisor_update
-          - update.log_viewer_update
-          - update.mosquitto_broker_update
           - update.studio_code_server_update
-          - update.zigbee2mqtt_update
           - update.ps5_mqtt_update
         to: "on"
     conditions:
@@ -546,15 +542,10 @@ automation:
     triggers:
       - trigger: state
         entity_id:
-          - binary_sensor.file_editor_running
-          - binary_sensor.filebrowser_running
           - binary_sensor.home_assistant_google_drive_backup_running
-          - binary_sensor.log_viewer_running
           - binary_sensor.matter_server_running
-          - binary_sensor.mosquitto_broker_running
           - binary_sensor.ps5_mqtt_running
           - binary_sensor.studio_code_server_running
-          - binary_sensor.zigbee2mqtt_running
         from: "on"
         to: "off"
         for: "00:00:30" # Защита от ложных срабатываний при обновлении/рестарте аддона
