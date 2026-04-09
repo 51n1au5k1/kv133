@@ -103,18 +103,6 @@ group:
 
 template:
   - binary_sensor:
-      - unique_id: bathroom_is_night_mode
-        name: bathroom_is_night_mode
-        device_class: light
-        state: >-
-          {{ (now().hour == 0 and now().minute >= 30) or (1 <= now().hour < 6) }}
-        icon: >-
-          {% if is_state(this.entity_id, 'on') %}
-            mdi:weather-night
-          {% else %}
-            mdi:weather-sunny
-          {% endif %}
-
       - unique_id: bathroom_spots_problem
         name: bathroom_spots_problem
         device_class: problem
@@ -353,7 +341,7 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: binary_sensor.is_night_mode
+                entity_id: binary_sensor.night_mode
                 state: "on"
             sequence:
               - action: script.turn_on
@@ -397,7 +385,7 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: binary_sensor.is_night_mode
+                entity_id: binary_sensor.night_mode
                 state: "on"
             sequence:
               - action: script.turn_on

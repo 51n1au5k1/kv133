@@ -70,6 +70,7 @@ automation:
                   entity_id: notify.telegram_master
                 data:
                   message: "Свет в квартире выключен! Приятной дороги!"
+
   # Температура ниже уровня
   - id: "a8c5eb07-9381-46d5-bc65-0f52dd7079a8"
     alias: "Уведомление. Яндекс: Температура ниже установленного уровня"
@@ -96,7 +97,7 @@ automation:
     mode: single
     triggers:
       - trigger: numeric_state
-        entity_id: sensor.zhimi_cn_271517251_mb3_filter_life_level_p_4_3
+        entity_id: sensor.zhimi_mb3_a5d3_filter_life_level
         below: 10
         for: "00:01:00"
     conditions:
@@ -120,7 +121,7 @@ automation:
     mode: single
     triggers:
       - trigger: numeric_state
-        entity_id: sensor.xiaomi_cn_823407205_p3_filter_life_level_p_8_1
+        entity_id: sensor.xiaomi_p3_946a_filter_life_level
         below: 10
         for: "00:01:00"
     conditions:
@@ -137,28 +138,3 @@ automation:
       - action: script.yandex_tts_generic
         data:
           text: "Фильтр увлажнителя требует замены. Его ресурс менее десяти процентов."
-
-  # # Гостиная: увлажнитель — низкий уровень воды
-  # - id: "abee01b3-024f-4e26-9c64-384a1634449f"
-  #   alias: "Яндекс: увлажнитель — низкий уровень воды"
-  #   mode: single
-  #   triggers:
-  #     - trigger: state
-  #       entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
-  #   conditions:
-  #     - condition: state
-  #       entity_id: input_boolean.silent_mode
-  #       state: "off"
-  #     - condition: state
-  #       entity_id: binary_sensor.someone_is_home
-  #       state: "on"
-  #     - condition: state
-  #       entity_id: input_boolean.system_startup_phase
-  #       state: "off"
-  #     - condition: state
-  #       entity_id: input_boolean.xiaomi_home_integration_unstable
-  #       state: "off"
-  #   actions:
-  #     - action: script.yandex_tts_generic
-  #       data:
-  #         text: "Внимание! В увлажнителе закончилась вода. Пожалуйста, долейте."

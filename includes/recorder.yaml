@@ -59,6 +59,10 @@ include:
     - sensor.strongbox_*
     # Miktotik
     - sensor.mikrotik_*
+    # Телефон
+    - sensor.pixel_*
+    # Часы
+    - sensor.google_*
     # Эксперементальные
     - sensor.vremia_igry_*
     - sensor.*_ps5_*

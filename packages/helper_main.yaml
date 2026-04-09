@@ -252,7 +252,7 @@ script:
           _notify_request: "{{ notify | default(false) }}"
           _should_notify: >
             {{ _notify_request or _level in ['error', 'critical'] }}
-      - service: system_log.write
+      - action: system_log.write
         data:
           level: >
             {% set allowed = ['debug','info','warning','error','critical'] %}
@@ -286,54 +286,6 @@ script:
 # АВТОМАТИЗАЦИИ
 ##############################################################################
 automation:
-  # - id: "2674efa1-8470-45f4-842a-fcabebc5ea20"
-  #   alias: "HELPER: Xiaomi Home — интеграция нестабильна"
-  #   mode: restart
-  #   trigger:
-  #     - platform: state
-  #       entity_id:
-  #         - fan.zhimi_mb3_a5d3_air_purifier
-  #         - humidifier.xiaomi_p3_946a_humidifier
-  #         - light.lumi_v3_7cdd_light
-  #         - switch.chuangmi_ipc019_b10e_switch_status
-  #         - switch.chuangmi_ipc019_37da_switch_status_2
-  #         - vacuum.dreame_cn_332835372_mc1808
-  #       to: "unavailable"
-  #       from: ["on", "off"]
-  #       for: "00:00:10"
-  #   condition:
-  #     - condition: state
-  #       entity_id: input_boolean.system_startup_phase
-  #       state: "off"
-  #     - condition: state
-  #       entity_id: input_boolean.xiaomi_home_integration_unstable
-  #       state: "off"
-  #     - condition: template
-  #       value_template: >
-  #         {% set devices = [
-  #           'fan.zhimi_mb3_a5d3_air_purifier',
-  #           'humidifier.xiaomi_p3_946a_humidifier',
-  #           'light.lumi_v3_7cdd_light',
-  #           'switch.chuangmi_ipc019_b10e_switch_status',
-  #           'switch.chuangmi_ipc019_37da_switch_status_2',
-  #           'vacuum.dreame_cn_332835372_mc1808'
-  #         ] %}
-  #         {{ devices | map('states') | select('eq','unavailable') | list | count >= (devices | count // 2 + 1) }}
-  #   action:
-  #     - service: input_boolean.turn_on
-  #       target:
-  #         entity_id: input_boolean.xiaomi_home_integration_unstable
-  #     - service: script.log_helper_event
-  #       data:
-  #         level: warning
-  #         message: "Xiaomi Home: интеграция нестабильна, флаг on."
-  #         source: "{{ this.entity_id }}"
-  #         notify: true
-  #     - delay: "00:01:00"
-  #     - service: input_boolean.turn_off
-  #       target:
-  #         entity_id: input_boolean.xiaomi_home_integration_unstable
-
   - id: "c6382818-05ed-4590-be92-b367489fb0e1"
     alias: "HELPER: Обновление списка пользователей"
     mode: single

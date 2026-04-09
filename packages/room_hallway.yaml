@@ -295,6 +295,59 @@ automation:
   # ОСВЕЩЕНИЕ ПРИХОЖЕЙ
   # ==========================================================================
 
+  #   # --------------------------------------------------------------------------
+  #   # Ручное управление светом кнопкой
+  #   # --------------------------------------------------------------------------
+  #   - id: "fc57ec27-9c9d-489a-8f5f-050b489466f7"
+  #     alias: "Прихожая: переключение света кнопкой"
+  #     description: >
+  #       Переключает свет по нажатию кнопки.
+  #     mode: restart
+  #     trigger:
+  #       - platform: device
+  #         domain: mqtt
+  #         device_id: cfd464e1cbfa3da2ddd4f2109d74eb4e
+  #         type: action
+  #         subtype: single
+  #     condition:
+  #       - condition: state
+  #         entity_id: input_boolean.system_startup_phase
+  #         state: "off"
+  #     action:
+  #       # Переключаем свет
+  #       - type: toggle
+  #         device_id: 61c0ac07893316543e261176eb0cb5f9
+  #         entity_id: 89add52cab26b9b6bcad7e86fd6387ec
+  #         domain: light
+
+  #       # Управление таймером в зависимости от состояния света
+  #       - choose:
+  #           # Если хотя бы один источник света включён → запускаем таймер
+  #           - conditions:
+  #               - condition: or
+  #                 conditions:
+  #                   - condition: state
+  #                     entity_id: light.hallway_switch
+  #                     state: "on"
+  #                   - condition: state
+  #                     entity_id: light.gateway_light_04cf8c977cdd
+  #                     state: "on"
+  #             sequence:
+  #               - service: timer.start
+  #                 target:
+  #                   entity_id: timer.timer_hallway
+  #                 data:
+  #                   duration: "{{ (states('input_number.hallway_timer_duration') | float(1.5) * 60) | int }}"
+  #         default:
+  #           # Весь свет выключен → отменяем таймер
+  #           - service: timer.cancel
+  #             target:
+  #               entity_id: timer.timer_hallway
+  # automation:
+  # ==========================================================================
+  # ОСВЕЩЕНИЕ ПРИХОЖЕЙ
+  # ==========================================================================
+
   # --------------------------------------------------------------------------
   # Ручное управление светом кнопкой
   # --------------------------------------------------------------------------
@@ -303,26 +356,22 @@ automation:
     description: >
       Переключает свет по нажатию кнопки.
     mode: restart
-    trigger:
-      - platform: device
+    triggers:
+      - trigger: device
         domain: mqtt
         device_id: cfd464e1cbfa3da2ddd4f2109d74eb4e
         type: action
         subtype: single
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    action:
-      # Переключаем свет
-      - type: toggle
-        device_id: 61c0ac07893316543e261176eb0cb5f9
-        entity_id: 89add52cab26b9b6bcad7e86fd6387ec
-        domain: light
+    actions:
+      - action: light.toggle
+        target:
+          entity_id: light.hallway_switch
 
-      # Управление таймером в зависимости от состояния света
       - choose:
-          # Если хотя бы один источник света включён → запускаем таймер
           - conditions:
               - condition: or
                 conditions:
@@ -333,14 +382,13 @@ automation:
                     entity_id: light.gateway_light_04cf8c977cdd
                     state: "on"
             sequence:
-              - service: timer.start
+              - action: timer.start
                 target:
                   entity_id: timer.timer_hallway
                 data:
                   duration: "{{ (states('input_number.hallway_timer_duration') | float(1.5) * 60) | int }}"
         default:
-          # Весь свет выключен → отменяем таймер
-          - service: timer.cancel
+          - action: timer.cancel
             target:
               entity_id: timer.timer_hallway
 
@@ -352,13 +400,13 @@ automation:
     description: >
       Автоматически включает свет при открытии двери.
     mode: restart
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.hallway_door_contact
         to: "on"
         for:
           seconds: 5
-    condition:
+    conditions:
       - condition: state
         entity_id: light.hallway_switch
         state: "off"
@@ -370,12 +418,12 @@ automation:
         state: "off"
       - condition: template
         value_template: "{{ states('binary_sensor.hallway_door_contact') not in ['unknown','unavailable',''] }}"
-    action:
-      - service: light.turn_on
+    actions:
+      - action: light.turn_on
         target:
           entity_id: light.hallway_switch
 
-      - service: timer.start
+      - action: timer.start
         target:
           entity_id: timer.timer_hallway
         data:
@@ -389,11 +437,11 @@ automation:
     description: >
       Включает подсветку шлюза при движении в тёмное время.
     mode: restart
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.hallway_motion_ultrasonic_occupancy
         to: "on"
-    condition:
+    conditions:
       - condition: numeric_state
         entity_id: sensor.illumination_04cf8c977cdd
         below: 250
@@ -410,8 +458,8 @@ automation:
           - condition: state
             entity_id: input_boolean.bathroom_cleaning_mode
             state: "on"
-    action:
-      - service: light.turn_on
+    actions:
+      - action: light.turn_on
         target:
           entity_id: light.gateway_light_04cf8c977cdd
         data:
@@ -425,11 +473,11 @@ automation:
     description: >
       Запускает таймер автовыключения, когда движение прекратилось.
     mode: restart
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.hallway_motion_ultrasonic_occupancy
         to: "off"
-    condition:
+    conditions:
       - condition: or
         conditions:
           - condition: state
@@ -444,8 +492,8 @@ automation:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    action:
-      - service: timer.start
+    actions:
+      - action: timer.start
         target:
           entity_id: timer.timer_hallway
         data:
@@ -459,13 +507,13 @@ automation:
     description: >
       Продлевает освещение при новом движении.
     mode: restart
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.hallway_motion_ultrasonic_occupancy
         to: "on"
         for:
           seconds: 2
-    condition:
+    conditions:
       - condition: or
         conditions:
           - condition: state
@@ -485,36 +533,35 @@ automation:
           - condition: state
             entity_id: input_boolean.bathroom_cleaning_mode
             state: "on"
-    action:
-      - service: timer.cancel
+    actions:
+      - action: timer.cancel
         target:
           entity_id: timer.timer_hallway
 
   # --------------------------------------------------------------------------
   # Выключение света по таймеру
   # --------------------------------------------------------------------------
-  - id: "7f6bdbae-a73b-4509-8db8-43f71a3525ca"
+  - id: "776bdbae-a73b-4509-8db8-43f71a3525ca"
     alias: "Прихожая: выключение света по таймеру"
-    description: >
-      Выключает свет после окончания таймера.
+    description: "Выключает свет после окончания таймера."
     mode: single
-    trigger:
-      - platform: event
+    triggers:
+      - trigger: event
         event_type: timer.finished
         event_data:
           entity_id: timer.timer_hallway
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
       - condition: state
         entity_id: binary_sensor.hallway_motion_ultrasonic_occupancy
         state: "off"
-    action:
-      - service: light.turn_off
+    actions:
+      - action: light.turn_off
         target:
           entity_id:
-            - light.hallway_switch
+            - light.light_hallway
             - light.gateway_light_04cf8c977cdd
 
   # ==========================================================================
@@ -527,18 +574,18 @@ automation:
       Включает полное освещение при первом появлении в прихожей
       после прибытия домой.
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.hallway_door_contact
         to: "on"
         for:
           seconds: 2
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.hallway_motion_ultrasonic_occupancy
         to: "on"
         for:
           seconds: 2
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.hallway_first_door_open
         state: "off"
@@ -557,26 +604,26 @@ automation:
             states('binary_sensor.hallway_door_contact') not in ['unknown','unavailable','']
             or states('binary_sensor.hallway_motion_ultrasonic_occupancy') not in ['unknown','unavailable','']
           }}
-    action:
-      - service: light.turn_on
+    actions:
+      - action: light.turn_on
         target:
           entity_id: light.hallway_switch
 
-      - service: light.turn_on
+      - action: light.turn_on
         target:
           entity_id: light.gateway_light_04cf8c977cdd
         data:
           brightness_pct: 100
 
-      - service: input_boolean.turn_on
+      - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.hallway_first_door_open
 
-      - service: timer.cancel
+      - action: timer.cancel
         target:
           entity_id: timer.timer_arrival_window
 
-      - service: timer.start
+      - action: timer.start
         target:
           entity_id: timer.timer_hallway
         data:
@@ -587,16 +634,16 @@ automation:
     description: >
       Сбрасывает флаг и запускает "окно прибытия" при возвращении домой.
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: person.master
         to: "home"
-    action:
-      - service: input_boolean.turn_off
+    actions:
+      - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.hallway_first_door_open
 
-      - service: timer.start
+      - action: timer.start
         target:
           entity_id: timer.timer_arrival_window
 
@@ -609,13 +656,13 @@ automation:
     description: >
       Озвучивает уведомление и мигает светом при нажатии кнопки звонка.
     mode: restart
-    trigger:
-      - platform: device
+    triggers:
+      - trigger: device
         domain: mqtt
         device_id: d2c3001cdc59660c456de45aec09da91
         type: action
         subtype: single
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
@@ -628,22 +675,22 @@ automation:
       - condition: state
         entity_id: input_boolean.xiaomi_home_integration_unstable
         state: "off"
-    action:
+    actions:
       - variables:
           was_on_led: "{{ is_state('light.working_room_led', 'on') }}"
 
-      - service: script.yandex_tts_click_outdoor_button
+      - action: script.yandex_tts_click_outdoor_button
 
       - repeat:
           count: "{{ states('input_number.hallway_blink_count') | int }}"
           sequence:
-            - service: light.turn_on
+            - action: light.turn_on
               target:
                 entity_id:
                   - light.gateway_light_04cf8c977cdd
                   - light.working_room_led
             - delay: "00:00:01"
-            - service: light.turn_off
+            - action: light.turn_off
               target:
                 entity_id:
                   - light.gateway_light_04cf8c977cdd
@@ -655,11 +702,11 @@ automation:
               - condition: template
                 value_template: "{{ was_on_led }}"
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 target:
                   entity_id: light.working_room_led
         default:
-          - service: light.turn_off
+          - action: light.turn_off
             target:
               entity_id: light.working_room_led
 
@@ -668,26 +715,25 @@ automation:
     description: >
       Отправляет уведомления при обнаружении попытки снять кнопку.
     mode: single
-    trigger:
-      - platform: device
+    triggers:
+      - trigger: device
         domain: mqtt
         device_id: d2c3001cdc59660c456de45aec09da91
         type: action
         subtype: shake
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
-    action:
-      - service: script.yandex_tts_shaking_outdoor_button
+    actions:
+      - action: script.yandex_tts_shaking_outdoor_button
 
-      - service: notify.send_message
-        target:
-          entity_id: notify.telegram_master
+      - action: notify.send_message
         data:
+          entity_id: notify.telegram_master
           message: "⚠️ ВНИМАНИЕ! Кто-то пытается снять наружную кнопку! 🛑"
 
   # ==========================================================================
@@ -699,21 +745,21 @@ automation:
     description: >
       Поднимает флаг уведомления при устойчивом риске плесени.
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.strongbox_mold_risk
         to: "on"
         for:
           minutes: 10
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
         entity_id: input_boolean.strongbox_hum_text_notified
         state: "off"
-    action:
-      - service: input_boolean.turn_on
+    actions:
+      - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.strongbox_hum_text_notified
 
@@ -722,20 +768,20 @@ automation:
     description: >
       Сбрасывает флаг уведомления при устойчивой нормализации условий.
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.strongbox_safe_status
         to: "on"
         for:
           minutes: "{{ states('input_number.strongbox_resolve_min') | int(20) }}"
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
       - condition: state
         entity_id: input_boolean.strongbox_hum_text_notified
         state: "on"
-    action:
-      - service: input_boolean.turn_off
+    actions:
+      - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.strongbox_hum_text_notified

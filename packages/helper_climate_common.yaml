@@ -280,7 +280,7 @@ script:
                 value_template: >
                   {{ states(dev) in ['unknown', 'unavailable', ''] }}
             sequence:
-              - service: script.log_helper_event
+              - action: script.log_helper_event
                 data:
                   level: error
                   message: >
@@ -298,7 +298,7 @@ script:
                   {{ is_state(dev, 'on')
                      and (force or states(last_on) in ['unknown','unavailable','']) }}
             sequence:
-              - service: input_datetime.set_datetime
+              - action: input_datetime.set_datetime
                 target:
                   entity_id: "{{ last_on }}"
                 data:
@@ -310,12 +310,12 @@ script:
                   {{ is_state(dev, 'off')
                      and (force or states(last_off) in ['unknown','unavailable','']) }}
             sequence:
-              - service: input_datetime.set_datetime
+              - action: input_datetime.set_datetime
                 target:
                   entity_id: "{{ last_off }}"
                 data:
                   datetime: "{{ now().isoformat() }}"
-              - service: script.log_helper_event
+              - action: script.log_helper_event
                 data:
                   level: info
                   message: >
@@ -326,7 +326,7 @@ script:
                   trigger_to: "off"
                   extra: "force={{ force }}"
         default:
-          - service: script.log_helper_event
+          - action: script.log_helper_event
             data:
               level: debug
               message: >
@@ -347,10 +347,10 @@ automation:
     description: >
       Обновляет input_datetime.humidifier_last_on и humidifier_last_off
       при каждом изменении состояния увлажнителя.
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: humidifier.xiaomi_p3_946a_humidifier
-    action:
+    actions:
       - choose:
           - conditions:
               - condition: state
@@ -359,7 +359,7 @@ automation:
             sequence:
               - stop: "Xiaomi Home нестабилен, обновление таймеров увлажнителя пропущено."
 
-      - service: script.climate_update_timers
+      - action: script.climate_update_timers
         data:
           device_on_entity: humidifier.xiaomi_p3_946a_humidifier
           last_on_entity: input_datetime.humidifier_last_on
@@ -371,10 +371,10 @@ automation:
     description: >
       Обновляет input_datetime.air_purifier_last_on и air_purifier_last_off
       при каждом изменении состояния очистителя воздуха.
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: fan.zhimi_mb3_a5d3_air_purifier
-    action:
+    actions:
       - choose:
           - conditions:
               - condition: state
@@ -383,7 +383,7 @@ automation:
             sequence:
               - stop: "Xiaomi Home нестабилен, обновление таймеров очистителя пропущено."
 
-      - service: script.climate_update_timers
+      - action: script.climate_update_timers
         data:
           device_on_entity: fan.zhimi_mb3_a5d3_air_purifier
           last_on_entity: input_datetime.air_purifier_last_on
@@ -394,10 +394,10 @@ automation:
     alias: "HELPER: Инициализация таймеров климата при старте"
     description: >
       Инициализирует таймеры климатических устройств при старте Home Assistant.
-    trigger:
-      - platform: homeassistant
+    triggers:
+      - trigger: homeassistant
         event: start
-    action:
+    actions:
       - delay: "00:00:05"
 
       - choose:
@@ -408,13 +408,13 @@ automation:
             sequence:
               - stop: "Xiaomi Home нестабилен, инициализация таймеров климата пропущена."
 
-      - service: script.climate_update_timers
+      - action: script.climate_update_timers
         data:
           device_on_entity: humidifier.xiaomi_p3_946a_humidifier
           last_on_entity: input_datetime.humidifier_last_on
           last_off_entity: input_datetime.humidifier_last_off
 
-      - service: script.climate_update_timers
+      - action: script.climate_update_timers
         data:
           device_on_entity: fan.zhimi_mb3_a5d3_air_purifier
           last_on_entity: input_datetime.air_purifier_last_on
@@ -423,23 +423,23 @@ automation:
   - id: "d8084e61-405b-4f92-8c86-527254cc6753"
     alias: "HELPER: Переключение зимнего режима по месяцам"
     mode: single
-    trigger:
-      - platform: time
+    triggers:
+      - trigger: time
         at: "00:01:00"
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
-    action:
+    actions:
       - choose:
           - conditions:
               - condition: template
                 value_template: >
                   {{ now().month >= 11 or now().month <= 3 }}
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.winter_mode
         default:
-          - service: input_boolean.turn_off
+          - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.winter_mode
 
@@ -449,10 +449,10 @@ automation:
   - id: "5b187cde-0ad5-4132-bb68-a622dd15d6ff"
     alias: "HELPER: Сохранение состояний климатической техники"
     mode: single
-    trigger:
-      - platform: homeassistant
+    triggers:
+      - trigger: homeassistant
         event: shutdown
-    action:
+    actions:
       - choose:
           - conditions:
               - condition: state
@@ -462,11 +462,11 @@ automation:
                 entity_id: input_boolean.winter_mode
                 state: "off"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.climate_pre_restart_state
         default:
-          - service: input_boolean.turn_off
+          - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.climate_pre_restart_state
 
@@ -476,11 +476,11 @@ automation:
                 entity_id: fan.zhimi_mb3_a5d3_air_purifier
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.fan_pre_restart_state
         default:
-          - service: input_boolean.turn_off
+          - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.fan_pre_restart_state
 
@@ -490,21 +490,21 @@ automation:
                 entity_id: humidifier.xiaomi_p3_946a_humidifier
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.humidifier_pre_restart_state
         default:
-          - service: input_boolean.turn_off
+          - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.humidifier_pre_restart_state
 
   - id: "457a6711-67fa-4cb2-bcab-63c0cc58e054"
     alias: "HELPER: Восстановление состояний климатической техники"
     mode: single
-    trigger:
-      - platform: homeassistant
+    triggers:
+      - trigger: homeassistant
         event: start
-    action:
+    actions:
       - choose:
           - conditions:
               - condition: state
@@ -514,7 +514,7 @@ automation:
                 entity_id: input_boolean.winter_mode
                 state: "off"
             sequence:
-              - service: climate.turn_on
+              - action: climate.turn_on
                 target:
                   entity_id: climate.konditsioner
 
@@ -524,7 +524,7 @@ automation:
                 entity_id: input_boolean.fan_pre_restart_state
                 state: "on"
             sequence:
-              - service: fan.turn_on
+              - action: fan.turn_on
                 target:
                   entity_id: fan.zhimi_mb3_a5d3_air_purifier
 
@@ -534,11 +534,11 @@ automation:
                 entity_id: input_boolean.humidifier_pre_restart_state
                 state: "on"
             sequence:
-              - service: humidifier.turn_on
+              - action: humidifier.turn_on
                 target:
                   entity_id: humidifier.xiaomi_p3_946a_humidifier
 
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         target:
           entity_id:
             - input_boolean.climate_pre_restart_state
@@ -551,12 +551,12 @@ automation:
   - id: "f4e42442-155e-4d0a-87c2-3f21fd72025d"
     alias: "HELPER: Гостиная: Климат, отключить устройства при открытии двери"
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.doors_in_kitchen_livingroom
         to: "on"
         for: "00:01:00"
-    action:
+    actions:
       - choose:
           - conditions:
               - condition: template
@@ -565,10 +565,10 @@ automation:
                 entity_id: input_boolean.winter_mode
                 state: "off"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.door_open_climate_pre_state
-              - service: climate.turn_off
+              - action: climate.turn_off
                 target:
                   entity_id: climate.konditsioner
 
@@ -578,10 +578,10 @@ automation:
                 entity_id: fan.zhimi_mb3_a5d3_air_purifier
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.door_open_fan_pre_state
-              - service: fan.turn_off
+              - action: fan.turn_off
                 target:
                   entity_id: fan.zhimi_mb3_a5d3_air_purifier
 
@@ -591,10 +591,10 @@ automation:
                 entity_id: humidifier.xiaomi_p3_946a_humidifier
                 state: "on"
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.door_open_humidifier_pre_state
-              - service: humidifier.turn_off
+              - action: humidifier.turn_off
                 target:
                   entity_id: humidifier.xiaomi_p3_946a_humidifier
 
@@ -608,11 +608,11 @@ automation:
       • Xiaomi Home не нестабилен
       • устройство доступно
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.doors_in_kitchen_livingroom
         to: "off"
-    action:
+    actions:
       - choose:
           - conditions:
               - condition: state
@@ -622,7 +622,7 @@ automation:
                 entity_id: input_boolean.winter_mode
                 state: "off"
             sequence:
-              - service: climate.turn_on
+              - action: climate.turn_on
                 target:
                   entity_id: climate.konditsioner
 
@@ -632,7 +632,7 @@ automation:
                 entity_id: input_boolean.door_open_fan_pre_state
                 state: "on"
             sequence:
-              - service: fan.turn_on
+              - action: fan.turn_on
                 target:
                   entity_id: fan.zhimi_mb3_a5d3_air_purifier
 
@@ -654,11 +654,11 @@ automation:
                 value_template: >
                   {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable','unknown',''] }}
             sequence:
-              - service: humidifier.turn_on
+              - action: humidifier.turn_on
                 target:
                   entity_id: humidifier.xiaomi_p3_946a_humidifier
 
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         target:
           entity_id:
             - input_boolean.door_open_climate_pre_state
@@ -668,21 +668,21 @@ automation:
   - id: "b9867c28-be9f-425e-9fee-0aea777d04c0"
     alias: "HELPER: Защита — не включать кондиционер при активном зимнем режиме"
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: climate.konditsioner
         from: "off"
-    condition:
+    conditions:
       - condition: state
         entity_id: input_boolean.winter_mode
         state: "on"
-    action:
-      - service: climate.turn_off
+    actions:
+      - action: climate.turn_off
         target:
           entity_id: climate.konditsioner
-      - service: notify.send_message
+      - action: notify.send_message
         target:
           entity_id: notify.telegram_master
         data:
           message: "Кондиционер принудительно отключён: активен зимний режим."
-      - service: script.yandex_tts_kondicioner_warning
+      - action: script.yandex_tts_kondicioner_warning

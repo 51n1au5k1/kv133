@@ -72,10 +72,10 @@ template:
             {% set moisture = states('sensor.ficus_lyrata_filtered_soil_moisture') | float(0) %}
             {% set min_thr  = states('number.ficus_lyrata_min_soil_moisture') | float(15) %}
             {% set max_thr  = states('number.ficus_lyrata_max_soil_moisture') | float(60) %}
-            
+
             {% set was_on   = is_state('binary_sensor.plant_alert_ficus_lyrata_soil','on') %}
             {% set release_thr = min_thr + 5 %}
-            
+
             {% if moisture > max_thr %} false
             {% elif was_on %} {{ moisture < release_thr }}
             {% else %} {{ moisture < min_thr }}
@@ -87,6 +87,8 @@ template:
       - unique_id: plant_alert_ficus_lyrata_temperature
         name: "Температура (Фикус)"
         device_class: problem
+        availability: >-
+          {{ states('sensor.ficus_lyrata_filtered_temperature') not in ['unknown','unavailable',''] }}
         state: >-
           {% if is_state('input_boolean.ficus_notify_temp', 'off') %}
             false
@@ -106,20 +108,20 @@ automation:
   - id: "ficus_notify_soil"
     alias: "Растение. Фикус: Уведомление о поливе"
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.plant_alert_ficus_lyrata_soil
         to: "on"
         for: "00:30:00"
-    condition:
+    conditions:
       - condition: state
         entity_id: person.master
         state: "home"
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    action:
-      - service: script.plant_check_conditions
+    actions:
+      - action: script.plant_check_conditions
         data:
           plant_name: "Фикус лировидный"
           plant_name_latin: "ficus_lyrata"
@@ -128,20 +130,20 @@ automation:
   - id: "ficus_notify_temp"
     alias: "Растение. Фикус: Уведомление о температуре"
     mode: single
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: binary_sensor.plant_alert_ficus_lyrata_temperature
         to: "on"
         for: "00:10:00"
-    condition:
+    conditions:
       - condition: state
         entity_id: person.master
         state: "home"
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
-    action:
-      - service: script.plant_check_conditions
+    actions:
+      - action: script.plant_check_conditions
         data:
           plant_name: "Фикус лировидный"
           plant_name_latin: "ficus_lyrata"
@@ -149,11 +151,11 @@ automation:
   # 3. Периодическая проверка
   - id: "ficus_periodic_check"
     alias: "Растение. Фикус: Периодическая проверка"
-    trigger:
-      - platform: time_pattern
+    triggers:
+      - trigger: time_pattern
         hours: "/6"
-    action:
-      - service: script.plant_check_conditions
+    actions:
+      - action: script.plant_check_conditions
         data:
           plant_name: "Фикус лировидный"
           plant_name_latin: "ficus_lyrata"

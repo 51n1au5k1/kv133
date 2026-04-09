@@ -60,7 +60,7 @@ script:
     sequence:
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -75,7 +75,7 @@ script:
         state: "off"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -93,7 +93,7 @@ script:
         state: "off"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -111,7 +111,7 @@ script:
         state: "off"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -149,7 +149,7 @@ script:
               Все двери закрыты
             {% endif %}
 
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -166,7 +166,7 @@ script:
         state: "off"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -185,7 +185,7 @@ script:
           yandex_station_entities:
             - "{{ states('input_text.yandex_station_entity_bathroom') }}"
             - "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entities }}"
         data:
@@ -204,7 +204,7 @@ script:
         state: "off"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -222,7 +222,7 @@ script:
         state: "off"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -241,7 +241,7 @@ script:
         state: "off"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -259,7 +259,7 @@ script:
         state: "off"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -276,7 +276,7 @@ script:
         state: "off"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -293,7 +293,7 @@ script:
         state: "off"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -316,7 +316,7 @@ script:
         state: "on"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:
@@ -336,7 +336,7 @@ script:
         state: "on"
       - variables:
           yandex_station_entity: "{{ states('input_text.yandex_station_entity_livingroom') }}"
-      - service: media_player.play_media
+      - action: media_player.play_media
         target:
           entity_id: "{{ yandex_station_entity }}"
         data:

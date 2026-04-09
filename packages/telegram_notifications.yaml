@@ -11,7 +11,7 @@ script:
         example: "notify.telegram_master"
         required: true
     sequence:
-      - service: weather.get_forecasts
+      - action: weather.get_forecasts
         data:
           type: hourly
         target:
@@ -143,46 +143,6 @@ automation:
         data:
           message: "⚠️ <b>Открытие входной двери!</b> 🔓"
 
-  # # --- БЕЗОПАСНОСТЬ: ЗВОНОК В ДВЕРЬ ---
-  # - id: "eaddf6dd-762d-487e-9bf2-ba018f10b742"
-  #   alias: "Уведомление. Телеграм: Уведомление о звонке в дверь"
-  #   mode: single
-  #   triggers:
-  #     - trigger: device
-  #       domain: mqtt
-  #       device_id: d2c3001cdc59660c456de45aec09da91
-  #       type: action
-  #       subtype: single
-  #     # Для event entity лучше ловить любое изменение состояния (обновление timestamp)
-  #     - trigger: state
-  #       entity_id: event.madv_cn_329651133_miowlv2l_doorbell_ring_e_2_1
-  #   conditions:
-  #     - condition: state
-  #       entity_id: person.master
-  #       state: "not_home"
-  #     - condition: state
-  #       entity_id: input_boolean.bathroom_cleaning_mode
-  #       state: "off"
-  #     - condition: state
-  #       entity_id: input_boolean.system_startup_phase
-  #       state: "off"
-  #     - condition: state
-  #       entity_id: input_boolean.doorbell_spam_guard
-  #       state: "off"
-  #   actions:
-  #     - action: notify.send_message
-  #       target:
-  #         entity_id: notify.telegram_master
-  #       data:
-  #         message: "⚠️ <b>Кто-то звонит в дверь</b>"
-  #     - action: input_boolean.turn_on
-  #       target:
-  #         entity_id: input_boolean.doorbell_spam_guard
-  #     - delay: "00:00:30"
-  #     - action: input_boolean.turn_off
-  #       target:
-  #         entity_id: input_boolean.doorbell_spam_guard
-
   # --- СИСТЕМА: СТАРТ/СТОП ---
   - id: "686a3440-7629-4b55-b508-593caf3679af"
     alias: "Уведомление. Телеграм: Сервер запущен"
@@ -239,28 +199,6 @@ automation:
               🆕 <b>Обновление доступно:</b> {{ entity.attributes.friendly_name }}
               v{{ entity.attributes.installed_version }} ➡️ v{{ entity.attributes.latest_version }}
             {% endif %}
-
-  # # --- БАТАРЕЙКИ ---
-  # - id: "ab45665b-4995-448d-b180-c0e1d77184e9"
-  #   alias: "Уведомление. Телеграм: Массажёр (батарея)"
-  #   mode: single
-  #   triggers:
-  #     - trigger: numeric_state
-  #       entity_id: sensor.soocare_cn_1083009681_m14_battery_level_p_3_1
-  #       below: 30
-  #   conditions:
-  #     - condition: state
-  #       entity_id: person.master
-  #       state: "home"
-  #     - condition: state
-  #       entity_id: input_boolean.system_startup_phase
-  #       state: "off"
-  #   actions:
-  #     - action: notify.send_message
-  #       target:
-  #         entity_id: notify.telegram_master
-  #       data:
-  #         message: "🔋 <b>Массажёр разряжен (&lt;30%)</b>"
 
   # ----------------------------------------------------------------------------
   # Уведомление: Проблемы с жесткими дисками Proxmox (S.M.A.R.T)
@@ -507,31 +445,6 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.humidifier_filter_replace_notified
-
-  # # --- ВОДА: УВЛАЖНИТЕЛЬ ---
-  # - id: "68eb40de-2339-4260-9bd6-3db5aa1604d9"
-  #   alias: "Телеграм: Увлажнитель — Нет воды"
-  #   mode: single
-  #   triggers:
-  #     # Ловим событие (для Xiaomi Miot Auto это изменение атрибута или состояния event entity)
-  #     - trigger: state
-  #       entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
-  #   conditions:
-  #     - condition: state
-  #       entity_id: input_boolean.system_startup_phase
-  #       state: "off"
-  #     - condition: state
-  #       entity_id: input_boolean.humidifier_low_water_notified
-  #       state: "off"
-  #   actions:
-  #     - action: notify.send_message
-  #       target:
-  #         entity_id: notify.telegram_master
-  #       data:
-  #         message: "💧 <b>Увлажнитель:</b> закончилась вода!"
-  #     - action: input_boolean.turn_on
-  #       target:
-  #         entity_id: input_boolean.humidifier_low_water_notified
 
   # ----------------------------------------------------------------------------
   # Уведомление: Остановка критически важных аддонов/сервисов
