@@ -11,18 +11,9 @@
 #    • Продув перед выключением (2 минуты)
 #    • Усреднённые показания влажности (1 минута)
 #
-# 2. Мониторинг активности
-#    • Группировка датчиков движения
-#    • Детекция открытия дверей (внутренняя + внешняя)
-#    • Определение отсутствия активности (15 минут)
-#
 # УСТРОЙСТВА:
 # • sensor.bathroom_th_2_humidity — датчик влажности ванной
 # • fan.bathroom_relay_l1 — вентилятор ванной
-# • binary_sensor.0x0ceff6fffe693347_occupancy — датчик движения #1
-# • binary_sensor.0x00158d0006ebbef4_occupancy — датчик движения #2
-# • binary_sensor.bathroom_door_inside_contact — датчик внутренней двери
-# • binary_sensor.bathroom_door_outside_contact — датчик внешней двери
 #
 # ЛОГИКА УПРАВЛЕНИЯ ВЕНТИЛЯТОРОМ (ГИСТЕРЕЗИС):
 # ┌──────────────────────────────────────────────────────────────────┐
@@ -186,66 +177,6 @@ template:
             mdi:water-minus
           {% else %}
             mdi:water-plus
-          {% endif %}
-
-      # ======================================================================
-      # Открытие дверей ванной (внутренняя ИЛИ внешняя)
-      # ======================================================================
-      - unique_id: bathroom_open_door
-        name: bathroom_open_door
-        device_class: door
-        availability: >-
-          {{ states('binary_sensor.bathroom_door_inside_contact') not in ['unknown', 'unavailable']
-             and states('binary_sensor.bathroom_door_outside_contact') not in ['unknown', 'unavailable'] }}
-        state: >-
-          {{ is_state('binary_sensor.bathroom_door_inside_contact', 'on') or
-             is_state('binary_sensor.bathroom_door_outside_contact', 'on') }}
-        icon: >-
-          {% if is_state('binary_sensor.bathroom_open_door', 'on') %}
-            mdi:door-open
-          {% else %}
-            mdi:door-closed
-          {% endif %}
-
-      # ======================================================================
-      # Движение в ванной (объединение всех датчиков)
-      # ======================================================================
-      - unique_id: bathroom_motions
-        name: bathroom_motions
-        device_class: motion
-        availability: >-
-          {{ states('group.bathroom_motion_sensors') not in ['unknown', 'unavailable'] }}
-        state: >-
-          {{ is_state('group.bathroom_motion_sensors', 'on') }}
-        icon: >-
-          {% if is_state('binary_sensor.bathroom_motions', 'on') %}
-            mdi:motion-sensor
-          {% else %}
-            mdi:motion-sensor-off
-          {% endif %}
-
-      # ======================================================================
-      # Отсутствие активности в ванной (15 минут)
-      # ======================================================================
-      - unique_id: no_activity_in_bathroom_recently
-        name: no_activity_in_bathroom_recently
-        device_class: problem
-        availability: >-
-          {{ states('binary_sensor.bathroom_open_door') not in ['unknown', 'unavailable']
-             and states('group.bathroom_motion_sensors') not in ['unknown', 'unavailable'] }}
-        state: >-
-          {% set door = states.binary_sensor.bathroom_open_door %}
-          {% set motion_off = is_state('group.bathroom_motion_sensors', 'off') %}
-          {% if door is not none and door.last_changed is not none %}
-            {{ motion_off and (as_timestamp(now()) - as_timestamp(door.last_changed)) > 900 }}
-          {% else %}
-            false
-          {% endif %}
-        icon: >-
-          {% if is_state('binary_sensor.no_activity_in_bathroom_recently', 'on') %}
-            mdi:clock-alert
-          {% else %}
-            mdi:clock-check
           {% endif %}
 
 ##############################################################################

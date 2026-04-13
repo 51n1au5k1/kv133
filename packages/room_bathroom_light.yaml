@@ -4,12 +4,51 @@
 #
 # УПРАВЛЕНИЕ ОСВЕЩЕНИЕМ ВАННОЙ КОМНАТЫ
 #
+# ФУНКЦИИ:
+# 1. Управление основным и ночным светом
+#    • Ручное переключение с настенного MQTT-выключателя
+#    • Автовключение по двери ИЛИ движению
+#    • Ночной/дневной сценарий в зависимости от binary_sensor.night_mode
+#
+# 2. Защита от ложных срабатываний
+#    • Защита 5 минут после старта Home Assistant
+#    • Краткая защита от ложного включения при приходе домой
+#    • Разрешение motion-срабатывания, если дверь ванной открыта сейчас
+#      или открывалась недавно
+#
+# 3. Управление таймером автоотключения
+#    • Перезапуск/отмена таймера при новой активности
+#    • Автовыключение света при отсутствии движения
+#
+# 4. Контроль Wi-Fi спотов Philips
+#    • Постоянное поддержание питания switch.bathroom_spots_power
+#    • Попытка восстановления спотов при массовом unavailable
+#
 # АРХИТЕКТУРА:
 # • switch.bathroom_spots_power         — служебное питание Wi-Fi-спотов
 #                                         Должен быть постоянно включён
 # • light.bathroom_shower_illumination  — отдельный основной свет ванной
 # • Wi-Fi-споты Philips                 — управляются только при наличии питания
 #                                         от switch.bathroom_spots_power
+#
+# УСТРОЙСТВА:
+# • binary_sensor.0x0ceff6fffe693347_occupancy — датчик движения #1
+# • binary_sensor.0x00158d0006ebbef4_occupancy — датчик движения #2
+# • binary_sensor.bathroom_door_inside_contact — датчик внутренней двери
+# • binary_sensor.bathroom_door_outside_contact — датчик внешней двери
+#
+# ЗАВИСИМОСТИ:
+# • group.bathroom_motion_sensors           — группа датчиков движения
+#                                             (определена в /packages/room_bathroom.yaml)
+# • binary_sensor.night_mode                — глобальный ночной режим
+# • input_boolean.system_startup_phase      — глобальная фаза запуска
+# • input_boolean.bathroom_lights_startup_protection
+# • input_boolean.bathroom_cleaning_mode
+# • binary_sensor.someone_is_home
+# • binary_sensor.hallway_door_contact      — входная дверь
+# • timer.timer_arrival_window              — окно прибытия домой
+# • person.master
+# • notify.telegram_master
 #
 # ВАЖНО:
 # • switch.bathroom_spots_power НЕ считается "обычным светом" для пользователя
@@ -103,6 +142,9 @@ group:
 
 template:
   - binary_sensor:
+      # ======================================================================
+      # Проблема со спотами: 2 или более недоступны
+      # ======================================================================
       - unique_id: bathroom_spots_problem
         name: bathroom_spots_problem
         device_class: problem
@@ -122,21 +164,104 @@ template:
             mdi:check-circle-outline
           {% endif %}
 
+      # ======================================================================
+      # Открытие дверей ванной (внутренняя ИЛИ внешняя)
+      # ======================================================================
+      # НАЗНАЧЕНИЕ:
+      # • Единый бинарный сенсор факта открытия двери ванной
+      # • Используется для быстрого включения света и подтверждения реального
+      #   входа в ванную
+      # ======================================================================
+      - unique_id: bathroom_open_door
+        name: bathroom_open_door
+        device_class: door
+        availability: >-
+          {{ states('binary_sensor.bathroom_door_inside_contact') not in ['unknown', 'unavailable']
+             and states('binary_sensor.bathroom_door_outside_contact') not in ['unknown', 'unavailable'] }}
+        state: >-
+          {{ is_state('binary_sensor.bathroom_door_inside_contact', 'on') or
+             is_state('binary_sensor.bathroom_door_outside_contact', 'on') }}
+        icon: >-
+          {% if is_state('binary_sensor.bathroom_open_door', 'on') %}
+            mdi:door-open
+          {% else %}
+            mdi:door-closed
+          {% endif %}
+
+      # ======================================================================
+      # Движение в ванной (объединение всех датчиков)
+      # ======================================================================
+      # НАЗНАЧЕНИЕ:
+      # • Единый сенсор движения ванной на базе группы датчиков
+      # • group.bathroom_motion_sensors = ON, если движение видит хотя бы
+      #   один датчик
+      # ======================================================================
+      - unique_id: bathroom_motions
+        name: bathroom_motions
+        device_class: motion
+        availability: >-
+          {{ states('group.bathroom_motion_sensors') not in ['unknown', 'unavailable'] }}
+        state: >-
+          {{ is_state('group.bathroom_motion_sensors', 'on') }}
+        icon: >-
+          {% if is_state('binary_sensor.bathroom_motions', 'on') %}
+            mdi:motion-sensor
+          {% else %}
+            mdi:motion-sensor-off
+          {% endif %}
+
 ##############################################################################
-#                                  ТАЙМЕР
+#                                  ТАЙМЕРЫ
 ##############################################################################
 
 timer:
+  # ==========================================================================
+  # Таймер автовыключения света в ванной
+  # ==========================================================================
+  # НАЗНАЧЕНИЕ:
+  # • Откладывает выключение света после прекращения движения
+  # • Длительность задаётся динамически из input_number.bathroom_timer_duration
+  # ==========================================================================
   timer_bathroom:
     name: "Ванная: таймер автовыключения"
     duration: "00:03:00"
     icon: mdi:timer-off-outline
+
+  # ==========================================================================
+  # Краткая защита от ложного включения после прихода домой
+  # ==========================================================================
+  # НАЗНАЧЕНИЕ:
+  # • Отсекает ложные срабатывания motion-датчиков ванной в момент входа
+  #   в квартиру
+  # • Используется только как блокировка триггера по движению
+  # • Не мешает включению света по фактическому открытию двери ванной
+  # ==========================================================================
+  timer_bathroom_arrival_guard:
+    name: "Ванная: защита от ложного включения после прихода"
+    duration: "00:00:35"
+    icon: mdi:shield-home
+
+  # ==========================================================================
+  # Краткое окно "дверь ванной открывалась недавно"
+  # ==========================================================================
+  # НАЗНАЧЕНИЕ:
+  # • Подтверждает, что движение связано именно со входом в ванную
+  # • Даёт короткий период, в течение которого motion считается валидным
+  #   даже при активной защите после прихода домой
+  # ==========================================================================
+  timer_bathroom_door_recent:
+    name: "Ванная: дверь открывалась недавно"
+    duration: "00:00:12"
+    icon: mdi:door-open
 
 ##############################################################################
 #                                  СКРИПТЫ
 ##############################################################################
 
 script:
+  # ==========================================================================
+  # Обеспечение питания спотов
+  # ==========================================================================
   bathroom_ensure_spots_power:
     alias: "Ванная: обеспечить питание спотов"
     icon: mdi:power-plug-outline
@@ -154,6 +279,9 @@ script:
                   entity_id: switch.bathroom_spots_power
               - delay: "00:00:03"
 
+  # ==========================================================================
+  # Переключение ночного режима по настенной кнопке
+  # ==========================================================================
   bathroom_toggle_night_mode:
     alias: "Ванная: переключение ночного режима"
     icon: mdi:weather-night
@@ -223,6 +351,9 @@ script:
             data:
               duration: "{{ (states('input_number.bathroom_timer_duration') | float(3) * 60) | int }}"
 
+  # ==========================================================================
+  # Переключение дневного режима по настенной кнопке
+  # ==========================================================================
   bathroom_toggle_day_mode:
     alias: "Ванная: переключение дневного режима"
     icon: mdi:weather-sunny
@@ -270,6 +401,9 @@ script:
             data:
               duration: "{{ (states('input_number.bathroom_timer_duration') | float(3) * 60) | int }}"
 
+  # ==========================================================================
+  # Принудительное включение ночного режима
+  # ==========================================================================
   bathroom_turn_on_night_mode:
     alias: "Ванная: включение ночного режима"
     icon: mdi:lightbulb-night-outline
@@ -295,6 +429,9 @@ script:
         data:
           brightness_pct: 10
 
+  # ==========================================================================
+  # Принудительное включение дневного режима
+  # ==========================================================================
   bathroom_turn_on_day_mode:
     alias: "Ванная: включение дневного режима"
     icon: mdi:lightbulb-on-outline
@@ -320,11 +457,18 @@ script:
 ##############################################################################
 
 automation:
+  # ==========================================================================
+  # Ручное управление светом с выключателя
+  # ==========================================================================
   - id: "5525cbdc-3a8d-4464-908e-795c8205b40c"
     alias: "Ванная: переключение света с выключателя"
     mode: restart
     description: >
       Управление освещением через настенный MQTT-выключатель (левая кнопка).
+
+      ЛОГИКА:
+      • В ночное время переключает ночной сценарий
+      • В дневное время переключает дневной сценарий
     triggers:
       - trigger: device
         domain: mqtt
@@ -352,22 +496,57 @@ automation:
             target:
               entity_id: script.bathroom_toggle_day_mode
 
+  # ==========================================================================
+  # Автовключение света ванной
+  # ==========================================================================
   - id: "0007279c-13b5-402b-9aef-bf264273fa90"
-    alias: "Ванная: автовключение света по движению"
+    alias: "Ванная: автовключение света по двери или движению"
     mode: restart
+    description: >
+      Автоматически включает свет в ванной по открытию двери или по движению.
+
+      ТРИГГЕРЫ:
+      • binary_sensor.bathroom_open_door: off → on
+      • binary_sensor.bathroom_motions: off → on
+
+      ОСНОВНАЯ ЛОГИКА:
+      • Если дверь ванной открылась — свет включается сразу
+      • Если есть движение в ванной — свет тоже может включиться
+      • Но сразу после прихода домой движение проходит через защитный фильтр
+
+      ЗАЩИТА ОТ ЛОЖНЫХ СРАБАТЫВАНИЙ:
+      • При возвращении домой запускается timer_bathroom_arrival_guard
+      • Пока он активен, движение само по себе не включает свет
+      • Исключения:
+        - дверь ванной открыла текущий триггер
+        - дверь ванной сейчас открыта
+        - дверь ванной открывалась недавно (timer_bathroom_door_recent)
+
+      РЕЗУЛЬТАТ:
+      • Свет включается быстро при реальном входе в ванную
+      • Ложные срабатывания motion при входе в квартиру отсекаются
     triggers:
+      - trigger: state
+        entity_id: binary_sensor.bathroom_open_door
+        from: "off"
+        to: "on"
+        id: door
+
       - trigger: state
         entity_id: binary_sensor.bathroom_motions
         from: "off"
         to: "on"
+        id: motion
 
     conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
+
       - condition: state
         entity_id: input_boolean.bathroom_lights_startup_protection
         state: "off"
+
       - condition: or
         conditions:
           - condition: state
@@ -376,6 +555,27 @@ automation:
           - condition: state
             entity_id: input_boolean.bathroom_cleaning_mode
             state: "on"
+
+      - condition: or
+        conditions:
+          # Обычный режим: защиты после прихода нет
+          - condition: state
+            entity_id: timer.timer_bathroom_arrival_guard
+            state: "idle"
+
+          # Если триггер — сама дверь ванной, включаем сразу
+          - condition: trigger
+            id: door
+
+          # Если дверь ванной всё ещё открыта, движение считаем легитимным
+          - condition: state
+            entity_id: binary_sensor.bathroom_open_door
+            state: "on"
+
+          # Если дверь ванной открывали недавно, motion тоже разрешён
+          - condition: state
+            entity_id: timer.timer_bathroom_door_recent
+            state: "active"
 
     actions:
       - action: timer.cancel
@@ -396,9 +596,14 @@ automation:
             target:
               entity_id: script.bathroom_turn_on_day_mode
 
+  # ==========================================================================
+  # Отмена таймера при новой активности
+  # ==========================================================================
   - id: "50323f55-c6dd-483a-8799-af3c57e3e363"
     alias: "Ванная: отмена таймера (новое движение)"
     mode: single
+    description: >
+      Отменяет таймер автоотключения при новом движении в ванной.
     triggers:
       - trigger: state
         entity_id: binary_sensor.bathroom_motions
@@ -415,9 +620,14 @@ automation:
         target:
           entity_id: timer.timer_bathroom
 
+  # ==========================================================================
+  # Запуск таймера при отсутствии движения
+  # ==========================================================================
   - id: "e519fa4c-bbad-4b0d-b06c-8521b3b10131"
     alias: "Ванная: запуск таймера (нет движения 1 мин)"
     mode: restart
+    description: >
+      Запускает таймер автоотключения, если движения в ванной нет 1 минуту.
     triggers:
       - trigger: state
         entity_id: binary_sensor.bathroom_motions
@@ -438,9 +648,14 @@ automation:
         data:
           duration: "{{ (states('input_number.bathroom_timer_duration') | float(3) * 60) | int }}"
 
+  # ==========================================================================
+  # Выключение света по таймеру
+  # ==========================================================================
   - id: "c5af2cfe-5445-4d39-9d1b-1468db6cf001"
     alias: "Ванная: выключение света по таймеру"
     mode: single
+    description: >
+      Выключает свет после окончания timer.timer_bathroom, если движения нет.
     triggers:
       - trigger: event
         event_type: timer.finished
@@ -464,9 +679,15 @@ automation:
             - light.bathroom_spot_c1_philips
             - light.bathroom_spot_c2_philips
 
+  # ==========================================================================
+  # Восстановление питания спотов
+  # ==========================================================================
   - id: "0c5020c3-e674-4789-8086-38dbc07253d7"
     alias: "Ванная: восстановление питания спотов"
     mode: single
+    description: >
+      Если 2 или более спота стали unavailable, пытается восстановить их
+      переподачей питания на switch.bathroom_spots_power.
     triggers:
       - trigger: state
         entity_id:
@@ -560,9 +781,15 @@ automation:
                     До восстановления: {{ unavailable_count_initial }} недоступно.
                     После восстановления: {{ unavailable_count_after }} недоступно.
 
+  # ==========================================================================
+  # Поддержание питания спотов включённым
+  # ==========================================================================
   - id: "4ecf691e-0f5c-4d4f-8f74-c6a4e7d1f251"
     alias: "Ванная: поддержание питания спотов включённым"
     mode: restart
+    description: >
+      Автоматически возвращает switch.bathroom_spots_power в состояние on,
+      если его кто-то или что-то выключило.
     triggers:
       - trigger: state
         entity_id: switch.bathroom_spots_power
@@ -596,11 +823,18 @@ automation:
                   entity_id: notify.telegram_master
                 data:
                   message: >-
-                    ⚠️ Ванная: не удалось удержать включённым питание спотов (switch.bathroom_spots_power).
+                    ⚠️ Ванная: не удалось удержать включённым питание спотов
+                    (switch.bathroom_spots_power).
 
+  # ==========================================================================
+  # Сброс света после рестарта HA
+  # ==========================================================================
   - id: "14a6f0ef-8217-4fc6-8dca-067875b950a7"
     alias: "Ванная: сброс света после рестарта HA"
     mode: single
+    description: >
+      После старта HA включает питание спотов и, если в ванной нет движения,
+      выключает освещение.
     triggers:
       - trigger: homeassistant
         event: start
@@ -631,9 +865,14 @@ automation:
             - light.bathroom_spot_c1_philips
             - light.bathroom_spot_c2_philips
 
+  # ==========================================================================
+  # Защита от ложных срабатываний 5 минут после старта
+  # ==========================================================================
   - id: "048bc34f-9e6d-475c-84ed-0af54dedeed9"
     alias: "Ванная: защита от ложных срабатываний (5 мин после старта)"
     mode: single
+    description: >
+      Временно блокирует автоматики света ванной сразу после старта HA.
     triggers:
       - trigger: homeassistant
         event: start
@@ -647,3 +886,89 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.bathroom_lights_startup_protection
+
+  # ==========================================================================
+  # Защита от ложного motion при приходе домой
+  # ==========================================================================
+  - id: "bathroom_arrival_false_trigger_guard"
+    alias: "Ванная: защита от ложного включения при приходе домой"
+    mode: restart
+    description: >
+      Запускает краткий защитный таймер после входа домой.
+
+      НАЗНАЧЕНИЕ:
+      • Уменьшить ложные включения света ванной от датчиков движения,
+        которые могут реагировать на активность у входной двери
+
+      ОСОБЕННОСТЬ:
+      • Ловит оба порядка событий:
+        1) сначала person.master = home, потом открылась дверь
+        2) сначала открылась дверь, потом person.master = home
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.hallway_door_contact
+        to: "on"
+        id: door
+
+      - trigger: state
+        entity_id: person.master
+        to: "home"
+        id: home
+
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+
+      - condition: or
+        conditions:
+          # Дверь открылась во время активного окна прибытия
+          - condition: and
+            conditions:
+              - condition: trigger
+                id: door
+              - condition: state
+                entity_id: timer.timer_arrival_window
+                state: "active"
+
+          # Person стал home, пока входная дверь всё ещё открыта
+          - condition: and
+            conditions:
+              - condition: trigger
+                id: home
+              - condition: state
+                entity_id: binary_sensor.hallway_door_contact
+                state: "on"
+
+    actions:
+      - action: timer.start
+        target:
+          entity_id: timer.timer_bathroom_arrival_guard
+
+  # ==========================================================================
+  # Короткое окно после открытия двери ванной
+  # ==========================================================================
+  - id: "bathroom_door_recent_open"
+    alias: "Ванная: дверь открывалась недавно"
+    mode: restart
+    description: >
+      Запускает короткий таймер после открытия двери ванной.
+
+      НАЗНАЧЕНИЕ:
+      • Подтверждает, что движение действительно связано со входом в ванную
+      • Используется как разрешающий фактор для motion-включения света
+        во время активной защиты после прихода домой
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.bathroom_open_door
+        to: "on"
+
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+
+    actions:
+      - action: timer.start
+        target:
+          entity_id: timer.timer_bathroom_door_recent

@@ -2,23 +2,49 @@
 # /packages/washing_machine.yaml
 ################################################################################
 #
-# Пакет конфигураций Home Assistant для контроля работы стиральной машины
-# и уведомлений.
+# КОНТРОЛЬ РАБОТЫ СТИРАЛЬНОЙ МАШИНЫ И НАПОМИНАНИЙ
 #
-# Изменения/уточнения:
-#  - Убраны упоминания про input_boolean.stiralnaia_mashina_zavershila_stirku (остаётся только
-#    binary_sensor.stiralnaia_mashina_zavershila_stirku).
-#  - Уведомление о завершении теперь отправляется в Telegram + TTS на Яндекс-колонку.
-#  - Сброшен сервис notify.notify.
+# ФУНКЦИИ:
+# 1. Определение старта и окончания цикла стирки
+#    • Гистерезис через template binary sensors
+#    • Защита от коротких колебаний мощности
+#    • Проверка минимальной длительности цикла
 #
-# Доработки на основе отзыва:
-#  - Добавлен гистерезис в binary_sensor (delay_off для active, синхронизация delay_on).
-#  - Объединены автоматизации для старта/окончания и сбросов при рестарте.
-#  - Упрощены условия в уведомлениях (добавлен silent_mode в Telegram, проверки на someone_is_home).
-#  - Добавлено логирование для ключевых событий.
-#  - Минимальное время стирки уменьшено до 10 мин в шаблоне (настраиваемо).
+# 2. Уведомления
+#    • Сообщение в Telegram при завершении стирки
+#    • Голосовое уведомление через Яндекс-колонку
+#    • Отложенное напоминание, если ванной не пользуются 15 минут
+#
+# 3. Устойчивость к рестартам и сбоям питания
+#    • Сохранение/восстановление состояния цикла при рестарте HA
+#    • Детекция потери питания розетки стиральной машины
+#    • Уведомление о восстановлении питания
+#
+# ЗАВИСИМОСТИ:
+# • sensor.bathroom_washing_machine_power
+# • switch.bathroom_washing_machine
+# • binary_sensor.bathroom_open_door
+# • binary_sensor.bathroom_motions
+# • input_boolean.system_startup_phase
+# • input_boolean.silent_mode
+# • binary_sensor.someone_is_home
+# • notify.telegram_master
+# • script.yandex_tts_washing_machine_finished
+# • script.yandex_tts_washing_machine_reminder
+# • script.yandex_tts_washing_machine_power_lost
+# • script.yandex_tts_washing_machine_power_restored
+#
+# ПРИМЕЧАНИЯ:
+# • input_boolean.washing_machine_finished_pending — внутренний флаг, что
+#   завершённая стирка ждёт отложенного напоминания
+# • binary_sensor.no_activity_in_bathroom_recently — общий сенсор длительного
+#   отсутствия активности в ванной; используется здесь для сценария напоминания
 #
 ################################################################################
+
+##############################################################################
+#                        НАСТРАИВАЕМЫЕ ПАРАМЕТРЫ
+##############################################################################
 
 input_number:
   wm_min_cycle_min:
@@ -34,49 +60,122 @@ input_datetime:
     has_date: true
     has_time: true
 
+input_boolean:
+  # ==========================================================================
+  # Флаг ожидания отложенного напоминания
+  # ==========================================================================
+  # НАЗНАЧЕНИЕ:
+  # • Поднимается после корректного завершения цикла стирки
+  # • Сбрасывается:
+  #   - при старте новой стирки
+  #   - после отправки напоминания
+  # • Нужен, чтобы напоминание не зависело от краткоживущего состояния
+  #   binary_sensor.stiralnaia_mashina_zavershila_stirku
+  # ==========================================================================
+  washing_machine_finished_pending:
+    name: "Стиралка: ожидается напоминание"
+    icon: mdi:bell-ring-outline
+
 ##############################################################################
 #                          БИНАРНЫЕ СЕНСОРЫ
 ##############################################################################
 
 template:
   - binary_sensor:
-      # ----------------------------------------------------------------------
+      # ======================================================================
       # Стиральная машина активна
-      # ----------------------------------------------------------------------
-      # Мощность > 5 Вт означает, что машина работает.
-      # delay_off не поддерживается в новом формате — логику задержки
-      # можно реализовать через for: в триггерах автоматизаций.
-      # ----------------------------------------------------------------------
+      # ======================================================================
+      # ЛОГИКА:
+      # • ON, если мощность > 5 Вт
+      # • delay_on 20 сек — защита от кратких стартовых всплесков
+      # • delay_off 2 мин — защита от коротких пауз в потреблении
+      # ======================================================================
       - unique_id: stiralnaia_mashina_aktivna
         name: "Стиральная машина активна"
+        delay_on:
+          seconds: 20
+        delay_off:
+          minutes: 2
         availability: >
           {{ states('sensor.bathroom_washing_machine_power') not in ['unknown', 'unavailable', ''] }}
         state: >
           {{ (states('sensor.bathroom_washing_machine_power') | float(0)) > 5 }}
         icon: mdi:washing-machine
 
-      # ----------------------------------------------------------------------
+      # ======================================================================
       # Стиральная машина завершила стирку
-      # ----------------------------------------------------------------------
-      # Мощность < 5 Вт означает завершение цикла.
-      # delay_on не поддерживается в новом формате — задержка 2 минуты
-      # реализована через for: в триггере автоматизации уведомления.
-      # ----------------------------------------------------------------------
+      # ======================================================================
+      # ЛОГИКА:
+      # • ON, если мощность < 5 Вт не менее 2 минут
+      # • Дополнительное условие:
+      #   input_boolean.wm_cycle_seen_start = on
+      #   (то есть система уже видела старт текущего цикла)
+      #
+      # ПРИМЕЧАНИЕ:
+      # • Этот сенсор отражает факт завершения цикла
+      # • Для напоминания используется отдельный persistent-флаг
+      #   input_boolean.washing_machine_finished_pending
+      # ======================================================================
       - unique_id: stiralnaia_mashina_zavershila_stirku
         name: "Стиральная машина завершила стирку"
+        delay_on:
+          minutes: 2
         availability: >
           {{ states('sensor.bathroom_washing_machine_power') not in ['unknown', 'unavailable', ''] }}
         state: >
-          {{ (states('sensor.bathroom_washing_machine_power') | float(0)) < 5 }}
+          {{ (states('sensor.bathroom_washing_machine_power') | float(0)) < 5
+             and is_state('input_boolean.wm_cycle_seen_start', 'on') }}
         icon: mdi:washing-machine-off
+
+      # ======================================================================
+      # Отсутствие активности в ванной (15 минут)
+      # ======================================================================
+      # НАЗНАЧЕНИЕ:
+      # • Определяет, что ванной долго не пользуются
+      # • Используется для напоминания о завершённой стирке
+      #
+      # ЛОГИКА:
+      # • Сенсор становится ON, если:
+      #   - дверь ванной закрыта
+      #   - движения в ванной нет
+      #   - это состояние сохраняется 15 минут (delay_on)
+      #
+      # ПРИМЕЧАНИЕ:
+      # • Это сенсор "длительного отсутствия активности", а не мгновенное
+      #   состояние "сейчас никого нет"
+      # ======================================================================
+      - unique_id: no_activity_in_bathroom_recently
+        name: no_activity_in_bathroom_recently
+        device_class: problem
+        delay_on:
+          minutes: 15
+        availability: >-
+          {{ states('binary_sensor.bathroom_open_door') not in ['unknown', 'unavailable']
+             and states('binary_sensor.bathroom_motions') not in ['unknown', 'unavailable'] }}
+        state: >-
+          {{ is_state('binary_sensor.bathroom_open_door', 'off')
+             and is_state('binary_sensor.bathroom_motions', 'off') }}
+        icon: >-
+          {% if is_state('binary_sensor.no_activity_in_bathroom_recently', 'on') %}
+            mdi:clock-alert
+          {% else %}
+            mdi:clock-check
+          {% endif %}
+
+##############################################################################
+#                               АВТОМАТИЗАЦИИ
+##############################################################################
 
 automation:
   # ----------------------------------------------------------------------------
-  # 1. СОХРАНЕНИЕ/ВОССТАНОВЛЕНИЕ ПРИ РЕСТАРТЕ (Без изменений)
+  # 1. СОХРАНЕНИЕ/ВОССТАНОВЛЕНИЕ ПРИ РЕСТАРТЕ
   # ----------------------------------------------------------------------------
   - id: "064cbd85-8d52-40ac-98bd-98164ad1434c"
     alias: "HELPER: Сохранение/восстановление состояния стиральной машины"
     mode: single
+    description: >
+      Сохраняет факт активной стирки перед shutdown и восстанавливает
+      состояние флагов после старта HA.
     triggers:
       - trigger: homeassistant
         event: shutdown
@@ -84,8 +183,12 @@ automation:
       - trigger: homeassistant
         event: start
         id: start
+
     actions:
       - choose:
+          # --------------------------------------------------------------------
+          # ПЕРЕД ВЫКЛЮЧЕНИЕМ HA
+          # --------------------------------------------------------------------
           - conditions:
               - condition: trigger
                 id: shutdown
@@ -103,6 +206,10 @@ automation:
                   - action: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.washing_machine_pre_restart_state
+
+          # --------------------------------------------------------------------
+          # ПОСЛЕ СТАРТА HA
+          # --------------------------------------------------------------------
           - conditions:
               - condition: trigger
                 id: start
@@ -118,40 +225,66 @@ automation:
                           entity_id:
                             - input_boolean.washing_machine_running
                             - input_boolean.wm_cycle_seen_start
+
+                      # Если цикл продолжается после рестарта,
+                      # напоминание о завершении не должно висеть.
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.washing_machine_finished_pending
+
                 default:
                   - action: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.washing_machine_running
+
               - action: input_boolean.turn_off
                 target:
                   entity_id: input_boolean.washing_machine_pre_restart_state
 
   # ----------------------------------------------------------------------------
-  # 2. ОСНОВНАЯ ЛОГИКА: СТАРТ + ОКОНЧАНИЕ + УВЕДОМЛЕНИЕ (ОБЪЕДИНЕНО!)
+  # 2. ОСНОВНАЯ ЛОГИКА: СТАРТ + ОКОНЧАНИЕ + УВЕДОМЛЕНИЕ
   # ----------------------------------------------------------------------------
   - id: "04a14878-99d3-4030-a17d-bfa3c75b1f9b"
     alias: "Стиральная машина: Управление циклом"
     mode: restart
+    description: >
+      Обрабатывает старт и завершение цикла стирки.
+
+      СТАРТ:
+      • мощность > 5 Вт
+
+      ОКОНЧАНИЕ:
+      • мощность < 5 Вт в течение 2 минут
+      • цикл действительно считался активным
+      • длительность цикла >= input_number.wm_min_cycle_min
+
+      ПОСЛЕ УСПЕШНОГО ЗАВЕРШЕНИЯ:
+      • отправляет основное уведомление
+      • поднимает флаг washing_machine_finished_pending
+      • сбрасывает флаги running / seen_start
     triggers:
-      # СТАРТ: Мощность > 5 Вт
       - trigger: numeric_state
         entity_id: sensor.bathroom_washing_machine_power
         above: 5
         id: start
-      # ОКОНЧАНИЕ: Мощность < 5 Вт в течение 2 минут
+
       - trigger: numeric_state
         entity_id: sensor.bathroom_washing_machine_power
         below: 5
         for:
           minutes: 2
         id: finish
+
     conditions:
       - condition: template
         value_template: >
           {{ states('sensor.bathroom_washing_machine_power') not in ['unknown','unavailable'] }}
+
     actions:
       - choose:
-          # --- СТАРТ ЦИКЛА ---
+          # --------------------------------------------------------------------
+          # СТАРТ ЦИКЛА
+          # --------------------------------------------------------------------
           - conditions:
               - condition: trigger
                 id: start
@@ -161,17 +294,24 @@ automation:
                   entity_id:
                     - input_boolean.washing_machine_running
                     - input_boolean.wm_cycle_seen_start
+
+              # Новая стирка = старое напоминание больше не актуально
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.washing_machine_finished_pending
+
               - action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.washing_machine_started_at
                 data:
                   datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
-          # --- ОКОНЧАНИЕ ЦИКЛА ---
+          # --------------------------------------------------------------------
+          # ОКОНЧАНИЕ ЦИКЛА
+          # --------------------------------------------------------------------
           - conditions:
               - condition: trigger
                 id: finish
-              # Убеждаемся, что мы считали, что стирка идет
               - condition: state
                 entity_id: input_boolean.washing_machine_running
                 state: "on"
@@ -179,16 +319,20 @@ automation:
                 entity_id: input_boolean.wm_cycle_seen_start
                 state: "on"
             sequence:
-              # 1. Проверяем длительность
               - choose:
+                  # --------------------------------------------------------------
+                  # Проверка минимальной длительности реального цикла
+                  # --------------------------------------------------------------
                   - conditions:
                       - condition: template
                         value_template: >
                           {% set started = as_timestamp(states('input_datetime.washing_machine_started_at')) %}
-                          {% set min_sec = (states('input_number.wm_min_cycle_min')|float(10)*60)|int %}
+                          {% set min_sec = (states('input_number.wm_min_cycle_min') | float(10) * 60) | int %}
                           {{ started is number and (now().timestamp() - started) >= min_sec }}
                     sequence:
-                      # 2. ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ (ПРЯМО ЗДЕСЬ!)
+                      # ----------------------------------------------------------
+                      # Основное уведомление о завершении
+                      # ----------------------------------------------------------
                       - choose:
                           - conditions:
                               - condition: state
@@ -208,7 +352,16 @@ automation:
                                 data:
                                   message: "🏠 Стирка закончена! 🧼"
 
-              # 3. СБРАСЫВАЕМ ФЛАГИ (В ЛЮБОМ СЛУЧАЕ)
+                      # ----------------------------------------------------------
+                      # Поднимаем флаг отложенного напоминания
+                      # ----------------------------------------------------------
+                      - action: input_boolean.turn_on
+                        target:
+                          entity_id: input_boolean.washing_machine_finished_pending
+
+              # --------------------------------------------------------------
+              # Сбрасываем флаги состояния цикла в любом случае
+              # --------------------------------------------------------------
               - action: input_boolean.turn_off
                 target:
                   entity_id:
@@ -216,49 +369,69 @@ automation:
                     - input_boolean.wm_cycle_seen_start
 
   # ----------------------------------------------------------------------------
-  # 3. НАПОМИНАНИЕ (15 мин после окончания)
+  # 3. НАПОМИНАНИЕ, ЕСЛИ ВАННОЙ НЕ ПОЛЬЗУЮТСЯ 15 МИНУТ
   # ----------------------------------------------------------------------------
   - id: "washing_machine_reminder_no_motion"
-    alias: "Уведомление: Напоминание о стирке при отсутствии движения"
+    alias: "Уведомление: Напоминание о стирке при отсутствии активности в ванной"
     mode: single
+    description: >
+      Отправляет голосовое напоминание о завершённой стирке, если ванной
+      не пользуются уже 15 минут.
+
+      ТРИГГЕР:
+      • binary_sensor.no_activity_in_bathroom_recently: off → on
+
+      УСЛОВИЯ:
+      • Есть отложенное напоминание о завершённой стирке
+      • Стиральная машина уже не активна
+      • Система полностью загружена
+      • Не включён режим тишины
+      • Кто-то дома
+
+      ДЕЙСТВИЯ:
+      • Проигрывает TTS-напоминание
+      • Сбрасывает флаг ожидающего напоминания
     triggers:
-      # Триггеримся по бинарному сенсору, т.к. флаги уже сброшены
       - trigger: state
-        entity_id: binary_sensor.stiralnaia_mashina_zavershila_stirku
+        entity_id: binary_sensor.no_activity_in_bathroom_recently
         to: "on"
-        for:
-          minutes: 15
+
     conditions:
-      # Убеждаемся, что машина все еще не работает
+      - condition: state
+        entity_id: input_boolean.washing_machine_finished_pending
+        state: "on"
+
       - condition: state
         entity_id: input_boolean.washing_machine_running
         state: "off"
-      # И что в ванной никого нет
-      - condition: state
-        entity_id: binary_sensor.bathroom_motions
-        state: "off"
-      - condition: state
-        entity_id: binary_sensor.bathroom_open_door
-        state: "off"
-      # Общие условия
+
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
+
       - condition: state
         entity_id: input_boolean.silent_mode
         state: "off"
+
       - condition: state
         entity_id: binary_sensor.someone_is_home
         state: "on"
+
     actions:
       - action: script.yandex_tts_washing_machine_reminder
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.washing_machine_finished_pending
 
   # ----------------------------------------------------------------------------
-  # 4. АВАРИЯ ПИТАНИЯ
+  # 4. АВАРИЯ ПИТАНИЯ РОЗЕТКИ СТИРАЛЬНОЙ МАШИНЫ
   # ----------------------------------------------------------------------------
   - id: "91f99b09-a228-43af-9377-11069bff484b"
     alias: "Уведомление: Стиралка — розетка недоступна"
     mode: single
+    description: >
+      Сообщает о потере питания розетки, если это произошло во время активной
+      стирки.
     triggers:
       - trigger: state
         entity_id: switch.bathroom_washing_machine
@@ -270,6 +443,7 @@ automation:
         to: "unknown"
         for: "00:00:30"
         id: unknown
+
     conditions:
       - condition: state
         entity_id: input_boolean.washing_machine_running
@@ -280,13 +454,16 @@ automation:
       - condition: state
         entity_id: input_boolean.wm_socket_outage_active
         state: "off"
+
     actions:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.wm_socket_outage_active
+
       - variables:
           started_at: "{{ states('input_datetime.washing_machine_started_at') }}"
           last_power: "{{ states('sensor.bathroom_washing_machine_power') }}"
+
       - action: notify.send_message
         target:
           entity_id: notify.telegram_master
@@ -295,6 +472,7 @@ automation:
             ⚠️ <b>Стиральная машина: питание недоступно</b>
             Розетка unavailable. Стирка начата: {{ started_at }}.
             Последняя P={{ last_power }} Вт.
+
       - action: script.yandex_tts_washing_machine_power_lost
 
   # ----------------------------------------------------------------------------
@@ -303,6 +481,8 @@ automation:
   - id: "eb7b1bfa-4c3d-4a78-ac5b-eaa20756842c"
     alias: "Уведомление: Стиралка — питание восстановлено"
     mode: single
+    description: >
+      Сообщает, что питание розетки стиральной машины восстановилось.
     triggers:
       - trigger: state
         entity_id: switch.bathroom_washing_machine
@@ -312,6 +492,7 @@ automation:
         entity_id: switch.bathroom_washing_machine
         from: "unknown"
         for: "00:00:45"
+
     conditions:
       - condition: state
         entity_id: input_boolean.wm_socket_outage_active
@@ -319,23 +500,28 @@ automation:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
+
     actions:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.wm_socket_outage_active
+
       - action: notify.send_message
         target:
           entity_id: notify.telegram_master
         data:
           message: "✅ Стиральная машина: питание восстановлено."
+
       - action: script.yandex_tts_washing_machine_power_restored
 
   # ----------------------------------------------------------------------------
-  # 6. СБРОС ФЛАГА АВАРИИ ПРИ СТАРТЕ
+  # 6. СБРОС ФЛАГА АВАРИИ ПРИ СТАРТЕ HA
   # ----------------------------------------------------------------------------
   - id: "bc7cc8c2-b6c3-4843-851b-e69d25a9bc78"
     alias: "HELPER: Сброс флага аварии стиралки при старте HA"
     mode: single
+    description: >
+      Сбрасывает флаг аварии питания при запуске Home Assistant.
     triggers:
       - trigger: homeassistant
         event: start
