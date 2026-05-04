@@ -23,7 +23,7 @@ sensor:
   # Приводим имя к ожидаемому entity_id: sensor.srednee_znachenie_temperatury_v_masterskoi_2
   - platform: filter
     name: "srednee_znachenie_temperatury_v_masterskoi_2"
-    entity_id: sensor.cgllc_cn_blt_3_15gd8656slo00_dove_temperature_p_2_1
+    entity_id: sensor.cgllc_dove_f637_temperature
     unique_id: workroom_filtered_th
     filters:
       - filter: time_simple_moving_average

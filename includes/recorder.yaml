@@ -66,6 +66,7 @@ include:
     # Эксперементальные
     - sensor.vremia_igry_*
     - sensor.*_ps5_*
+    - sensor.dzengi_guard_*
 
   # Включаем отдельные сущности, которые не попали в правила выше (ТОЛЬКО точные ID)
   entities:

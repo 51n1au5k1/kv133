@@ -21,8 +21,8 @@
 #    • Уведомление о восстановлении питания
 #
 # ЗАВИСИМОСТИ:
-# • sensor.bathroom_washing_machine_power
-# • switch.bathroom_washing_machine
+# • sensor.bathroom_washing_machine_socket_power
+# • switch.bathroom_washing_machine_socket
 # • binary_sensor.bathroom_open_door
 # • binary_sensor.bathroom_motions
 # • input_boolean.system_startup_phase
@@ -97,9 +97,9 @@ template:
         delay_off:
           minutes: 2
         availability: >
-          {{ states('sensor.bathroom_washing_machine_power') not in ['unknown', 'unavailable', ''] }}
+          {{ states('sensor.bathroom_washing_machine_socket_power') not in ['unknown', 'unavailable', ''] }}
         state: >
-          {{ (states('sensor.bathroom_washing_machine_power') | float(0)) > 5 }}
+          {{ (states('sensor.bathroom_washing_machine_socket_power') | float(0)) > 5 }}
         icon: mdi:washing-machine
 
       # ======================================================================
@@ -121,9 +121,9 @@ template:
         delay_on:
           minutes: 2
         availability: >
-          {{ states('sensor.bathroom_washing_machine_power') not in ['unknown', 'unavailable', ''] }}
+          {{ states('sensor.bathroom_washing_machine_socket_power') not in ['unknown', 'unavailable', ''] }}
         state: >
-          {{ (states('sensor.bathroom_washing_machine_power') | float(0)) < 5
+          {{ (states('sensor.bathroom_washing_machine_socket_power') | float(0)) < 5
              and is_state('input_boolean.wm_cycle_seen_start', 'on') }}
         icon: mdi:washing-machine-off
 
@@ -264,12 +264,12 @@ automation:
       • сбрасывает флаги running / seen_start
     triggers:
       - trigger: numeric_state
-        entity_id: sensor.bathroom_washing_machine_power
+        entity_id: sensor.bathroom_washing_machine_socket_power
         above: 5
         id: start
 
       - trigger: numeric_state
-        entity_id: sensor.bathroom_washing_machine_power
+        entity_id: sensor.bathroom_washing_machine_socket_power
         below: 5
         for:
           minutes: 2
@@ -278,7 +278,7 @@ automation:
     conditions:
       - condition: template
         value_template: >
-          {{ states('sensor.bathroom_washing_machine_power') not in ['unknown','unavailable'] }}
+          {{ states('sensor.bathroom_washing_machine_socket_power') not in ['unknown','unavailable'] }}
 
     actions:
       - choose:
@@ -434,12 +434,12 @@ automation:
       стирки.
     triggers:
       - trigger: state
-        entity_id: switch.bathroom_washing_machine
+        entity_id: switch.bathroom_washing_machine_socket
         to: "unavailable"
         for: "00:00:30"
         id: unavailable
       - trigger: state
-        entity_id: switch.bathroom_washing_machine
+        entity_id: switch.bathroom_washing_machine_socket
         to: "unknown"
         for: "00:00:30"
         id: unknown
@@ -462,7 +462,7 @@ automation:
 
       - variables:
           started_at: "{{ states('input_datetime.washing_machine_started_at') }}"
-          last_power: "{{ states('sensor.bathroom_washing_machine_power') }}"
+          last_power: "{{ states('sensor.bathroom_washing_machine_socket_power') }}"
 
       - action: notify.send_message
         target:
@@ -485,11 +485,11 @@ automation:
       Сообщает, что питание розетки стиральной машины восстановилось.
     triggers:
       - trigger: state
-        entity_id: switch.bathroom_washing_machine
+        entity_id: switch.bathroom_washing_machine_socket
         from: "unavailable"
         for: "00:00:45"
       - trigger: state
-        entity_id: switch.bathroom_washing_machine
+        entity_id: switch.bathroom_washing_machine_socket
         from: "unknown"
         for: "00:00:45"
 
