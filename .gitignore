@@ -35,4 +35,4 @@
 .watchman_report.txt
 _*.*_
 *.*_
-.go2rtc.yaml
+/go2rtc.yaml
