@@ -34,17 +34,15 @@
 #
 ################################################################################
 
-sensor:
-  # Измерение размера БД MariaDB
-  - platform: sql
+# Измерение размера БД MariaDB
+sql:
+  - name: Maria DB size
+    query: >
+      SELECT table_schema AS "database", ROUND(SUM(data_length + index_length) / 1048576, 2) AS "value"
+      FROM information_schema.tables WHERE table_schema = "homeassistant" GROUP BY table_schema;
+    column: "value"
+    unit_of_measurement: "MB"
     db_url: !secret db_link
-    queries:
-      - name: Maria DB size
-        query: >
-          SELECT table_schema AS "database", ROUND(SUM(data_length + index_length) / 1048576, 2) AS "value"
-          FROM information_schema.tables WHERE table_schema = "homeassistant" GROUP BY table_schema;
-        column: "value"
-        unit_of_measurement: MB
 
 ##############################################################################
 # ШАБЛОННЫЕ СЕНСОРЫ
@@ -54,59 +52,39 @@ template:
       # ----------------------------------------------------------------------
       # Кто-то дома (С учетом гостей!)
       # ----------------------------------------------------------------------
-      # Логика изменена: теперь возвращает ON, если:
-      # 1. Кто-то из жильцов (group.all_residents) дома
-      # 2. ИЛИ включен Гостевой режим
-      # Это позволяет свету и розеткам работать, когда вас нет, но есть гости.
-      # ----------------------------------------------------------------------
       - unique_id: someone_is_home
         name: someone_is_home
+        delay_off: 120
         device_class: occupancy
         state: >
-          {{
-             (expand('group.all_residents')
-               | selectattr('state', 'eq', 'home')
-               | list
-               | count > 0)
-             or is_state('input_boolean.guest_mode', 'on')
-          }}
+          {{ is_state('group.all_residents', 'home') or is_state('input_boolean.guest_mode', 'on') }}
         icon: mdi:home-account
 
-      # Андрей дома (устойчиво к unavailable)
+      # Стабильный Wi-Fi с задержкой на потерю
+      - unique_id: andrei_wifi_home
+        name: andrei_wifi_home
+        state: "{{ is_state('sensor.pixel_8_pro_wi_fi_connection', 'mdhouse') }}"
+        delay_off: 30 # 30 секунд не выключаться при пропадании
+        device_class: connectivity
+        icon: mdi:wifi
+
+      # Андрей дома (устойчиво)
       - unique_id: andrei_is_home
         name: andrei_is_home
         device_class: occupancy
+        delay_off: 30 # Защита от моргания Wi-Fi/GPS
         state: >
-          {% set p_home = is_state('person.master', 'home') %}
-          {% set wifi = states('sensor.pixel_8_pro_wi_fi_connection') %}
-          {% set wifi_home = (wifi == 'mdhouse') %}
-          {{ p_home or wifi_home }}
+          {{ is_state('person.master', 'home') or is_state('binary_sensor.andrei_wifi_home', 'on') }}
         icon: mdi:account
 
-        # availability убираем полностью, чтобы сенсор не становился unavailable
-        # из-за проблем с Wi-Fi сенсором телефона.
-
-      # Любая балконная дверь открыта
-      # - name: "Doors in Kitchen Livingroom"
-      #   unique_id: doors_in_kitchen_livingroom
-      #   device_class: door
-      #   availability: >
-      #     {{ states('binary_sensor.gostinaia_balkon_contact') not in ['unknown', 'unavailable']
-      #        and states('binary_sensor.0x00158d0003ce9922_contact') not in ['unknown', 'unavailable'] }}
-      #   state: >
-      #     {{ is_state('binary_sensor.gostinaia_balkon_contact', 'on')
-      #        or is_state('binary_sensor.0x00158d0003ce9922_contact', 'on') }}
+      # Балконная дверь (без изменений)
       - unique_id: doors_in_kitchen_livingroom
         name: doors_in_kitchen_livingroom
         device_class: door
         state: >
           {% set a = states('binary_sensor.gostinaia_balkon_contact') %}
           {% set b = states('binary_sensor.0x00158d0003ce9922_contact') %}
-
-          {% set a_on = (a == 'on') %}
-          {% set b_on = (b == 'on') %}
-
-          {{ a_on or b_on }}
+          {{ a == 'on' or b == 'on' }}
 
   - sensor:
       - name: "Суммарная мощность розеток гостиной"
@@ -114,7 +92,6 @@ template:
         unit_of_measurement: W
         state: >
           {{ states('sensor.livingroom_socket_l_power') | float(0) + states('sensor.livingroom_socket_r_power') | float(0) }}
-
 ##############################################################################
 # ВХОДНЫЕ ПАРАМЕТРЫ
 ##############################################################################
@@ -291,16 +268,18 @@ automation:
     mode: single
     triggers:
       - trigger: state
-        entity_id: [binary_sensor.andrei_is_home, person.master]
+        entity_id: binary_sensor.someone_is_home
     actions:
       - action: input_text.set_value
         target:
           entity_id: input_text.currently_home
         data:
           value: >
-            {% set home_users = [] %}
-            {% if is_state('binary_sensor.andrei_is_home', 'on') %}{% set home_users = home_users + ['Andrei'] %}{% endif %}
-            {{ home_users | join(', ') }}
+            {{ expand('group.all_residents') 
+               | selectattr('state', 'eq', 'home') 
+               | map(attribute='name') 
+               | list 
+               | join(', ') }}
     conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
@@ -361,24 +340,18 @@ automation:
       Выключает камеры, только если кто-то дома И режим гостей выключен.
     mode: single
     triggers:
-      # 1. Никого нет дома
       - trigger: state
         entity_id: binary_sensor.someone_is_home
         to: "off"
-        for: "00:02:00"
         id: away
-      # 2. Кто-то пришел
       - trigger: state
         entity_id: binary_sensor.someone_is_home
         to: "on"
-        for: "00:02:00"
         id: home
-      # 3. Включили режим гостей (нужна запись!)
       - trigger: state
         entity_id: input_boolean.guest_mode
         to: "on"
         id: guest_on
-      # 4. Выключили режим гостей
       - trigger: state
         entity_id: input_boolean.guest_mode
         to: "off"
