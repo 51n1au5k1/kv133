@@ -178,6 +178,7 @@ group:
     name: "Все Жильцы"
     entities:
       - person.master
+      - person.hanna
 
   cameras:
     name: "Камеры"

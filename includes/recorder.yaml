@@ -80,6 +80,9 @@ include:
     - sensor.temperatura_v_gostinoi_sglazhennaia
     - sensor.temperatura_v_spalne_sglazhennaia
     - sensor.srednee_znachenie_temperatury_v_masterskoi_2
+    - sensor.gostinaia_stantsiia_mini_3_pro_vlazhnost
+    - sensor.gostinaia_stantsiia_mini_3_pro_temperatura
+    - sensor.gostinaia_stantsiia_mini_3_pro_uroven_uglekislogo_gaza
     # Электроэнергия
     - sensor.potreblenie_stiralnoi_mashiny
     # Освещенность

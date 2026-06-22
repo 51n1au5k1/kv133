@@ -93,10 +93,10 @@ template:
         icon: "mdi:thermometer"
         availability: >-
           {{ states('sensor.livingroom_climat_sensor_temperature') not in ['unknown','unavailable','']
-             or states('sensor.co2_monitor_temperature') not in ['unknown','unavailable',''] }}
+             or states('sensor.gostinaia_stantsiia_mini_3_pro_temperatura') not in ['unknown','unavailable',''] }}
         state: >-
           {% set t1 = states('sensor.livingroom_climat_sensor_temperature') | float(none) %}
-          {% set t2 = states('sensor.co2_monitor_temperature') | float(none) %}
+          {% set t2 = states('sensor.gostinaia_stantsiia_mini_3_pro_temperatura') | float(none) %}
           {% set vals = [t1, t2] | reject('equalto', none) | list %}
           {% if vals | length > 0 %}
             {{ (vals | sum / (vals | length)) | round(1) }}
@@ -110,10 +110,10 @@ template:
         icon: "mdi:water-percent"
         availability: >-
           {{ states('sensor.livingroom_climat_sensor_humidity') not in ['unknown','unavailable','']
-             or states('sensor.co2_monitor_humidity') not in ['unknown','unavailable',''] }}
+             or states('sensor.gostinaia_stantsiia_mini_3_pro_vlazhnost') not in ['unknown','unavailable',''] }}
         state: >-
           {% set h1 = states('sensor.livingroom_climat_sensor_humidity') | float(none) %}
-          {% set h2 = states('sensor.co2_monitor_humidity') | float(none) %}
+          {% set h2 = states('sensor.gostinaia_stantsiia_mini_3_pro_vlazhnost') | float(none) %}
           {% set vals = [h1, h2] | reject('equalto', none) | list %}
           {% if vals | length > 0 %}
             {{ (vals | sum / (vals | length)) | round(1) }}
@@ -139,7 +139,7 @@ template:
 sensor:
   - platform: filter
     name: "Уровень CO2 (сглаженный)"
-    entity_id: sensor.co2_monitor_co2
+    entity_id: sensor.gostinaia_stantsiia_mini_3_pro_uroven_uglekislogo_gaza
     filters:
       - filter: time_simple_moving_average
         window_size: "00:02"
