@@ -47,7 +47,7 @@
 # • binary_sensor.someone_is_home
 # • binary_sensor.hallway_door_contact      — входная дверь
 # • timer.timer_arrival_window              — окно прибытия домой
-# • person.master
+# • group.all_residents
 # • notify.telegram_master
 #
 # ВАЖНО:
@@ -911,7 +911,9 @@ automation:
         id: door
 
       - trigger: state
-        entity_id: person.master
+        entity_id:
+          - person.master
+          - person.hanna
         to: "home"
         id: home
 

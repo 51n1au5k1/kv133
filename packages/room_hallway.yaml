@@ -590,8 +590,8 @@ automation:
         entity_id: input_boolean.hallway_first_door_open
         state: "off"
       - condition: state
-        entity_id: person.master
-        state: "home"
+        entity_id: binary_sensor.resident_is_home
+        state: "on"
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
@@ -636,7 +636,9 @@ automation:
     mode: single
     triggers:
       - trigger: state
-        entity_id: person.master
+        entity_id:
+          - person.master
+          - person.hanna
         to: "home"
     actions:
       - action: input_boolean.turn_off

@@ -62,8 +62,8 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: person.master
-                state: "home"
+                entity_id: binary_sensor.resident_is_home
+                state: "on"
             sequence:
               - action: notify.send_message
                 target:

@@ -50,7 +50,18 @@ sql:
 template:
   - binary_sensor:
       # ----------------------------------------------------------------------
-      # Кто-то дома (С учетом гостей!)
+      # Кто-то из жильцов дома (без гостевого режима)
+      # ----------------------------------------------------------------------
+      - unique_id: resident_is_home
+        name: resident_is_home
+        delay_off: 120
+        device_class: occupancy
+        state: >
+          {{ is_state('group.all_residents', 'home') }}
+        icon: mdi:account-group
+
+      # ----------------------------------------------------------------------
+      # Кто-то дома (жильцы + гостевой режим)
       # ----------------------------------------------------------------------
       - unique_id: someone_is_home
         name: someone_is_home
@@ -59,14 +70,6 @@ template:
         state: >
           {{ is_state('group.all_residents', 'home') or is_state('input_boolean.guest_mode', 'on') }}
         icon: mdi:home-account
-
-      # Стабильный Wi-Fi с задержкой на потерю
-      - unique_id: andrei_wifi_home
-        name: andrei_wifi_home
-        state: "{{ is_state('sensor.pixel_8_pro_wi_fi_connection', 'mdhouse') }}"
-        delay_off: 30 # 30 секунд не выключаться при пропадании
-        device_class: connectivity
-        icon: mdi:wifi
 
       # Андрей дома (устойчиво)
       - unique_id: andrei_is_home
@@ -269,18 +272,23 @@ automation:
     mode: single
     triggers:
       - trigger: state
-        entity_id: binary_sensor.someone_is_home
+        entity_id:
+          - person.master
+          - person.hanna
+          - input_boolean.guest_mode
     actions:
       - action: input_text.set_value
         target:
           entity_id: input_text.currently_home
         data:
           value: >
-            {{ expand('group.all_residents') 
-               | selectattr('state', 'eq', 'home') 
-               | map(attribute='name') 
-               | list 
-               | join(', ') }}
+            {% set residents = expand('group.all_residents')
+                 | selectattr('state', 'eq', 'home')
+                 | map(attribute='name')
+                 | list %}
+            {% set guests = ['Гости'] if is_state('input_boolean.guest_mode', 'on') else [] %}
+            {% set names = residents + guests %}
+            {{ names | join(', ') if names | length > 0 else 'Никого' }}
     conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase

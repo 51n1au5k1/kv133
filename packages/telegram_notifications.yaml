@@ -131,8 +131,8 @@ automation:
         to: "on"
     conditions:
       - condition: state
-        entity_id: person.master
-        state: "not_home"
+        entity_id: binary_sensor.resident_is_home
+        state: "off"
       - condition: state
         entity_id: input_boolean.bathroom_cleaning_mode
         state: "off"
@@ -256,79 +256,79 @@ automation:
   # ----------------------------------------------------------------------------
   # Уведомление: Заканчивается место на дисках/хранилищах
   # ----------------------------------------------------------------------------
-  - id: "4751a90b-0134-4906-84f0-e5b1a7cb02c2"
-    alias: "Уведомление. Телеграм: Proxmox Место на диске"
-    mode: single
-    triggers:
-      # Основной диск ноды
-      - trigger: numeric_state
-        entity_id: sensor.node_pve_disk_used_percentage
-        above: 90
-        id: "root"
-      # Хранилище ZFS (datapool)
-      - trigger: numeric_state
-        entity_id: sensor.storage_pve_datapool_disk_used_percentage
-        above: 90
-        id: "datapool"
-      # Локальное хранилище (local)
-      - trigger: numeric_state
-        entity_id: sensor.storage_pve_local_disk_used_percentage
-        above: 90
-        id: "local"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    actions:
-      - action: notify.send_message
-        target:
-          entity_id: notify.telegram_master
-        data:
-          message: >
-            💾 <b>Proxmox: Мало места (>90%)!</b>
-            {% if trigger.id == 'root' %}
-            Системный диск (Root): <b>{{ states('sensor.node_pve_disk_used_percentage') }}%</b> занято.
-            {% elif trigger.id == 'datapool' %}
-            ZFS Datapool: <b>{{ states('sensor.storage_pve_datapool_disk_used_percentage') }}%</b> занято.
-            {% elif trigger.id == 'local' %}
-            Local Storage: <b>{{ states('sensor.storage_pve_local_disk_used_percentage') }}%</b> занято.
-            {% endif %}
+  # - id: "4751a90b-0134-4906-84f0-e5b1a7cb02c2"
+  #   alias: "Уведомление. Телеграм: Proxmox Место на диске"
+  #   mode: single
+  #   triggers:
+  #     # Основной диск ноды
+  #     - trigger: numeric_state
+  #       entity_id: sensor.node_pve_disk_used_percentage
+  #       above: 90
+  #       id: "root"
+  #     # Хранилище ZFS (datapool)
+  #     - trigger: numeric_state
+  #       entity_id: sensor.storage_pve_datapool_disk_used_percentage
+  #       above: 90
+  #       id: "datapool"
+  #     # Локальное хранилище (local)
+  #     - trigger: numeric_state
+  #       entity_id: sensor.storage_pve_local_disk_used_percentage
+  #       above: 90
+  #       id: "local"
+  #   conditions:
+  #     - condition: state
+  #       entity_id: input_boolean.system_startup_phase
+  #       state: "off"
+  #   actions:
+  #     - action: notify.send_message
+  #       target:
+  #         entity_id: notify.telegram_master
+  #       data:
+  #         message: >
+  #           💾 <b>Proxmox: Мало места (>90%)!</b>
+  #           {% if trigger.id == 'root' %}
+  #           Системный диск (Root): <b>{{ states('sensor.node_pve_disk_used_percentage') }}%</b> занято.
+  #           {% elif trigger.id == 'datapool' %}
+  #           ZFS Datapool: <b>{{ states('sensor.storage_pve_datapool_disk_used_percentage') }}%</b> занято.
+  #           {% elif trigger.id == 'local' %}
+  #           Local Storage: <b>{{ states('sensor.storage_pve_local_disk_used_percentage') }}%</b> занято.
+  #           {% endif %}
 
   # ----------------------------------------------------------------------------
   # Уведомление: Высокая нагрузка на ресурсы (CPU/RAM)
   # ----------------------------------------------------------------------------
-  - id: "proxmox_high_load_alert"
-    alias: "Уведомление. Телеграм: Proxmox Высокая нагрузка"
-    mode: single
-    triggers:
-      # CPU > 90% в течение 10 минут
-      - trigger: numeric_state
-        entity_id: sensor.node_pve_cpu_used
-        above: 90
-        for: "00:10:00"
-        id: cpu
-      # RAM > 90% в течение 10 минут
-      - trigger: numeric_state
-        entity_id: sensor.node_pve_memory_used_percentage
-        above: 90
-        for: "00:10:00"
-        id: ram
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-    actions:
-      - action: notify.send_message
-        target:
-          entity_id: notify.telegram_master
-        data:
-          message: >
-            🔥 <b>Proxmox: Высокая нагрузка!</b>
-            {% if trigger.id == 'cpu' %}
-            CPU загружен на <b>{{ states('sensor.node_pve_cpu_used') | round(1) }}%</b> более 10 минут.
-            {% elif trigger.id == 'ram' %}
-            RAM занята на <b>{{ states('sensor.node_pve_memory_used_percentage') | round(1) }}%</b> более 10 минут.
-            {% endif %}
+  # - id: "proxmox_high_load_alert"
+  #   alias: "Уведомление. Телеграм: Proxmox Высокая нагрузка"
+  #   mode: single
+  #   triggers:
+  #     # CPU > 90% в течение 10 минут
+  #     - trigger: numeric_state
+  #       entity_id: sensor.node_pve_cpu_used
+  #       above: 90
+  #       for: "00:10:00"
+  #       id: cpu
+  #     # RAM > 90% в течение 10 минут
+  #     - trigger: numeric_state
+  #       entity_id: sensor.node_pve_memory_used_percentage
+  #       above: 90
+  #       for: "00:10:00"
+  #       id: ram
+  #   conditions:
+  #     - condition: state
+  #       entity_id: input_boolean.system_startup_phase
+  #       state: "off"
+  #   actions:
+  #     - action: notify.send_message
+  #       target:
+  #         entity_id: notify.telegram_master
+  #       data:
+  #         message: >
+  #           🔥 <b>Proxmox: Высокая нагрузка!</b>
+  #           {% if trigger.id == 'cpu' %}
+  #           CPU загружен на <b>{{ states('sensor.node_pve_cpu_used') | round(1) }}%</b> более 10 минут.
+  #           {% elif trigger.id == 'ram' %}
+  #           RAM занята на <b>{{ states('sensor.node_pve_memory_used_percentage') | round(1) }}%</b> более 10 минут.
+  #           {% endif %}
 
   # ----------------------------------------------------------------------------
   # Уведомление: Доступны обновления для Proxmox
@@ -394,57 +394,57 @@ automation:
         data:
           message: "✅ <b>Сейф: условия в норме.</b>"
 
-  # --- ФИЛЬТРЫ: ОЧИСТИТЕЛЬ ВОЗДУХА ---
-  - id: "d3bb27a3-51be-4ce6-8dc7-ebad482e5ea3"
-    alias: "Телеграм: Очиститель — Замените фильтр"
-    mode: single
-    triggers:
-      - trigger: numeric_state
-        entity_id: sensor.zhimi_mb3_a5d3_filter_life_level
-        below: 10
-        for: "00:01:00"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.air_filter_replace_notified
-        state: "off"
-    actions:
-      - action: notify.send_message
-        target:
-          entity_id: notify.telegram_master
-        data:
-          message: "⚠️ <b>Очиститель воздуха:</b> фильтр &lt; 10%!"
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.air_filter_replace_notified
+  # # --- ФИЛЬТРЫ: ОЧИСТИТЕЛЬ ВОЗДУХА ---
+  # - id: "d3bb27a3-51be-4ce6-8dc7-ebad482e5ea3"
+  #   alias: "Телеграм: Очиститель — Замените фильтр"
+  #   mode: single
+  #   triggers:
+  #     - trigger: numeric_state
+  #       entity_id: sensor.zhimi_mb3_a5d3_filter_life_level
+  #       below: 10
+  #       for: "00:01:00"
+  #   conditions:
+  #     - condition: state
+  #       entity_id: input_boolean.system_startup_phase
+  #       state: "off"
+  #     - condition: state
+  #       entity_id: input_boolean.air_filter_replace_notified
+  #       state: "off"
+  #   actions:
+  #     - action: notify.send_message
+  #       target:
+  #         entity_id: notify.telegram_master
+  #       data:
+  #         message: "⚠️ <b>Очиститель воздуха:</b> фильтр &lt; 10%!"
+  #     - action: input_boolean.turn_on
+  #       target:
+  #         entity_id: input_boolean.air_filter_replace_notified
 
-  # --- ФИЛЬТРЫ: УВЛАЖНИТЕЛЬ ---
-  - id: "dbaaf929-4f15-4b23-8d4b-b8edd4083484"
-    alias: "Телеграм: Увлажнитель — Замените фильтр"
-    mode: single
-    triggers:
-      - trigger: numeric_state
-        entity_id: sensor.xiaomi_p3_946a_filter_life_level
-        below: 10
-        for: "00:01:00"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
-      - condition: state
-        entity_id: input_boolean.humidifier_filter_replace_notified
-        state: "off"
-    actions:
-      - action: notify.send_message
-        target:
-          entity_id: notify.telegram_master
-        data:
-          message: "⚠️ <b>Увлажнитель:</b> фильтр &lt; 10%!"
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.humidifier_filter_replace_notified
+  # # --- ФИЛЬТРЫ: УВЛАЖНИТЕЛЬ ---
+  # - id: "dbaaf929-4f15-4b23-8d4b-b8edd4083484"
+  #   alias: "Телеграм: Увлажнитель — Замените фильтр"
+  #   mode: single
+  #   triggers:
+  #     - trigger: numeric_state
+  #       entity_id: sensor.xiaomi_p3_946a_filter_life_level
+  #       below: 10
+  #       for: "00:01:00"
+  #   conditions:
+  #     - condition: state
+  #       entity_id: input_boolean.system_startup_phase
+  #       state: "off"
+  #     - condition: state
+  #       entity_id: input_boolean.humidifier_filter_replace_notified
+  #       state: "off"
+  #   actions:
+  #     - action: notify.send_message
+  #       target:
+  #         entity_id: notify.telegram_master
+  #       data:
+  #         message: "⚠️ <b>Увлажнитель:</b> фильтр &lt; 10%!"
+  #     - action: input_boolean.turn_on
+  #       target:
+  #         entity_id: input_boolean.humidifier_filter_replace_notified
 
   # ----------------------------------------------------------------------------
   # Уведомление: Остановка критически важных аддонов/сервисов

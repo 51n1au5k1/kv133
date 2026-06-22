@@ -89,6 +89,9 @@ include:
     - sensor.livingroom_light_sensor_illuminance
     # Кто был дома
     - input_text.currently_home
+    - person.master
+    - person.hanna
+    - device_tracker.iphone_mary
     # Тестовая секция (точный сенсор)
     - sensor.app_usage_last_month
     # Увлажнитель (Гостиная)
