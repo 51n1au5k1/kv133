@@ -57,7 +57,8 @@ template:
         delay_off: 120
         device_class: occupancy
         state: >
-          {{ is_state('group.all_residents', 'home') }}
+          {{ is_state('group.all_residents', 'home')
+             or is_state('binary_sensor.andrei_wifi_home', 'on') }}
         icon: mdi:account-group
 
       # ----------------------------------------------------------------------
@@ -147,7 +148,6 @@ input_boolean:
 
   washing_machine_pre_restart_state:
     name: "Washing Machine Pre-Restart State"
-    initial: false
     icon: mdi:washing-machine
 
   wm_socket_outage_active:
@@ -275,7 +275,9 @@ automation:
         entity_id:
           - person.master
           - person.hanna
+          - binary_sensor.andrei_wifi_home
           - input_boolean.guest_mode
+          - input_boolean.system_startup_phase
     actions:
       - action: input_text.set_value
         target:
@@ -345,22 +347,27 @@ automation:
   - id: "bee019e8-c011-4283-85df-4cbbbc00e92f"
     alias: "Камеры: Управление в зависимости от присутствия и гостей"
     description: >
-      Включает камеры, если никого нет дома ИЛИ если включен режим гостей.
-      Выключает камеры, только если кто-то дома И режим гостей выключен.
+      Включает камеры, если дома нет жильцов ИЛИ если включен режим гостей.
+      Выключает камеры, только если кто-то из жильцов дома И режим гостей выключен.
+      Для проверки реального присутствия используется binary_sensor.resident_is_home,
+      чтобы guest_mode не искажал логику при выключении гостевого режима.
     mode: single
     triggers:
       - trigger: state
-        entity_id: binary_sensor.someone_is_home
+        entity_id: binary_sensor.resident_is_home
         to: "off"
         id: away
+
       - trigger: state
-        entity_id: binary_sensor.someone_is_home
+        entity_id: binary_sensor.resident_is_home
         to: "on"
         id: home
+
       - trigger: state
         entity_id: input_boolean.guest_mode
         to: "on"
         id: guest_on
+
       - trigger: state
         entity_id: input_boolean.guest_mode
         to: "off"
@@ -370,51 +377,62 @@ automation:
       - condition: state
         entity_id: input_boolean.system_startup_phase
         state: "off"
+
       - condition: state
         entity_id: input_boolean.force_camera_off
         state: "off"
 
     actions:
       - choose:
-          # --- ВКЛЮЧЕНИЕ КАМЕР ---
-          # Включаем, если:
-          # - Все ушли (away)
-          # - Включили режим гостей (guest_on)
-          # - Выключили режим гостей, НО дома никого нет (проверка условия)
+          # ------------------------------------------------------------------
+          # ВКЛЮЧЕНИЕ КАМЕР
+          # ------------------------------------------------------------------
+          # Включаем камеры, если:
+          # - все жильцы ушли;
+          # - включили гостевой режим;
+          # - выключили гостевой режим, но жильцов дома всё равно нет.
+          # ------------------------------------------------------------------
           - conditions:
               - condition: or
                 conditions:
                   - condition: trigger
                     id: away
+
                   - condition: trigger
                     id: guest_on
+
                   - condition: and
                     conditions:
                       - condition: trigger
                         id: guest_off
-                      # Проверяем реальное присутствие людей (без учета guest_mode, т.к. он уже off)
                       - condition: state
-                        entity_id: binary_sensor.someone_is_home
+                        entity_id: binary_sensor.resident_is_home
                         state: "off"
             sequence:
               - action: switch.turn_on
                 target:
                   entity_id: group.cameras
+
               - action: notify.send_message
                 target:
                   entity_id: notify.telegram_master
                 data:
                   message: >
                     {% if trigger.id == 'guest_on' %}
-                    📹 Камеры включены (Гостевой режим).
+                      📹 Камеры включены: включён гостевой режим.
+                    {% elif trigger.id == 'guest_off' %}
+                      📹 Камеры включены: гостевой режим выключен, но жильцов дома нет.
                     {% else %}
-                    📹 Камеры включены (Никого нет дома).
+                      📹 Камеры включены: жильцов нет дома.
                     {% endif %}
 
-          # --- ВЫКЛЮЧЕНИЕ КАМЕР ---
-          # Выключаем только если:
-          # - Пришли домой (home) И гости выключены
-          # - Выключили гостей (guest_off) И дома кто-то есть
+          # ------------------------------------------------------------------
+          # ВЫКЛЮЧЕНИЕ КАМЕР
+          # ------------------------------------------------------------------
+          # Выключаем камеры, если:
+          # - кто-то из жильцов пришёл домой, а гостевой режим выключен;
+          # - выключили гостевой режим, и кто-то из жильцов уже дома.
+          # ------------------------------------------------------------------
           - conditions:
               - condition: or
                 conditions:
@@ -425,22 +443,24 @@ automation:
                       - condition: state
                         entity_id: input_boolean.guest_mode
                         state: "off"
+
                   - condition: and
                     conditions:
                       - condition: trigger
                         id: guest_off
                       - condition: state
-                        entity_id: binary_sensor.someone_is_home
+                        entity_id: binary_sensor.resident_is_home
                         state: "on"
             sequence:
               - action: switch.turn_off
                 target:
                   entity_id: group.cameras
+
               - action: notify.send_message
                 target:
                   entity_id: notify.telegram_master
                 data:
-                  message: "📹 Камеры выключены: Кто-то дома."
+                  message: "📹 Камеры выключены: кто-то из жильцов дома."
 
   # --------------------------------------------------------------------------
   # Блокировка включения камер при force_camera_off (без изменений)
@@ -536,17 +556,3 @@ automation:
       - action: switch.turn_off
         target:
           entity_id: switch.smart_plug_in_unit_vykliuchatel
-
-  - id: "76238992-89bc-48c6-bd82-27e8a7c79b6d"
-    alias: "HELPER: Сброс флагов стирки при старте HA"
-    mode: single
-    triggers:
-      - trigger: homeassistant
-        event: start
-    actions:
-      - action: input_boolean.turn_off
-        target:
-          entity_id:
-            - input_boolean.wm_cycle_seen_start
-            - input_boolean.washing_machine_running
-            - input_boolean.wm_socket_outage_active

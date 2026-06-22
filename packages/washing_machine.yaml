@@ -95,7 +95,7 @@ template:
         delay_on:
           seconds: 20
         delay_off:
-          minutes: 2
+          minutes: 10
         availability: >
           {{ states('sensor.bathroom_washing_machine_socket_power') not in ['unknown', 'unavailable', ''] }}
         state: >
@@ -119,7 +119,7 @@ template:
       - unique_id: stiralnaia_mashina_zavershila_stirku
         name: "Стиральная машина завершила стирку"
         delay_on:
-          minutes: 2
+          minutes: 10
         availability: >
           {{ states('sensor.bathroom_washing_machine_socket_power') not in ['unknown', 'unavailable', ''] }}
         state: >
@@ -263,16 +263,14 @@ automation:
       • поднимает флаг washing_machine_finished_pending
       • сбрасывает флаги running / seen_start
     triggers:
-      - trigger: numeric_state
-        entity_id: sensor.bathroom_washing_machine_socket_power
-        above: 5
+      - trigger: state
+        entity_id: binary_sensor.stiralnaia_mashina_aktivna
+        to: "on"
         id: start
 
-      - trigger: numeric_state
-        entity_id: sensor.bathroom_washing_machine_socket_power
-        below: 5
-        for:
-          minutes: 2
+      - trigger: state
+        entity_id: binary_sensor.stiralnaia_mashina_aktivna
+        to: "off"
         id: finish
 
     conditions:
