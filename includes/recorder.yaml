@@ -24,7 +24,11 @@ include:
     - event
     - humidifier # увлажнитель
     - fan # очиститель воздуха
+
   # Включаем группы сущностей по маске имени
+  # ВАЖНО:
+  # Здесь можно использовать маски со звёздочкой.
+  # В include.entities ниже — только точные entity_id.
   entity_globs:
     - sensor.*temperature*
     - sensor.*humidity*
@@ -40,40 +44,56 @@ include:
     - sensor.*_energy
     - sensor.*_power
     - sensor.*_illuminance
+
     # Цветы
     - sensor.ficus_*
     - sensor.euphorbia_*
     - plant.*
+
     # Виртуализация
     - sensor.lxc_*
     - sensor.qemu_*
     - sensor.*_pve_*
+
     # Скорость интернета
     - sensor.speedtest_*
     - sensor.cloudflare_*
-    # Фильтры климатическойц техники
+
+    # Фильтры климатической техники
     - sensor.*_filter_*
+
     # Контроль уровня воды
     - event.*_low_water_*
+
     # Сейф
     - sensor.strongbox_*
-    # Miktotik
+
+    # Mikrotik
     - sensor.mikrotik_*
-    # Телефон
+
+    # Телефоны и присутствие по устройствам
     - sensor.pixel_*
+    - sensor.iphone_*
+    - device_tracker.*
+
     # Часы
     - sensor.google_*
-    # Эксперементальные
+
+    # Экспериментальные
     - sensor.vremia_igry_*
     - sensor.*_ps5_*
     - sensor.dzengi_guard_*
+    - sensor.yandex_pogoda_*
 
-  # Включаем отдельные сущности, которые не попали в правила выше (ТОЛЬКО точные ID)
+  # Включаем отдельные сущности, которые не попали в правила выше
+  # ВАЖНО:
+  # Здесь только точные entity_id, без звёздочек.
   entities:
     # Системные и специфические сенсоры
     - sensor.maria_db_size
     - sensor.cpu_lxc_npmplus
-    # Климатические кастомные (точные имена)
+
+    # Климатические кастомные
     - sensor.vlazhnost_vannoi_usrednennaia_za_1_minutu
     - sensor.uroven_co2_sglazhennyi
     - sensor.bathroom_filtered_humidity
@@ -83,34 +103,57 @@ include:
     - sensor.gostinaia_stantsiia_mini_3_pro_vlazhnost
     - sensor.gostinaia_stantsiia_mini_3_pro_temperatura
     - sensor.gostinaia_stantsiia_mini_3_pro_uroven_uglekislogo_gaza
+
     # Электроэнергия
     - sensor.potreblenie_stiralnoi_mashiny
+
     # Освещенность
     - sensor.livingroom_light_sensor_illuminance
-    # Кто был дома
+
+    # Кто был дома / присутствие жильцов
     - input_text.currently_home
     - person.master
     - person.hanna
+
+    # Телефоны: точные сущности для отладки присутствия
     - device_tracker.iphone_mary
-    # Тестовая секция (точный сенсор)
+    - sensor.iphone_mary_ssid
+    - sensor.iphone_mary_bssid
+    #    - sensor.iphone_mary_connection_type
+    - sensor.iphone_mary_battery_level
+    - sensor.iphone_mary_battery_state
+    - sensor.iphone_mary_location_permission
+    - sensor.pixel_8_pro_wi_fi_connection
+
+    # Шаблонные сенсоры присутствия
+    - binary_sensor.andrei_wifi_home
+    - binary_sensor.hanna_wifi_home
+    - binary_sensor.andrei_is_home
+    - binary_sensor.hanna_is_home
+    - binary_sensor.resident_is_home
+    - binary_sensor.someone_is_home
+
+    # Тестовая секция
     - sensor.app_usage_last_month
-    # Увлажнитель (Гостиная)
+
+    # Увлажнитель, гостиная
     - input_number.livingroom_hum_low
     - input_number.livingroom_hum_high
     - input_number.livingroom_hum_min_on_min
     - input_number.livingroom_hum_min_off_min
 
-    # Очиститель (Гостиная)
+    # Очиститель, гостиная
     - input_number.livingroom_pm25_high
     - input_number.livingroom_pm25_low
     - input_number.livingroom_air_min_on_min
     - input_number.livingroom_air_min_off_min
+
     # Тестирование
     - sensor.vremia_raboty_televizora_segodnia
 
 # --- Теперь определяем, что мы ТОЧНО НЕ хотим хранить ---
 exclude:
-  # Исключаем "шумные" домены
+  # Исключаем шумные домены
   domains:
     - update
     - camera
@@ -118,17 +161,17 @@ exclude:
     - script
     - vacuum
 
-  # Исключаем "шумные" группы сущностей
+  # Исключаем шумные группы сущностей
   entity_globs:
     - sensor.*_linkquality # Очень частые апдейты
-    - sensor.*_power_* # Часто "шумные"
+    - sensor.*_power_* # Часто шумные
     - binary_sensor.*_battery_low # Дублирует информацию про батарею
 
-  # Исключаем отдельные "шумные" сущности
+  # Исключаем отдельные шумные сущности
   entities:
     - binary_sensor.backups_stale # Если он не важен для истории
 
-  # Системные типы событий (для истории не нужны)
+  # Системные типы событий, для истории не нужны
   event_types:
     - call_service
     - automation_triggered

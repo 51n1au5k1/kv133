@@ -1,0 +1,360 @@
+################################################################################
+# /packages/livingroom_summer_cooling.yaml
+################################################################################
+#
+# ЛЕТНЕЕ АВТООХЛАЖДЕНИЕ ГОСТИНОЙ, КОГДА НИКОГО НЕТ ДОМА
+#
+# Назначение:
+# • в рабочие дни поддерживать в гостиной приемлемую температуру примерно 22–23 °C;
+# • включать кондиционер, если дома никого нет и в гостиной становится жарко;
+# • выключать кондиционер, если температура опустилась достаточно низко;
+# • не охлаждать при открытых балконных дверях;
+# • не зависеть только от crossing-триггера numeric_state;
+# • не выключать вручную включённый кондиционер.
+#
+# Используемые сущности:
+# • climate.konditsioner
+# • sensor.livingroom_average_temperature
+# • binary_sensor.someone_is_home
+# • binary_sensor.doors_in_kitchen_livingroom
+# • input_boolean.system_startup_phase
+# • input_boolean.winter_mode
+#
+################################################################################
+
+##############################################################################
+# НАСТРАИВАЕМЫЕ ПАРАМЕТРЫ И ВНУТРЕННИЕ ФЛАГИ
+##############################################################################
+
+input_boolean:
+  livingroom_summer_away_cooling:
+    name: "Гостиная: летнее автоохлаждение, когда никого нет"
+    icon: mdi:snowflake-thermometer
+
+  livingroom_summer_away_cooling_ac_active:
+    name: "Гостиная: кондиционер включён автоохлаждением"
+    icon: mdi:snowflake-check
+
+input_number:
+  livingroom_summer_cooling_on_above:
+    name: "Гостиная: включать охлаждение выше"
+    min: 20
+    max: 30
+    step: 0.1
+    initial: 23.2
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-chevron-up
+
+  livingroom_summer_cooling_off_below:
+    name: "Гостиная: выключать охлаждение ниже"
+    min: 18
+    max: 26
+    step: 0.1
+    initial: 22.2
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-chevron-down
+
+  livingroom_summer_cooling_target:
+    name: "Гостиная: целевая температура охлаждения"
+    min: 18
+    max: 26
+    step: 0.5
+    initial: 22.5
+    unit_of_measurement: "°C"
+    icon: mdi:target
+
+##############################################################################
+# ДИАГНОСТИЧЕСКИЕ СЕНСОРЫ
+##############################################################################
+
+template:
+  - binary_sensor:
+      # ----------------------------------------------------------------------
+      # Можно ли сейчас автоохлаждать гостиную
+      # ----------------------------------------------------------------------
+      - unique_id: livingroom_summer_away_cooling_allowed
+        name: livingroom_summer_away_cooling_allowed
+        icon: mdi:shield-check-outline
+        state: >
+          {{ is_state('input_boolean.livingroom_summer_away_cooling', 'on')
+             and is_state('input_boolean.system_startup_phase', 'off')
+             and is_state('input_boolean.winter_mode', 'off')
+             and is_state('binary_sensor.someone_is_home', 'off')
+             and is_state('binary_sensor.doors_in_kitchen_livingroom', 'off')
+             and states('sensor.livingroom_average_temperature') not in ['unknown', 'unavailable', 'none', '']
+             and states('climate.konditsioner') not in ['unknown', 'unavailable', 'none', ''] }}
+        attributes:
+          friendly_name: "Гостиная: автоохлаждение разрешено"
+          reason: >
+            {% if not is_state('input_boolean.livingroom_summer_away_cooling', 'on') %}
+              Режим автоохлаждения выключен
+            {% elif not is_state('input_boolean.system_startup_phase', 'off') %}
+              Идёт фаза запуска Home Assistant
+            {% elif not is_state('input_boolean.winter_mode', 'off') %}
+              Включён зимний режим
+            {% elif not is_state('binary_sensor.someone_is_home', 'off') %}
+              Кто-то дома
+            {% elif not is_state('binary_sensor.doors_in_kitchen_livingroom', 'off') %}
+              Открыты балконные двери
+            {% elif states('sensor.livingroom_average_temperature') in ['unknown', 'unavailable', 'none', ''] %}
+              Недоступна температура гостиной
+            {% elif states('climate.konditsioner') in ['unknown', 'unavailable', 'none', ''] %}
+              Недоступен кондиционер
+            {% else %}
+              Разрешено
+            {% endif %}
+          current_temperature: "{{ states('sensor.livingroom_average_temperature') }}"
+          on_above: "{{ states('input_number.livingroom_summer_cooling_on_above') }}"
+          off_below: "{{ states('input_number.livingroom_summer_cooling_off_below') }}"
+          target: "{{ states('input_number.livingroom_summer_cooling_target') }}"
+          someone_is_home: "{{ states('binary_sensor.someone_is_home') }}"
+          balcony_doors: "{{ states('binary_sensor.doors_in_kitchen_livingroom') }}"
+          climate_state: "{{ states('climate.konditsioner') }}"
+          ac_started_by_automation: "{{ states('input_boolean.livingroom_summer_away_cooling_ac_active') }}"
+
+      # ----------------------------------------------------------------------
+      # Нужно ли сейчас включить охлаждение
+      # ----------------------------------------------------------------------
+      - unique_id: livingroom_summer_away_cooling_needed
+        name: livingroom_summer_away_cooling_needed
+        icon: mdi:snowflake-alert
+        delay_on:
+          minutes: 3
+        state: >
+          {{ is_state('binary_sensor.livingroom_summer_away_cooling_allowed', 'on')
+             and now().isoweekday() in [1, 2, 3, 4, 5]
+             and today_at('08:30') <= now() < today_at('17:30')
+             and states('sensor.livingroom_average_temperature') | float(0)
+                >= states('input_number.livingroom_summer_cooling_on_above') | float(23.2) }}
+        attributes:
+          friendly_name: "Гостиная: нужно автоохлаждение"
+
+      # ----------------------------------------------------------------------
+      # Нужно ли сейчас выключить охлаждение
+      # ----------------------------------------------------------------------
+      - unique_id: livingroom_summer_away_cooling_should_stop
+        name: livingroom_summer_away_cooling_should_stop
+        icon: mdi:snowflake-off
+        delay_on:
+          minutes: 5
+        state: >
+          {{ states('sensor.livingroom_average_temperature') not in ['unknown', 'unavailable', 'none', '']
+             and states('sensor.livingroom_average_temperature') | float(99)
+                <= states('input_number.livingroom_summer_cooling_off_below') | float(22.2) }}
+        attributes:
+          friendly_name: "Гостиная: автоохлаждение можно выключить"
+
+##############################################################################
+# АВТОМАТИЗАЦИИ
+##############################################################################
+
+automation:
+  - id: "livingroom_summer_away_cooling_control"
+    alias: "Гостиная: летнее автоохлаждение, когда никого нет"
+    mode: restart
+    description: >
+      В рабочие дни в дневное время поддерживает температуру в гостиной около
+      22–23 °C, если дома никого нет. Работает по фактическому состоянию каждые
+      5 минут и выключает только тот кондиционер, который был включён этой
+      автоматизацией.
+
+    triggers:
+      - trigger: time_pattern
+        minutes: "/5"
+        id: periodic_check
+
+      - trigger: state
+        entity_id: sensor.livingroom_average_temperature
+        id: temperature_changed
+
+      - trigger: state
+        entity_id:
+          - binary_sensor.livingroom_summer_away_cooling_needed
+          - binary_sensor.livingroom_summer_away_cooling_should_stop
+          - binary_sensor.livingroom_summer_away_cooling_allowed
+        id: diagnostic_changed
+
+      - trigger: state
+        entity_id: binary_sensor.someone_is_home
+        id: presence_changed
+
+      - trigger: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom
+        id: balcony_doors_changed
+
+      - trigger: state
+        entity_id: input_boolean.livingroom_summer_away_cooling
+        id: mode_changed
+
+      - trigger: state
+        entity_id:
+          - input_number.livingroom_summer_cooling_on_above
+          - input_number.livingroom_summer_cooling_off_below
+          - input_number.livingroom_summer_cooling_target
+        id: thresholds_changed
+
+      - trigger: time
+        at: "08:30:00"
+        id: workday_start
+
+      - trigger: time
+        at: "17:30:00"
+        id: workday_end
+
+      - trigger: homeassistant
+        event: start
+        id: ha_start
+
+    actions:
+      - choose:
+          # --------------------------------------------------------------------
+          # Кто-то пришёл домой:
+          # автоматизация перестаёт считать кондиционер "своим".
+          # Сам кондиционер НЕ выключаем.
+          # --------------------------------------------------------------------
+          - conditions:
+              - condition: trigger
+                id: presence_changed
+
+              - condition: state
+                entity_id: binary_sensor.someone_is_home
+                state: "on"
+
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.livingroom_summer_away_cooling_ac_active
+
+          # --------------------------------------------------------------------
+          # Защитное выключение:
+          # выключаем кондиционер только если его включала эта автоматизация.
+          # --------------------------------------------------------------------
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.someone_is_home
+                state: "off"
+
+              - condition: state
+                entity_id: input_boolean.livingroom_summer_away_cooling_ac_active
+                state: "on"
+
+              - condition: template
+                value_template: "{{ states('climate.konditsioner') != 'off' }}"
+
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity_id: input_boolean.livingroom_summer_away_cooling
+                    state: "off"
+
+                  - condition: state
+                    entity_id: input_boolean.winter_mode
+                    state: "on"
+
+                  - condition: state
+                    entity_id: binary_sensor.doors_in_kitchen_livingroom
+                    state: "on"
+
+                  - condition: not
+                    conditions:
+                      - condition: time
+                        after: "08:30:00"
+                        before: "17:30:00"
+                        weekday:
+                          - mon
+                          - tue
+                          - wed
+                          - thu
+                          - fri
+
+            sequence:
+              - action: climate.turn_off
+                target:
+                  entity_id: climate.konditsioner
+
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.livingroom_summer_away_cooling_ac_active
+
+          # --------------------------------------------------------------------
+          # Включение охлаждения
+          # --------------------------------------------------------------------
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.livingroom_summer_away_cooling_needed
+                state: "on"
+
+              - condition: template
+                value_template: "{{ states('climate.konditsioner') != 'cool' }}"
+
+            sequence:
+              - action: climate.set_hvac_mode
+                target:
+                  entity_id: climate.konditsioner
+                data:
+                  hvac_mode: cool
+
+              - delay: "00:00:02"
+
+              - action: climate.set_temperature
+                target:
+                  entity_id: climate.konditsioner
+                data:
+                  temperature: >
+                    {{ states('input_number.livingroom_summer_cooling_target') | float(22.5) }}
+
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.livingroom_summer_away_cooling_ac_active
+
+          # --------------------------------------------------------------------
+          # Если кондиционер уже в cool, но нужно просто обновить target.
+          # Например, ты изменил input_number целевой температуры.
+          # --------------------------------------------------------------------
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.livingroom_summer_away_cooling_needed
+                state: "on"
+
+              - condition: template
+                value_template: "{{ states('climate.konditsioner') == 'cool' }}"
+
+            sequence:
+              - action: climate.set_temperature
+                target:
+                  entity_id: climate.konditsioner
+                data:
+                  temperature: >
+                    {{ states('input_number.livingroom_summer_cooling_target') | float(22.5) }}
+
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.livingroom_summer_away_cooling_ac_active
+
+          # --------------------------------------------------------------------
+          # Выключение после охлаждения
+          # --------------------------------------------------------------------
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.someone_is_home
+                state: "off"
+
+              - condition: state
+                entity_id: input_boolean.livingroom_summer_away_cooling_ac_active
+                state: "on"
+
+              - condition: state
+                entity_id: binary_sensor.livingroom_summer_away_cooling_should_stop
+                state: "on"
+
+              - condition: template
+                value_template: "{{ states('climate.konditsioner') != 'off' }}"
+
+            sequence:
+              - action: climate.turn_off
+                target:
+                  entity_id: climate.konditsioner
+
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.livingroom_summer_away_cooling_ac_active

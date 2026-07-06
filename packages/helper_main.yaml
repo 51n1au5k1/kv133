@@ -50,15 +50,69 @@ sql:
 template:
   - binary_sensor:
       # ----------------------------------------------------------------------
+      # Андрей дома по Wi-Fi
+      # ----------------------------------------------------------------------
+      - unique_id: andrei_wifi_home
+        name: andrei_wifi_home
+        device_class: connectivity
+        delay_off:
+          minutes: 2
+        state: >
+          {% set ssid = states('sensor.pixel_8_pro_wi_fi_connection') | string | trim | lower %}
+          {{ ssid == 'mdhouse' }}
+        icon: mdi:wifi
+
+      # ----------------------------------------------------------------------
+      # Hanna дома по Wi-Fi
+      # ----------------------------------------------------------------------
+      - unique_id: hanna_wifi_home
+        name: hanna_wifi_home
+        device_class: connectivity
+        delay_off:
+          minutes: 2
+        state: >
+          {% set ssid = states('sensor.iphone_mary_ssid') | string | trim | lower %}
+          {{ ssid == 'mdhouse' }}
+        icon: mdi:wifi
+
+      # ----------------------------------------------------------------------
+      # Андрей дома (GPS/person + Wi-Fi fallback)
+      # ----------------------------------------------------------------------
+      - unique_id: andrei_is_home
+        name: andrei_is_home
+        device_class: occupancy
+        delay_off:
+          seconds: 30
+        state: >
+          {{ is_state('person.master', 'home')
+             or is_state('binary_sensor.andrei_wifi_home', 'on') }}
+        icon: mdi:account
+
+      # ----------------------------------------------------------------------
+      # Hanna дома (GPS/person + Wi-Fi fallback)
+      # ----------------------------------------------------------------------
+      - unique_id: hanna_is_home
+        name: hanna_is_home
+        device_class: occupancy
+        delay_off:
+          seconds: 30
+        state: >
+          {{ is_state('person.hanna', 'home')
+             or is_state('binary_sensor.hanna_wifi_home', 'on') }}
+        icon: mdi:account
+
+      # ----------------------------------------------------------------------
       # Кто-то из жильцов дома (без гостевого режима)
       # ----------------------------------------------------------------------
       - unique_id: resident_is_home
         name: resident_is_home
-        delay_off: 120
+        delay_off:
+          minutes: 2
         device_class: occupancy
         state: >
           {{ is_state('group.all_residents', 'home')
-             or is_state('binary_sensor.andrei_wifi_home', 'on') }}
+             or is_state('binary_sensor.andrei_wifi_home', 'on')
+             or is_state('binary_sensor.hanna_wifi_home', 'on') }}
         icon: mdi:account-group
 
       # ----------------------------------------------------------------------
@@ -66,22 +120,17 @@ template:
       # ----------------------------------------------------------------------
       - unique_id: someone_is_home
         name: someone_is_home
-        delay_off: 120
+        delay_off:
+          minutes: 2
         device_class: occupancy
         state: >
-          {{ is_state('group.all_residents', 'home') or is_state('input_boolean.guest_mode', 'on') }}
+          {{ is_state('binary_sensor.resident_is_home', 'on')
+             or is_state('input_boolean.guest_mode', 'on') }}
         icon: mdi:home-account
 
-      # Андрей дома (устойчиво)
-      - unique_id: andrei_is_home
-        name: andrei_is_home
-        device_class: occupancy
-        delay_off: 30 # Защита от моргания Wi-Fi/GPS
-        state: >
-          {{ is_state('person.master', 'home') or is_state('binary_sensor.andrei_wifi_home', 'on') }}
-        icon: mdi:account
-
-      # Балконная дверь (без изменений)
+      # ----------------------------------------------------------------------
+      # Балконная дверь
+      # ----------------------------------------------------------------------
       - unique_id: doors_in_kitchen_livingroom
         name: doors_in_kitchen_livingroom
         device_class: door
@@ -276,25 +325,35 @@ automation:
           - person.master
           - person.hanna
           - binary_sensor.andrei_wifi_home
+          - binary_sensor.hanna_wifi_home
+          - binary_sensor.resident_is_home
           - input_boolean.guest_mode
           - input_boolean.system_startup_phase
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
     actions:
       - action: input_text.set_value
         target:
           entity_id: input_text.currently_home
         data:
           value: >
-            {% set residents = expand('group.all_residents')
-                 | selectattr('state', 'eq', 'home')
-                 | map(attribute='name')
-                 | list %}
-            {% set guests = ['Гости'] if is_state('input_boolean.guest_mode', 'on') else [] %}
-            {% set names = residents + guests %}
-            {{ names | join(', ') if names | length > 0 else 'Никого' }}
-    conditions:
-      - condition: state
-        entity_id: input_boolean.system_startup_phase
-        state: "off"
+            {% set ns = namespace(names=[]) %}
+
+            {% if is_state('person.master', 'home') or is_state('binary_sensor.andrei_wifi_home', 'on') %}
+              {% set ns.names = ns.names + ['Андрей'] %}
+            {% endif %}
+
+            {% if is_state('person.hanna', 'home') or is_state('binary_sensor.hanna_wifi_home', 'on') %}
+              {% set ns.names = ns.names + ['Hanna'] %}
+            {% endif %}
+
+            {% if is_state('input_boolean.guest_mode', 'on') %}
+              {% set ns.names = ns.names + ['Гости'] %}
+            {% endif %}
+
+            {{ ns.names | join(', ') if ns.names | length > 0 else 'Никого' }}
 
   - id: "38ea50fb-09bc-4d39-a771-1727ab72f265"
     alias: "HELPER: Фаза: Включение датчика загрузки"
