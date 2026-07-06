@@ -2,6 +2,21 @@
 # /packages/telegram_notifications.yaml
 ################################################################################
 
+input_text:
+  weather_primary_entity:
+    name: "Погода: основной провайдер"
+    initial: "weather.yandex_pogoda"
+    min: 0
+    max: 80
+    icon: mdi:weather-partly-cloudy
+
+  weather_fallback_entity:
+    name: "Погода: резервный провайдер"
+    initial: "weather.kvartira_133"
+    min: 0
+    max: 80
+    icon: mdi:weather-partly-cloudy
+
 script:
   telegram_send_weather_forecast:
     description: "Формирует и отправляет прогноз погоды указанному получателю"
@@ -11,11 +26,23 @@ script:
         example: "notify.telegram_master"
         required: true
     sequence:
+      - variables:
+          primary_weather_entity: "{{ states('input_text.weather_primary_entity') | trim }}"
+          fallback_weather_entity: "{{ states('input_text.weather_fallback_entity') | trim }}"
+          weather_entity: >-
+            {% set primary = states('input_text.weather_primary_entity') | trim %}
+            {% set fallback = states('input_text.weather_fallback_entity') | trim %}
+            {% if primary and states(primary) not in ['unknown', 'unavailable', 'none', ''] %}
+              {{ primary }}
+            {% else %}
+              {{ fallback }}
+            {% endif %}
+
       - action: weather.get_forecasts
         data:
           type: hourly
         target:
-          entity_id: weather.kvartira_133
+          entity_id: "{{ weather_entity }}"
         response_variable: weather_forecast
 
       - variables:
@@ -23,11 +50,43 @@ script:
           title: "<b>Прогноз погоды на <u>{{ today_date }}</u></b>"
 
           # Текущие данные
-          current_condition: "{{ states('sensor.open_meteo_opisanie_na_russkom') | default(states('weather.kvartira_133'), true) }}"
-          current_temperature: "{{ state_attr('weather.kvartira_133', 'temperature') | default('N/A') }}"
-          current_wind_bearing: "{{ state_attr('weather.kvartira_133', 'wind_bearing') | default(0) }}"
-          current_wind_speed: "{{ state_attr('weather.kvartira_133', 'wind_speed') | default('N/A') }}"
-          current_pressure_mmhg: "{{ state_attr('weather.kvartira_133', 'pressure') | default(0) }}"
+          current_condition: >-
+            {% set ya_condition = state_attr(weather_entity, 'yandex_condition') %}
+            {% set cond = ya_condition | lower if ya_condition else states(weather_entity) %}
+            {% set condition_map = dict(
+              sunny='ясно',
+              clear_night='ясно',
+              partlycloudy='малооблачно',
+              cloudy='облачно',
+              overcast='пасмурно',
+              fog='туман',
+              drizzle='морось',
+              rainy='дождливо',
+              rain='дождливо',
+              pouring='ливень',
+              lightning='гроза',
+              lightning_rainy='гроза с дождём',
+              snowy='снег',
+              snowy_rainy='дождь со снегом',
+              hail='град',
+              clear='ясно',
+              partly_cloudy='малооблачно',
+              light_rain='небольшой дождь',
+              heavy_rain='сильный дождь',
+              showers='ливень',
+              sleet='дождь со снегом',
+              light_snow='небольшой снег',
+              snow='снег',
+              snowfall='снегопад',
+              thunderstorm='гроза',
+              thunderstorm_with_rain='гроза с дождём',
+              thunderstorm_with_hail='гроза с градом'
+            ) %}
+            {{ condition_map.get(cond | replace('-', '_'), cond) }}
+          current_temperature: "{{ state_attr(weather_entity, 'temperature') | default('N/A') }}"
+          current_wind_bearing: "{{ state_attr(weather_entity, 'wind_bearing') | default(0) }}"
+          current_wind_speed: "{{ state_attr(weather_entity, 'wind_speed') | default('N/A') }}"
+          current_pressure_mmhg: "{{ state_attr(weather_entity, 'pressure') | default(0) }}"
 
           # Направление ветра
           wind_direction: >-
@@ -55,8 +114,9 @@ script:
 
           # Иконка
           weather_icon: >-
-            {% set cond = states('weather.kvartira_133') %}
+            {% set cond = states(weather_entity) %}
             {% if cond == 'sunny' or current_condition == 'ясно' %}☀️
+            {% elif cond == 'clear-night' %}🌙
             {% elif cond == 'partlycloudy' or current_condition == 'малооблачно' %}⛅
             {% elif cond == 'cloudy' or current_condition in ['облачно с прояснениями', 'облачно'] %}☁️
             {% elif cond == 'overcast' or current_condition == 'пасмурно' %}🌥
@@ -82,8 +142,8 @@ script:
             🌬 <b>Ветер:</b> {{ wind_direction }}, {{ current_wind_speed }} м/с
 
             <b>📅 Прогноз на сегодня:</b>
-            {%- if weather_forecast is defined and weather_forecast['weather.kvartira_133'] is defined and weather_forecast['weather.kvartira_133']['forecast'] is defined %}
-            {%- set forecasts = weather_forecast['weather.kvartira_133']['forecast'] %}
+            {%- if weather_forecast is defined and weather_forecast[weather_entity] is defined and weather_forecast[weather_entity]['forecast'] is defined %}
+            {%- set forecasts = weather_forecast[weather_entity]['forecast'] %}
             {%- set today_items = namespace(found=false) %}
             {%- for forecast in forecasts[:8] %}
             {%- if forecast.datetime is defined %}

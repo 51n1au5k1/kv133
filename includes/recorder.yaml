@@ -112,6 +112,8 @@ include:
 
     # Кто был дома / присутствие жильцов
     - input_text.currently_home
+    - input_text.weather_primary_entity
+    - input_text.weather_fallback_entity
     - person.master
     - person.hanna
 
