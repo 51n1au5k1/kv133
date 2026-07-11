@@ -19,7 +19,12 @@
 /secrets.yaml
 /themes
 /tts
-/www
+/www/*
+!/www/images/
+/www/images/*
+!/www/images/plants_alerts/
+!/www/images/plants_alerts/*.webp
+!/www/images/plants_alerts/README.md
 /xiaomi_tokens.txt
 /zigbee.db
 /zigbee2mqtt
@@ -36,3 +41,4 @@
 _*.*_
 *.*_
 /go2rtc.yaml
+
