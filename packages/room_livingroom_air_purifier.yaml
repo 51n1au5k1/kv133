@@ -160,12 +160,7 @@ automation:
         entity_id: input_boolean.livingroom_air_purifier_auto
         state: "on"
 
-      # 3. Интеграция Xiaomi должна быть стабильна
-      - condition: state
-        entity_id: input_boolean.xiaomi_home_integration_unstable
-        state: "off"
-
-      # 4. Устройство должно быть доступно
+      # 3. Устройство должно быть доступно
       - condition: template
         value_template: >-
           {{ states('fan.zhimi_mb3_a5d3_air_purifier')
@@ -256,43 +251,4 @@ automation:
                 data:
                   datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
-  # ==========================================================================
-  # ТЕХНИЧЕСКИЕ ТРИГГЕРЫ (ФИЛЬТРЫ)
-  # ==========================================================================
-  # Эти автоматизации оставляем отдельными, так как они служебные и не влияют на работу.
 
-  # 1. Фильтр < 10%
-  - id: "a4596f3c-27bf-48a8-a6db-62f9905f12fd"
-    alias: "Триггер: фильтр очистителя <10%"
-    triggers:
-      - trigger: numeric_state
-        entity_id: sensor.zhimi_cn_271517251_mb3_filter_life_level_p_4_3
-        below: 10
-        for: "00:01:00"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.xiaomi_home_integration_unstable
-        state: "off"
-      - condition: template
-        value_template: >-
-          {{ states('fan.zhimi_mb3_a5d3_air_purifier')
-             not in ['unavailable', 'unknown'] }}
-    actions: []
-
-  # 2. Фильтр > 10% (Сброс)
-  - id: "373bc4e2-1993-46df-85c5-0ff0470a1630"
-    alias: "Триггер: фильтр очистителя >10%"
-    triggers:
-      - trigger: numeric_state
-        entity_id: sensor.zhimi_cn_271517251_mb3_filter_life_level_p_4_3
-        above: 10
-        for: "00:01:00"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.xiaomi_home_integration_unstable
-        state: "off"
-      - condition: template
-        value_template: >-
-          {{ states('fan.zhimi_mb3_a5d3_air_purifier')
-             not in ['unavailable', 'unknown'] }}
-    actions: []
