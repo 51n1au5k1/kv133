@@ -132,4 +132,3 @@ automation:
       - action: script.yandex_tts_generic
         data:
           text: "Фильтр увлажнителя требует замены. Его ресурс менее десяти процентов."
-
