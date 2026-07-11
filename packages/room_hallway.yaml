@@ -561,7 +561,7 @@ automation:
       - action: light.turn_off
         target:
           entity_id:
-            - light.light_hallway
+            - light.hallway_switch
             - light.gateway_light_04cf8c977cdd
 
   # ==========================================================================
@@ -674,9 +674,6 @@ automation:
       - condition: state
         entity_id: binary_sensor.someone_is_home
         state: "on"
-      - condition: state
-        entity_id: input_boolean.xiaomi_home_integration_unstable
-        state: "off"
     actions:
       - variables:
           was_on_led: "{{ is_state('light.working_room_led', 'on') }}"
