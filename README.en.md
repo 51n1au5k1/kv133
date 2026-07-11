@@ -42,8 +42,8 @@ automations.
 ### Climate and ventilation
 
 - Averaged living-room temperature and humidity.
-- Humidifier with 47/50% RH hysteresis, minimum run/idle times, and blocking for
-  open balcony doors, low water, or unstable Xiaomi Home state.
+- Humidifier with 47/50% RH hysteresis, minimum run/idle times, and an
+  open-balcony-door interlock.
 - Air purifier with a five-minute PM2.5 mean, 20/10 µg/m³ hysteresis, and
   minimum run/idle times.
 - Air-conditioner winter lockout, restart state handling, and balcony-door
@@ -115,7 +115,6 @@ automations.
 | `packages/yandex_helper.yaml` | Yandex Station TTS scripts |
 | `packages/yandex_notifications.yaml` | Yandex Station events and voice alerts |
 | `packages/weather_variables.yaml` | Open-Meteo Russian condition and wind helpers |
-| `packages/scene_n_automation.yaml` | At-work scene |
 | `secrets.yaml.sample` | Required secret names without real values |
 
 ## External dependencies
