@@ -167,7 +167,6 @@ input_boolean:
 
   silent_mode:
     name: "Режим тишины"
-    initial: false
     icon: mdi:emoticon-neutral-outline
 
   bathroom_cleaning_mode:
@@ -177,7 +176,6 @@ input_boolean:
 
   force_camera_off:
     name: "Форсированное отключение камер"
-    initial: false
     icon: mdi:cctv-off
 
   bathroom_lights_startup_protection:
@@ -207,11 +205,6 @@ input_boolean:
   doorbell_spam_guard:
     name: Doorbell spam guard
     icon: mdi:bell-badge
-
-  xiaomi_home_integration_unstable:
-    name: "Xiaomi Home: интеграция нестабильна"
-    initial: false
-    icon: mdi:alert-circle
 
 ##############################################################################
 # ВХОДНЫЕ ТЕКСТОВЫЕ
@@ -400,6 +393,26 @@ automation:
         target:
           entity_id: input_boolean.silent_mode
 
+  - id: "helper_silent_mode_sync_on_start"
+    alias: "HELPER: Сверка режима тишины при старте"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ now().hour >= 23 or now().hour < 9 }}"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.silent_mode
+        default:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.silent_mode
+
   # ----------------------------------------------------------------------------
   # УПРАВЛЕНИЕ КАМЕРАМИ (ОБНОВЛЕНО ПОД ГОСТЕВОЙ РЕЖИМ)
   # ----------------------------------------------------------------------------
@@ -432,6 +445,16 @@ automation:
         to: "off"
         id: guest_off
 
+      - trigger: state
+        entity_id: input_boolean.system_startup_phase
+        to: "off"
+        id: startup_complete
+
+      - trigger: state
+        entity_id: input_boolean.force_camera_off
+        to: "off"
+        id: force_released
+
     conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
@@ -454,19 +477,12 @@ automation:
           - conditions:
               - condition: or
                 conditions:
-                  - condition: trigger
-                    id: away
-
-                  - condition: trigger
-                    id: guest_on
-
-                  - condition: and
-                    conditions:
-                      - condition: trigger
-                        id: guest_off
-                      - condition: state
-                        entity_id: binary_sensor.resident_is_home
-                        state: "off"
+                  - condition: state
+                    entity_id: binary_sensor.resident_is_home
+                    state: "off"
+                  - condition: state
+                    entity_id: input_boolean.guest_mode
+                    state: "on"
             sequence:
               - action: switch.turn_on
                 target:
@@ -479,8 +495,8 @@ automation:
                   message: >
                     {% if trigger.id == 'guest_on' %}
                       📹 Камеры включены: включён гостевой режим.
-                    {% elif trigger.id == 'guest_off' %}
-                      📹 Камеры включены: гостевой режим выключен, но жильцов дома нет.
+                    {% elif trigger.id in ['startup_complete', 'force_released'] %}
+                      📹 Камеры включены после сверки режима безопасности: жильцов нет дома.
                     {% else %}
                       📹 Камеры включены: жильцов нет дома.
                     {% endif %}
@@ -493,23 +509,12 @@ automation:
           # - выключили гостевой режим, и кто-то из жильцов уже дома.
           # ------------------------------------------------------------------
           - conditions:
-              - condition: or
-                conditions:
-                  - condition: and
-                    conditions:
-                      - condition: trigger
-                        id: home
-                      - condition: state
-                        entity_id: input_boolean.guest_mode
-                        state: "off"
-
-                  - condition: and
-                    conditions:
-                      - condition: trigger
-                        id: guest_off
-                      - condition: state
-                        entity_id: binary_sensor.resident_is_home
-                        state: "on"
+              - condition: state
+                entity_id: binary_sensor.resident_is_home
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.guest_mode
+                state: "off"
             sequence:
               - action: switch.turn_off
                 target:
@@ -615,3 +620,4 @@ automation:
       - action: switch.turn_off
         target:
           entity_id: switch.smart_plug_in_unit_vykliuchatel
+
