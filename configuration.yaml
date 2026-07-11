@@ -16,6 +16,8 @@ homeassistant:
   unit_system: metric
   country: !secret country
   time_zone: !secret time_zone
+  allowlist_external_dirs:
+    - /config/www/images/plants_alerts
   # Используем пакеты для определенных групп
   packages: !include_dir_named packages
 
@@ -50,3 +52,4 @@ http:
   use_x_forwarded_for: true
   trusted_proxies:
     - !secret npmplus_link
+
