@@ -70,7 +70,7 @@ script:
                   file: "/config/www/images/plants_alerts/{{ plant_name_latin }}_light.webp"
                   caption: "{{ plant_name }} необходимо переместить в более освещенное место, освещенность {{ value }}{{ unit }}."
 
-      # Запись в историю уведомлений (храним последние 5)
+      # Запись в историю уведомлений (храним последние 3)
       - variables:
           existing_history: >-
             {% set hist = states('input_text.notification_history_' ~ plant_name_latin) %}
@@ -86,8 +86,8 @@ script:
               else 'освещенности' if notification_type == 'illuminance'
               else 'неизвестном типе' %}
             {% set new_entry = "Уведомление о " ~ type_ru ~ " (" ~ plant_name ~ "): " ~ now().strftime('%Y-%m-%d %H:%M:%S') %}
-            {% set keep = (lines[-4:] if lines|length >= 4 else lines) %}
-            {{ (keep + [new_entry]) | join('\n') }}
+            {% set keep = (lines[-2:] if lines|length >= 2 else lines) %}
+            {{ ((keep + [new_entry]) | join('\n'))[-255:] }}
 
   plant_check_conditions:
     description: "Проверяет условия ухода за растением и отправляет уведомления при необходимости"
@@ -282,3 +282,4 @@ automation:
     actions:
       - delay: "00:01:00" # даём сенсорам обновиться
       - action: script.check_all_plants
+
