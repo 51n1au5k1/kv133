@@ -46,12 +46,30 @@
 ##############################################################################
 
 input_number:
+  wm_start_power_w:
+    name: "Стиралка: мощность старта цикла (Вт)"
+    min: 3
+    max: 50
+    step: 1
+    initial: 8
+    unit_of_measurement: "Вт"
+    icon: mdi:flash-triangle
+
+  wm_finish_power_w:
+    name: "Стиралка: мощность завершения цикла (Вт)"
+    min: 0
+    max: 10
+    step: 0.5
+    initial: 2
+    unit_of_measurement: "Вт"
+    icon: mdi:flash-off
+
   wm_min_cycle_min:
     name: "Стиралка: минимальная длительность цикла (мин)"
-    min: 5
+    min: 15
     max: 180
     step: 5
-    initial: 10
+    initial: 30
     icon: mdi:timer-check-outline
 
 input_datetime:
@@ -75,10 +93,10 @@ template:
       # Стиральная машина активна
       # ======================================================================
       # ON:
-      # • мощность розетки > 5 Вт
+      # • мощность розетки > настраиваемого порога старта (по умолчанию 8 Вт)
       #
       # OFF:
-      # • мощность <= 5 Вт
+      # • мощность <= порога старта
       # • либо мощность недоступна/unknown/unavailable
       #
       # ВАЖНО:
@@ -87,31 +105,34 @@ template:
       #   а не unavailable, чтобы автоматизации не зависали.
       #
       # Задержки:
-      # • delay_on 20 секунд — защита от коротких всплесков
-      # • delay_off 10 минут — защита от пауз внутри программы стирки
+      # • delay_on 1 минута — старт подтверждается устойчивой нагрузкой
+      # • delay_off 20 минут — длинные паузы внутри программы не завершают цикл
       # ======================================================================
       - unique_id: stiralnaia_mashina_aktivna
         name: "Стиральная машина активна"
         delay_on:
-          seconds: 20
+          minutes: 1
         delay_off:
-          minutes: 10
+          minutes: 20
         state: >
           {% set p = states('sensor.bathroom_washing_machine_socket_power') %}
+          {% set start_power = states('input_number.wm_start_power_w') | float(8) %}
           {{ p not in ['unknown', 'unavailable', 'none', '']
-             and (p | float(0)) > 5 }}
+             and (p | float(0)) > start_power }}
         icon: mdi:washing-machine
 
       # ======================================================================
       # Стиральная машина завершила стирку
       # ======================================================================
       # ON:
-      # • мощность < 5 Вт
+      # • мощность <= настраиваемого порога завершения (по умолчанию 2 Вт)
       # • цикл уже был замечен после старта
       # • флаг "стиралка работает" включён
-      # • это состояние держится 10 минут
+      # • это состояние держится непрерывно 20 минут
       #
       # НАЗНАЧЕНИЕ:
+      # • порог завершения намеренно ниже порога старта
+      # • 20 минут непрерывного простоя отсекают паузы нагрева/замачивания
       # • этот сенсор используется только как устойчивый признак завершения
       # • уведомление срабатывает по переходу этого сенсора в on
       #
@@ -122,11 +143,12 @@ template:
       - unique_id: stiralnaia_mashina_zavershila_stirku
         name: "Стиральная машина завершила стирку"
         delay_on:
-          minutes: 10
+          minutes: 20
         state: >
           {% set p = states('sensor.bathroom_washing_machine_socket_power') %}
+          {% set finish_power = states('input_number.wm_finish_power_w') | float(2) %}
           {{ p not in ['unknown', 'unavailable', 'none', '']
-             and (p | float(0)) < 5
+             and (p | float(0)) <= finish_power
              and is_state('input_boolean.washing_machine_running', 'on')
              and is_state('input_boolean.wm_cycle_seen_start', 'on') }}
         icon: mdi:washing-machine-off
@@ -258,7 +280,8 @@ automation:
 
       Окончание:
       • binary_sensor.stiralnaia_mashina_zavershila_stirku переходит в on.
-      • этот сенсор уже содержит задержку 10 минут при мощности < 5 Вт.
+      • этот сенсор содержит задержку 20 минут при мощности <= порога завершения.
+      • минимальная длительность цикла по умолчанию составляет 30 минут.
 
       После успешного завершения:
       • отправляет основное уведомление
@@ -275,6 +298,16 @@ automation:
         to: "on"
         id: finish
 
+      # Сверка нужна после рестарта HA и на случай пропущенного state-события.
+      - trigger: state
+        entity_id: input_boolean.system_startup_phase
+        to: "off"
+        id: watchdog
+
+      - trigger: time_pattern
+        minutes: "/5"
+        id: watchdog
+
     conditions:
       - condition: state
         entity_id: input_boolean.system_startup_phase
@@ -286,8 +319,20 @@ automation:
           # Старт цикла
           # --------------------------------------------------------------------
           - conditions:
-              - condition: trigger
-                id: start
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: start
+                  - condition: and
+                    conditions:
+                      - condition: trigger
+                        id: watchdog
+                      - condition: state
+                        entity_id: binary_sensor.stiralnaia_mashina_aktivna
+                        state: "on"
+                      - condition: state
+                        entity_id: input_boolean.washing_machine_running
+                        state: "off"
             sequence:
               - action: input_boolean.turn_on
                 target:
@@ -309,8 +354,17 @@ automation:
           # Окончание цикла
           # --------------------------------------------------------------------
           - conditions:
-              - condition: trigger
-                id: finish
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: finish
+                  - condition: and
+                    conditions:
+                      - condition: trigger
+                        id: watchdog
+                      - condition: state
+                        entity_id: binary_sensor.stiralnaia_mashina_zavershila_stirku
+                        state: "on"
 
               - condition: state
                 entity_id: input_boolean.washing_machine_running
@@ -322,7 +376,7 @@ automation:
             sequence:
               - variables:
                   started_ts: "{{ as_timestamp(states('input_datetime.washing_machine_started_at'), 0) }}"
-                  min_sec: "{{ (states('input_number.wm_min_cycle_min') | float(10) * 60) | int }}"
+                  min_sec: "{{ (states('input_number.wm_min_cycle_min') | float(30) * 60) | int }}"
                   cycle_sec: "{{ (as_timestamp(now()) - started_ts | float(0)) | int }}"
                   cycle_is_valid: "{{ started_ts | float(0) > 0 and cycle_sec | int >= min_sec | int }}"
 
@@ -363,27 +417,29 @@ automation:
                         target:
                           entity_id: input_boolean.washing_machine_finished_pending
 
+                      # Цикл закрываем только после подтвержденного завершения.
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id:
+                            - input_boolean.washing_machine_running
+                            - input_boolean.wm_cycle_seen_start
+
                 # --------------------------------------------------------------
-                # Слишком короткий цикл: считаем ложным срабатыванием
+                # Ранний кандидат завершения: продолжаем отслеживать цикл
                 # --------------------------------------------------------------
                 default:
-                  - action: notify.send_message
-                    target:
-                      entity_id: notify.telegram_master
+                  - action: script.log_helper_event
                     data:
-                      message: >-
-                        ⚠️ Стиралка: короткий цикл проигнорирован.
-                        Длительность: {{ (cycle_sec | int / 60) | round(1) }} мин,
-                        минимум: {{ states('input_number.wm_min_cycle_min') }} мин.
-
-              # --------------------------------------------------------------
-              # Сбрасываем флаги состояния цикла после обработки завершения
-              # --------------------------------------------------------------
-              - action: input_boolean.turn_off
-                target:
-                  entity_id:
-                    - input_boolean.washing_machine_running
-                    - input_boolean.wm_cycle_seen_start
+                      level: warning
+                      message: "Стиралка: ранний кандидат завершения проигнорирован, цикл остается активным."
+                      source: "{{ this.entity_id }}"
+                      trigger_entity: binary_sensor.stiralnaia_mashina_zavershila_stirku
+                      trigger_from: "off"
+                      trigger_to: "on"
+                      extra: >-
+                        duration={{ (cycle_sec | int / 60) | round(1) }} min;
+                        minimum={{ states('input_number.wm_min_cycle_min') }} min;
+                        power={{ states('sensor.bathroom_washing_machine_socket_power') }} W
 
   # ----------------------------------------------------------------------------
   # 3. НАПОМИНАНИЕ, ЕСЛИ ВАННОЙ НЕ ПОЛЬЗУЮТСЯ 15 МИНУТ
@@ -540,3 +596,4 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.wm_socket_outage_active
+
