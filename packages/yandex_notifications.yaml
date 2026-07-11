@@ -107,9 +107,6 @@ automation:
       - condition: state
         entity_id: binary_sensor.someone_is_home
         state: "on"
-      - condition: state
-        entity_id: input_boolean.xiaomi_home_integration_unstable
-        state: "off"
     actions:
       - action: script.yandex_tts_generic
         data:
@@ -131,10 +128,8 @@ automation:
       - condition: state
         entity_id: binary_sensor.someone_is_home
         state: "on"
-      - condition: state
-        entity_id: input_boolean.xiaomi_home_integration_unstable
-        state: "off"
     actions:
       - action: script.yandex_tts_generic
         data:
           text: "Фильтр увлажнителя требует замены. Его ресурс менее десяти процентов."
+
