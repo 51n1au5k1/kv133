@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 0.3 seconds
+Output:
 ################################################################################
 # /packages/helper_proxmox.yaml
 ################################################################################
@@ -116,6 +119,62 @@ input_number:
     step: 2
     initial: 1
 
+  cpu_112:
+    name: "CPU 112 (BookStack)"
+    min: 1
+    max: 12
+    step: 1
+    initial: 1
+
+  cpu_113:
+    name: "CPU 113 (UptimeKuma)"
+    min: 1
+    max: 12
+    step: 1
+    initial: 1
+
+  cpu_114:
+    name: "CPU 114 (AdGuard)"
+    min: 1
+    max: 12
+    step: 1
+    initial: 1
+
+  cpu_115:
+    name: "CPU 115 (MQTT)"
+    min: 1
+    max: 12
+    step: 1
+    initial: 1
+
+  cpu_116:
+    name: "CPU 116 (Zigbee2MQTT)"
+    min: 1
+    max: 12
+    step: 1
+    initial: 1
+
+  cpu_118:
+    name: "CPU 118 (PostgreSQL)"
+    min: 1
+    max: 12
+    step: 1
+    initial: 1
+
+  cpu_119:
+    name: "CPU 119 (Gas Meters API)"
+    min: 1
+    max: 12
+    step: 1
+    initial: 1
+
+  cpu_120:
+    name: "CPU 120 (Gas Meters Web Admin)"
+    min: 1
+    max: 12
+    step: 1
+    initial: 1
+
 ##############################################################################
 #                                 СЕНСОРЫ
 ##############################################################################
@@ -217,6 +276,54 @@ template:
         icon: mdi:percent-outline
         state: >-
           {{ states('sensor.lxc_pihole_111_cpu_used') | float(0) | round(2) }}
+
+      - name: "CPU LXC BookStack Normalized"
+        unique_id: cpu_lxc_bookstack_112_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: "{{ states('sensor.lxc_bookstack_112_cpu_used') | float(0) | round(2) }}"
+
+      - name: "CPU LXC UptimeKuma Normalized"
+        unique_id: cpu_lxc_uptimekuma_113_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: "{{ states('sensor.lxc_uptimekuma_113_cpu_used') | float(0) | round(2) }}"
+
+      - name: "CPU LXC AdGuard Normalized"
+        unique_id: cpu_lxc_adguard_114_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: "{{ states('sensor.lxc_alpine_adguard_114_cpu_used') | float(0) | round(2) }}"
+
+      - name: "CPU LXC MQTT Normalized"
+        unique_id: cpu_lxc_mqtt_115_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: "{{ states('sensor.lxc_mqtt_115_cpu_used') | float(0) | round(2) }}"
+
+      - name: "CPU LXC Zigbee2MQTT Normalized"
+        unique_id: cpu_lxc_zigbee2mqtt_116_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: "{{ states('sensor.lxc_alpine_zigbee2mqtt_116_cpu_used') | float(0) | round(2) }}"
+
+      - name: "CPU LXC PostgreSQL Normalized"
+        unique_id: cpu_lxc_postgresql_118_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: "{{ states('sensor.lxc_postgresql_118_cpu_used') | float(0) | round(2) }}"
+
+      - name: "CPU LXC Gas Meters API Normalized"
+        unique_id: cpu_lxc_gas_meters_api_119_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: "{{ states('sensor.lxc_gas_meters_api_119_cpu_used') | float(0) | round(2) }}"
+
+      - name: "CPU LXC Gas Meters Web Admin Normalized"
+        unique_id: cpu_lxc_gas_meters_web_admin_120_normalized
+        unit_of_measurement: "%"
+        icon: mdi:percent-outline
+        state: "{{ states('sensor.lxc_gas_meters_web_admin_120_cpu_used') | float(0) | round(2) }}"
 
       # ========================================================================
       # ВКЛАД В ЗАГРУЗКУ ХОСТА (какой % от всего сервера занимает гость)
@@ -352,3 +459,84 @@ template:
           {% set cpus = states('input_number.cpu_111') | float(1) %}
           {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
           {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC BookStack Host Percent"
+        unique_id: cpu_lxc_bookstack_112_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_bookstack_112_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_112') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC UptimeKuma Host Percent"
+        unique_id: cpu_lxc_uptimekuma_113_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_uptimekuma_113_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_113') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC AdGuard Host Percent"
+        unique_id: cpu_lxc_adguard_114_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_alpine_adguard_114_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_114') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC MQTT Host Percent"
+        unique_id: cpu_lxc_mqtt_115_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_mqtt_115_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_115') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC Zigbee2MQTT Host Percent"
+        unique_id: cpu_lxc_zigbee2mqtt_116_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_alpine_zigbee2mqtt_116_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_116') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC PostgreSQL Host Percent"
+        unique_id: cpu_lxc_postgresql_118_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_postgresql_118_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_118') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC Gas Meters API Host Percent"
+        unique_id: cpu_lxc_gas_meters_api_119_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_gas_meters_api_119_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_119') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
+      - name: "CPU LXC Gas Meters Web Admin Host Percent"
+        unique_id: cpu_lxc_gas_meters_web_admin_120_host_percent
+        unit_of_measurement: "%"
+        icon: mdi:chart-pie
+        state: >-
+          {% set raw = states('sensor.lxc_gas_meters_web_admin_120_cpu_used') | float(0) %}
+          {% set cpus = states('input_number.cpu_120') | float(1) %}
+          {% set host = states('input_number.proxmox_host_cpu_threads') | float(1) %}
+          {{ (raw * cpus / host) | round(2) }}
+
