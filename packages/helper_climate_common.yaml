@@ -162,41 +162,11 @@ input_boolean:
     initial: false
     icon: mdi:snowflake
 
-  air_filter_replace_notified:
-    name: "Очиститель воздуха: уведомление о замене фильтра отправлено"
-    initial: false
-    icon: mdi:air-filter
-
-  humidifier_filter_replace_notified:
-    name: "Увлажнитель: уведомление о замене фильтра отправлено"
-    initial: false
-    icon: mdi:water-alert
-
-  humidifier_low_water_notified:
-    name: Humidifier low water notified
-    icon: mdi:water-alert
-
-  co2_text_notification_sensor:
-    name: "Сенсор текстовых уведомлений о СО2"
-    initial: false
-    icon: mdi:message-alert
-
-  co2_voice_notification_sensor:
-    name: "Сенсор голосовых уведомлений о СО2"
-    initial: false
-    icon: mdi:account-voice
-
-  climate_pre_restart_state:
-    name: "Climate Pre-Restart State"
-    initial: false
-
   fan_pre_restart_state:
     name: "Fan Pre-Restart State"
-    initial: false
 
   humidifier_pre_restart_state:
     name: "Humidifier Pre-Restart State"
-    initial: false
 
   door_open_climate_pre_state:
     name: "Climate Pre-State When Door Opened"
@@ -209,6 +179,11 @@ input_boolean:
   door_open_humidifier_pre_state:
     name: "Humidifier Pre-State When Door Opened"
     initial: false
+
+input_text:
+  climate_pre_restart_hvac_mode:
+    name: "Кондиционер: HVAC-режим перед перезапуском"
+    max: 20
 
 input_number:
   low_th_notification_reset_period:
@@ -239,13 +214,6 @@ input_number:
     max: 1500
     step: 50
     initial: 550
-
-  co2_notification_reset_period:
-    name: "Период сброса уведомлений CO₂ (мин)"
-    min: 5
-    max: 60
-    step: 1
-    initial: 22
 
 ##############################################################################
 # УНИВЕРСАЛЬНЫЙ СКРИПТ
@@ -351,14 +319,6 @@ automation:
       - trigger: state
         entity_id: humidifier.xiaomi_p3_946a_humidifier
     actions:
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.xiaomi_home_integration_unstable
-                state: "on"
-            sequence:
-              - stop: "Xiaomi Home нестабилен, обновление таймеров увлажнителя пропущено."
-
       - action: script.climate_update_timers
         data:
           device_on_entity: humidifier.xiaomi_p3_946a_humidifier
@@ -375,14 +335,6 @@ automation:
       - trigger: state
         entity_id: fan.zhimi_mb3_a5d3_air_purifier
     actions:
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.xiaomi_home_integration_unstable
-                state: "on"
-            sequence:
-              - stop: "Xiaomi Home нестабилен, обновление таймеров очистителя пропущено."
-
       - action: script.climate_update_timers
         data:
           device_on_entity: fan.zhimi_mb3_a5d3_air_purifier
@@ -399,14 +351,6 @@ automation:
         event: start
     actions:
       - delay: "00:00:05"
-
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.xiaomi_home_integration_unstable
-                state: "on"
-            sequence:
-              - stop: "Xiaomi Home нестабилен, инициализация таймеров климата пропущена."
 
       - action: script.climate_update_timers
         data:
@@ -453,22 +397,13 @@ automation:
       - trigger: homeassistant
         event: shutdown
     actions:
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: climate.konditsioner
-                state: "on"
-              - condition: state
-                entity_id: input_boolean.winter_mode
-                state: "off"
-            sequence:
-              - action: input_boolean.turn_on
-                target:
-                  entity_id: input_boolean.climate_pre_restart_state
-        default:
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.climate_pre_restart_state
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.climate_pre_restart_hvac_mode
+        data:
+          value: >-
+            {% set mode = states('climate.konditsioner') %}
+            {{ mode if mode in ['heat', 'dry', 'cool', 'fan_only', 'heat_cool'] else 'off' }}
 
       - choose:
           - conditions:
@@ -505,18 +440,22 @@ automation:
       - trigger: homeassistant
         event: start
     actions:
+      - delay: "00:00:10"
+
       - choose:
           - conditions:
-              - condition: state
-                entity_id: input_boolean.climate_pre_restart_state
-                state: "on"
-              - condition: state
-                entity_id: input_boolean.winter_mode
-                state: "off"
+              - condition: template
+                value_template: >-
+                  {{ states('input_text.climate_pre_restart_hvac_mode')
+                     in ['heat', 'dry', 'cool', 'fan_only', 'heat_cool'] }}
+              - condition: template
+                value_template: "{{ 4 <= now().month <= 10 }}"
             sequence:
-              - action: climate.turn_on
+              - action: climate.set_hvac_mode
                 target:
                   entity_id: climate.konditsioner
+                data:
+                  hvac_mode: "{{ states('input_text.climate_pre_restart_hvac_mode') }}"
 
       - choose:
           - conditions:
@@ -541,9 +480,14 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id:
-            - input_boolean.climate_pre_restart_state
             - input_boolean.fan_pre_restart_state
             - input_boolean.humidifier_pre_restart_state
+
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.climate_pre_restart_hvac_mode
+        data:
+          value: "off"
 
   # ========================================================================
   # АНТИПРОВЕТРИВАНИЕ: УПРАВЛЕНИЕ КЛИМАТОМ ПРИ ОТКРЫТИИ ДВЕРЕЙ
@@ -644,12 +588,6 @@ automation:
               - condition: state
                 entity_id: input_boolean.livingroom_humidifier_auto
                 state: "on"
-              - condition: state
-                entity_id: input_boolean.humidifier_low_water_notified
-                state: "off"
-              - condition: state
-                entity_id: input_boolean.xiaomi_home_integration_unstable
-                state: "off"
               - condition: template
                 value_template: >
                   {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable','unknown',''] }}
@@ -686,3 +624,4 @@ automation:
         data:
           message: "Кондиционер принудительно отключён: активен зимний режим."
       - action: script.yandex_tts_kondicioner_warning
+
