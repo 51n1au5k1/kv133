@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 0.3 seconds
+Output:
 ################################################################################
 # /packages/room_bathroom.yaml
 ################################################################################
@@ -164,8 +167,7 @@ template:
       # Влажность ниже нижнего порога (выключение вентилятора)
       # ======================================================================
       - unique_id: bathroom_humidity_min
-        name: bathroom_humidity_min
-        device_class: problem
+        name: "Ванная: влажность ниже порога выключения"
         availability: >-
           {{ states('sensor.bathroom_filtered_humidity') not in ['unknown', 'unavailable', 'none', ''] }}
         state: >-
@@ -379,3 +381,4 @@ automation:
       - action: fan.turn_off
         target:
           entity_id: fan.bathroom_relay_l1
+
