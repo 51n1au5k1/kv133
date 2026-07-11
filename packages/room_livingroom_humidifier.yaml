@@ -12,9 +12,6 @@
 # ЗАЩИТА:
 # • Min On/Off time через input_datetime.humidifier_last_on/off (из helper_climate_common)
 # • Блокировка при открытых дверях (doors_in_kitchen_livingroom)
-# • Блокировка по low_water (input_boolean.humidifier_low_water_notified)
-#   - событие low_water -> ставим флаг ON
-#   - если устройство реально смогло включиться -> сбрасываем флаг OFF
 #
 # ВАЖНО:
 # • CO2 НЕ используется
@@ -149,10 +146,6 @@ automation:
         entity_id: input_boolean.livingroom_humidifier_auto
         state: "on"
 
-      - condition: state
-        entity_id: input_boolean.xiaomi_home_integration_unstable
-        state: "off"
-
       - condition: template
         value_template: >
           {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable', 'unknown', ''] }}
@@ -178,7 +171,6 @@ automation:
           is_on: "{{ is_state(hum, 'on') }}"
 
           doors_closed: "{{ is_state('binary_sensor.doors_in_kitchen_livingroom', 'off') }}"
-          low_water_flag: "{{ is_state('input_boolean.humidifier_low_water_notified', 'on') }}"
 
           last_on: "{{ states('input_datetime.humidifier_last_on') }}"
           last_off: "{{ states('input_datetime.humidifier_last_off') }}"
@@ -212,8 +204,6 @@ automation:
                 value_template: "{{ need and (not is_on) }}"
               - condition: template
                 value_template: "{{ doors_closed }}"
-              - condition: template
-                value_template: "{{ not low_water_flag }}"
               - condition: template
                 value_template: "{{ diff_off_min >= min_off }}"
             sequence:
@@ -249,100 +239,10 @@ automation:
                 need={{ need }};
                 is_on={{ is_on }};
                 doors_closed={{ doors_closed }};
-                low_water_flag={{ low_water_flag }};
                 diff_on_min={{ diff_on_min }} (min_on={{ min_on }});
                 diff_off_min={{ diff_off_min }} (min_off={{ min_off }});
                 humidity={{ states('sensor.livingroom_average_humidity') }};
                 low={{ states('input_number.livingroom_hum_low') }};
                 high={{ states('input_number.livingroom_hum_high') }};
 
-  # # ==========================================================================
-  # # LOW WATER: единая точка управления флагом humidifier_low_water_notified
-  # # ==========================================================================
-  # - id: "livingroom_humidifier_low_water_set_flag"
-  #   alias: "Гостиная: Увлажнитель — low water: поднять флаг"
-  #   description: >
-  #     Xiaomi event-энтити не даёт нормальных атрибутов (event_type=null),
-  #     поэтому просто: поймали событие low_water -> ставим флаг.
-  #   mode: single
-  #   trigger:
-  #     - platform: state
-  #       entity_id: event.xiaomi_cn_823407205_p3_low_water_level_e_2_1
-  #   condition:
-  #     - condition: state
-  #       entity_id: input_boolean.xiaomi_home_integration_unstable
-  #       state: "off"
-  #     - condition: template
-  #       value_template: >
-  #         {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable', 'unknown', ''] }}
-  #   action:
-  #     - variables:
-  #         trig_platform: "{{ trigger.platform if trigger is defined and trigger.platform is defined else '' }}"
-  #         trig_entity: "{{ trigger.entity_id if trigger is defined and trigger.entity_id is defined else '' }}"
-  #         trig_from: >-
-  #           {{ trigger.from_state.state
-  #              if trigger is defined and trigger.from_state is defined and trigger.from_state is not none
-  #              else '' }}
-  #         trig_to: >-
-  #           {{ trigger.to_state.state
-  #              if trigger is defined and trigger.to_state is defined and trigger.to_state is not none
-  #              else '' }}
 
-  #     - service: input_boolean.turn_on
-  #       target:
-  #         entity_id: input_boolean.humidifier_low_water_notified
-
-  #     - service: script.log_helper_event
-  #       data:
-  #         level: warning
-  #         message: "Humidifier: low water event detected -> set humidifier_low_water_notified=on"
-  #         source: "{{ this.entity_id }}"
-  #         trigger_entity: "{{ trig_entity }}"
-  #         trigger_from: "{{ trig_from }}"
-  #         trigger_to: "{{ trig_to }}"
-  #         extra: "platform={{ trig_platform }}; event_type_attr={{ state_attr('event.xiaomi_cn_823407205_p3_low_water_level_e_2_1','event_type') }}"
-
-  # - id: "livingroom_humidifier_low_water_auto_clear_on_start"
-  #   alias: "Гостиная: Увлажнитель — low water: сброс флага если смог включиться"
-  #   description: >
-  #     Если увлажнитель реально включился, значит защита по воде разрешила работу,
-  #     следовательно флаг low_water можно сбросить.
-  #   mode: restart
-  #   trigger:
-  #     - platform: state
-  #       entity_id: humidifier.xiaomi_p3_946a_humidifier
-  #       to: "on"
-  #       for: "00:00:10"
-  #   condition:
-  #     - condition: state
-  #       entity_id: input_boolean.humidifier_low_water_notified
-  #       state: "on"
-  #     - condition: state
-  #       entity_id: input_boolean.xiaomi_home_integration_unstable
-  #       state: "off"
-  #   action:
-  #     - variables:
-  #         trig_platform: "{{ trigger.platform if trigger is defined and trigger.platform is defined else '' }}"
-  #         trig_entity: "{{ trigger.entity_id if trigger is defined and trigger.entity_id is defined else '' }}"
-  #         trig_from: >-
-  #           {{ trigger.from_state.state
-  #              if trigger is defined and trigger.from_state is defined and trigger.from_state is not none
-  #              else '' }}
-  #         trig_to: >-
-  #           {{ trigger.to_state.state
-  #              if trigger is defined and trigger.to_state is defined and trigger.to_state is not none
-  #              else '' }}
-
-  #     - service: input_boolean.turn_off
-  #       target:
-  #         entity_id: input_boolean.humidifier_low_water_notified
-
-  #     - service: script.log_helper_event
-  #       data:
-  #         level: info
-  #         message: "Humidifier: device stayed ON -> clear humidifier_low_water_notified=off"
-  #         source: "{{ this.entity_id }}"
-  #         trigger_entity: "{{ trig_entity }}"
-  #         trigger_from: "{{ trig_from }}"
-  #         trigger_to: "{{ trig_to }}"
-  #         extra: "platform={{ trig_platform }}; auto_clear_on_start=true"
