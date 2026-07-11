@@ -25,11 +25,12 @@
 #     parse_mode: html
 #     allowed_chat_ids:
 #       - !secret chat_id_andrei
-# Уходит с версии 2026.5.0
+# Legacy YAML-конфигурация сохранена ниже только как справка.
+# Текущие Telegram Bot и notify-сущности настраиваются через UI-интеграцию.
 # notify:
 #   # ----------------------------------------------------------------------------
 #   # Настройки сервисов уведомлений для конкретных получателей.
-#   # notify.master   -> отправляет сообщения в Telegram Andrei
+#   # notify.telegram_master -> отправляет сообщения в Telegram Andrei
 #   # group_notifications -> группа для отправки для уведомлений обоим пользователям
 #   # ----------------------------------------------------------------------------
 
@@ -60,3 +61,4 @@
 #             chat_id={{ trigger.event.data.chat_id if trigger.event is defined and trigger.event.data.chat_id is defined else 'no-chat_id' }}
 #             user_id={{ trigger.event.data.user_id if trigger.event is defined and trigger.event.data.user_id is defined else 'no-user_id' }}
 #             full_data={{ trigger.event.data if trigger.event is defined else 'no-data' }}
+
