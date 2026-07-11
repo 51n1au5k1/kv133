@@ -6,8 +6,8 @@
 #   В данном пакете собраны и вычисляемые сенсоры
 #   (template), используемые в различных частях системы умного дома.
 #   Например, здесь определяются:
-#   1) Погодные переводы (направления ветра, погода) как для OpenWeather
-#      (open_meteo_*) так и для Яндекс (yandex_weather4notion_*).
+#   1) Погодные переводы для резервного провайдера Open-Meteo
+#      (`weather.kvartira_133`). Основной прогноз использует Yandex Pogoda.
 #
 ################################################################################
 
@@ -20,7 +20,7 @@ template:
   # ==================================================================
   - sensor:
       - unique_id: open_meteo_weather4notion_wind
-        name: "Направление ветра (OpenWeather)"
+        name: "Направление ветра (Open-Meteo)"
         icon: mdi:windsock
         availability: >
           {{ state_attr('weather.kvartira_133', 'wind_bearing') is not none }}
@@ -40,7 +40,7 @@ template:
           {{ directions[index] }}
 
       - unique_id: open_meteo_opisanie_na_russkom
-        name: "Погодные условия (OpenWeather, рус.)"
+        name: "Погодные условия (Open-Meteo, рус.)"
         icon: mdi:weather-partly-cloudy
         availability: >
           {{ states('weather.kvartira_133') not in ['unknown', 'unavailable', ''] }}
@@ -62,3 +62,4 @@ template:
             snowy='снег'
           ) %}
           {{ condition_map.get(condition, 'неопределенные погодные условия') }}
+
