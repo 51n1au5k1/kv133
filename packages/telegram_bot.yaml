@@ -1,7 +1,3 @@
-Exit code: 0
-Wall time: 0.3 seconds
-Total output lines: 1391
-Output:
 ################################################################################
 # /packages/telegram_bot.yaml
 ################################################################################
@@ -380,7 +376,568 @@ script:
             {{ '🟢' if is_state(entity_id, 'on') else '🔴' }} <b>{{ name }}:</b> {{ states(cpu_sensor) | float(0) | round(0) }}% | {{ states(ram_sensor) | float(0) | round(0) }}%
             {%- endmacro -%}
 
-            {{ '🟢' if i…6872 tokens truncated…event
+            {{ '🟢' if is_state('binary_sensor.qemu_haos12_3_100_status', 'on') else '🔴' }} <b>HAOS12:</b> {{ states('sensor.qemu_haos12_3_100_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_haos12_3_100_memory_used_percentage') | float(0) | round(0) }}%
+            {{ '🟢' if is_state('binary_sensor.qemu_mikrotik_routeros_chr_200_status', 'on') else '🔴' }} <b>CHR:</b> {{ states('sensor.qemu_mikrotik_routeros_chr_200_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_mikrotik_routeros_chr_200_memory_used_percentage') | float(0) | round(0) }}%
+            {{ '🟢' if is_state('binary_sensor.qemu_wp_alfaradon_stage_300_status', 'on') else '🔴' }} <b>WP_AR:</b> {{ states('sensor.qemu_wp_alfaradon_stage_300_cpu_used') | float(0) | round(0) }}% | {{ states('sensor.qemu_wp_alfaradon_stage_300_memory_used_percentage') | float(0) | round(0) }}%
+
+            {{ status('binary_sensor.lxc_mariadb_101_status', 'MariaDB', 'sensor.lxc_mariadb_101_cpu_used', 'sensor.lxc_mariadb_101_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_jackett_102_status', 'Jackett', 'sensor.lxc_jackett_102_cpu_used', 'sensor.lxc_jackett_102_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_jellyfin_103_status', 'Jellyfin', 'sensor.lxc_jellyfin_103_cpu_used', 'sensor.lxc_jellyfin_103_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_deluge_104_status', 'Deluge', 'sensor.lxc_deluge_104_cpu_used', 'sensor.lxc_deluge_104_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_debian_105_status', 'TorrServer', 'sensor.lxc_debian_105_cpu_used', 'sensor.lxc_debian_105_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_immich_106_status', 'Immich', 'sensor.lxc_immich_106_cpu_used', 'sensor.lxc_immich_106_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_minim_107_status', 'MinimServer', 'sensor.lxc_minim_107_cpu_used', 'sensor.lxc_minim_107_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_photoview_108_status', 'Photoview', 'sensor.lxc_photoview_108_cpu_used', 'sensor.lxc_photoview_108_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_npmplus_109_status', 'NPMplus', 'sensor.lxc_npmplus_109_cpu_used', 'sensor.lxc_npmplus_109_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_alpine_vaultwarden_110_status', 'VaultWarden', 'sensor.lxc_alpine_vaultwarden_110_cpu_used', 'sensor.lxc_alpine_vaultwarden_110_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_pihole_111_status', 'PiHole', 'sensor.lxc_pihole_111_cpu_used', 'sensor.lxc_pihole_111_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_bookstack_112_status', 'BookStack', 'sensor.lxc_bookstack_112_cpu_used', 'sensor.lxc_bookstack_112_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_uptimekuma_113_status', 'UptimeKuma', 'sensor.lxc_uptimekuma_113_cpu_used', 'sensor.lxc_uptimekuma_113_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_alpine_adguard_114_status', 'AdGuard', 'sensor.lxc_alpine_adguard_114_cpu_used', 'sensor.lxc_alpine_adguard_114_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_mqtt_115_status', 'MQTT', 'sensor.lxc_mqtt_115_cpu_used', 'sensor.lxc_mqtt_115_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_alpine_zigbee2mqtt_116_status', 'Zigbee2MQTT', 'sensor.lxc_alpine_zigbee2mqtt_116_cpu_used', 'sensor.lxc_alpine_zigbee2mqtt_116_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_postgresql_118_status', 'PostgreSQL', 'sensor.lxc_postgresql_118_cpu_used', 'sensor.lxc_postgresql_118_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_gas_meters_api_119_status', 'Gas Meters API', 'sensor.lxc_gas_meters_api_119_cpu_used', 'sensor.lxc_gas_meters_api_119_memory_used_percentage') }}
+            {{ status('binary_sensor.lxc_gas_meters_web_admin_120_status', 'Gas Meters Web', 'sensor.lxc_gas_meters_web_admin_120_cpu_used', 'sensor.lxc_gas_meters_web_admin_120_memory_used_percentage') }}
+
+          inline_keyboard: >
+            {% set page_n = (page | default(1) | int(1)) %}
+            {% set page_n = 1 if page_n < 1 else (3 if page_n > 3 else page_n) %}
+            {% set cb_suffix = "?p=" ~ page_n %}
+
+            {% set s_haos = is_state('binary_sensor.qemu_haos12_3_100_status', 'on') %}
+            {% set s_chr = is_state('binary_sensor.qemu_mikrotik_routeros_chr_200_status', 'on') %}
+            {% set s_arst = is_state('binary_sensor.qemu_wp_alfaradon_stage_300_status', 'on') %}
+
+            {% set s_maria = is_state('binary_sensor.lxc_mariadb_101_status', 'on') %}
+            {% set s_jack = is_state('binary_sensor.lxc_jackett_102_status', 'on') %}
+            {% set s_jelly = is_state('binary_sensor.lxc_jellyfin_103_status', 'on') %}
+            {% set s_deluge = is_state('binary_sensor.lxc_deluge_104_status', 'on') %}
+            {% set s_torr = is_state('binary_sensor.lxc_debian_105_status', 'on') %}
+            {% set s_immich = is_state('binary_sensor.lxc_immich_106_status', 'on') %}
+            {% set s_minim = is_state('binary_sensor.lxc_minim_107_status', 'on') %}
+            {% set s_photo = is_state('binary_sensor.lxc_photoview_108_status', 'on') %}
+            {% set s_npmplus = is_state('binary_sensor.lxc_npmplus_109_status', 'on') %}
+            {% set s_vaultwarden = is_state('binary_sensor.lxc_alpine_vaultwarden_110_status', 'on') %}
+            {% set s_pihole = is_state('binary_sensor.lxc_pihole_111_status', 'on') %}
+            {% set s_bookstack = is_state('binary_sensor.lxc_bookstack_112_status', 'on') %}
+            {% set s_uptimekuma = is_state('binary_sensor.lxc_uptimekuma_113_status', 'on') %}
+            {% set s_adguard = is_state('binary_sensor.lxc_alpine_adguard_114_status', 'on') %}
+            {% set s_mqtt = is_state('binary_sensor.lxc_mqtt_115_status', 'on') %}
+            {% set s_zigbee2mqtt = is_state('binary_sensor.lxc_alpine_zigbee2mqtt_116_status', 'on') %}
+            {% set s_postgresql = is_state('binary_sensor.lxc_postgresql_118_status', 'on') %}
+            {% set s_gas_api = is_state('binary_sensor.lxc_gas_meters_api_119_status', 'on') %}
+            {% set s_gas_web = is_state('binary_sensor.lxc_gas_meters_web_admin_120_status', 'on') %}
+
+            {% set prev_page = 1 if page_n <= 1 else page_n - 1 %}
+            {% set next_page = 3 if page_n >= 3 else page_n + 1 %}
+
+            {% set kb = [
+              [ ["🔄 Обновить статус", "/pve_status_refresh" ~ cb_suffix ] ],
+              [ ["🟢 HAOS12" if s_haos else "🔴 HAOS12", "/reboot_haos12" ~ cb_suffix],
+                ["🟢 CHR" if s_chr else "🔴 CHR", "/reboot_chr" ~ cb_suffix],
+                ["🟢 WP_AR" if s_arst else "🔴 WP_AR", "/reboot_arst" ~ cb_suffix] ]
+            ] %}
+
+            {% if page_n == 1 %}
+              {% set kb = kb + [
+                [ ["🟢 MariaDB" if s_maria else "🔴 MariaDB", "/start_mariadb" ~ cb_suffix], ["⏹ Стоп", "/stop_mariadb" ~ cb_suffix], ["🔄 Ребут", "/reboot_mariadb" ~ cb_suffix] ],
+                [ ["🟢 Jackett" if s_jack else "🔴 Jackett", "/start_jackett" ~ cb_suffix], ["⏹ Стоп", "/stop_jackett" ~ cb_suffix], ["🔄 Ребут", "/reboot_jackett" ~ cb_suffix] ],
+                [ ["🟢 Jellyfin" if s_jelly else "🔴 Jellyfin", "/start_jellyfin" ~ cb_suffix], ["⏹ Стоп", "/stop_jellyfin" ~ cb_suffix], ["🔄 Ребут", "/reboot_jellyfin" ~ cb_suffix] ],
+                [ ["🟢 Deluge" if s_deluge else "🔴 Deluge", "/start_deluge" ~ cb_suffix], ["⏹ Стоп", "/stop_deluge" ~ cb_suffix], ["🔄 Ребут", "/reboot_deluge" ~ cb_suffix] ],
+                [ ["🟢 TorrServer" if s_torr else "🔴 TorrServer", "/start_torrserver" ~ cb_suffix], ["⏹ Стоп", "/stop_torrserver" ~ cb_suffix], ["🔄 Ребут", "/reboot_torrserver" ~ cb_suffix] ],
+                [ ["🟢 Immich" if s_immich else "🔴 Immich", "/start_immich" ~ cb_suffix], ["⏹ Стоп", "/stop_immich" ~ cb_suffix], ["🔄 Ребут", "/reboot_immich" ~ cb_suffix] ]
+              ] %}
+            {% elif page_n == 2 %}
+              {% set kb = kb + [
+                [ ["🟢 Minim" if s_minim else "🔴 Minim", "/start_minimserver" ~ cb_suffix], ["⏹ Стоп", "/stop_minimserver" ~ cb_suffix], ["🔄 Ребут", "/reboot_minimserver" ~ cb_suffix] ],
+                [ ["🟢 Photoview" if s_photo else "🔴 Photoview", "/start_photoview" ~ cb_suffix], ["⏹ Стоп", "/stop_photoview" ~ cb_suffix], ["🔄 Ребут", "/reboot_photoview" ~ cb_suffix] ],
+                [ ["🟢 NPMplus" if s_npmplus else "🔴 NPMplus", "/start_npmplus" ~ cb_suffix], ["⏹ Стоп", "/stop_npmplus" ~ cb_suffix], ["🔄 Ребут", "/reboot_npmplus" ~ cb_suffix] ],
+                [ ["🟢 VaultWarden" if s_vaultwarden else "🔴 VaultWarden", "/start_vaultwarden" ~ cb_suffix], ["⏹ Стоп", "/stop_vaultwarden" ~ cb_suffix], ["🔄 Ребут", "/reboot_vaultwarden" ~ cb_suffix] ],
+                [ ["🟢 PiHole" if s_pihole else "🔴 PiHole", "/start_pihole" ~ cb_suffix], ["⏹ Стоп", "/stop_pihole" ~ cb_suffix], ["🔄 Ребут", "/reboot_pihole" ~ cb_suffix] ],
+                [ ["🟢 BookStack" if s_bookstack else "🔴 BookStack", "/start_bookstack" ~ cb_suffix], ["⏹ Стоп", "/stop_bookstack" ~ cb_suffix], ["🔄 Ребут", "/reboot_bookstack" ~ cb_suffix] ]
+              ] %}
+            {% else %}
+              {% set kb = kb + [
+                [ ["🟢 UptimeKuma" if s_uptimekuma else "🔴 UptimeKuma", "/start_uptimekuma" ~ cb_suffix], ["⏹ Стоп", "/stop_uptimekuma" ~ cb_suffix], ["🔄 Ребут", "/reboot_uptimekuma" ~ cb_suffix] ],
+                [ ["🟢 AdGuard" if s_adguard else "🔴 AdGuard", "/start_adguard" ~ cb_suffix], ["⏹ Стоп", "/stop_adguard" ~ cb_suffix], ["🔄 Ребут", "/reboot_adguard" ~ cb_suffix] ],
+                [ ["🟢 MQTT" if s_mqtt else "🔴 MQTT", "/start_mqtt" ~ cb_suffix], ["⏹ Стоп", "/stop_mqtt" ~ cb_suffix], ["🔄 Ребут", "/reboot_mqtt" ~ cb_suffix] ],
+                [ ["🟢 Zigbee2MQTT" if s_zigbee2mqtt else "🔴 Zigbee2MQTT", "/start_zigbee2mqtt" ~ cb_suffix], ["⏹ Стоп", "/stop_zigbee2mqtt" ~ cb_suffix], ["🔄 Ребут", "/reboot_zigbee2mqtt" ~ cb_suffix] ],
+                [ ["🟢 PostgreSQL" if s_postgresql else "🔴 PostgreSQL", "/start_postgresql" ~ cb_suffix], ["⏹ Стоп", "/stop_postgresql" ~ cb_suffix], ["🔄 Ребут", "/reboot_postgresql" ~ cb_suffix] ],
+                [ ["🟢 Gas API" if s_gas_api else "🔴 Gas API", "/start_gas_api" ~ cb_suffix], ["⏹ Стоп", "/stop_gas_api" ~ cb_suffix], ["🔄 Ребут", "/reboot_gas_api" ~ cb_suffix] ],
+                [ ["🟢 Gas Web" if s_gas_web else "🔴 Gas Web", "/start_gas_web" ~ cb_suffix], ["⏹ Стоп", "/stop_gas_web" ~ cb_suffix], ["🔄 Ребут", "/reboot_gas_web" ~ cb_suffix] ]
+              ] %}
+            {% endif %}
+
+            {% set kb = kb + [
+              [ ["◀️", "/pve_page_" ~ prev_page], ["📄 " ~ page_n ~ "/3", "/pve_page_" ~ page_n], ["▶️", "/pve_page_" ~ next_page] ],
+              [ ["👈 В меню", "/menu_back"] ]
+            ] %}
+
+            {{ kb | tojson }}
+
+##############################################################################
+#                             АВТОМАТИЗАЦИИ
+##############################################################################
+
+automation:
+  - id: "telegram_bot_start"
+    alias: "Telegram Bot Start (Приветствие)"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_command
+        event_data:
+          command: "/start"
+    actions:
+      - service: telegram_bot.send_message
+        data:
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          parse_mode: html
+          message: "<b>Добро пожаловать в умный дом!</b>"
+      - service: script.send_main_menu
+        data:
+          chat_id: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_main_menu"
+    alias: "Telegram Bot Main Menu"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_command
+        event_data:
+          command: "/main_menu"
+    actions:
+      - service: script.send_main_menu
+        data:
+          chat_id: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_menu_back"
+    alias: "Telegram Bot Menu Back"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/menu_back"
+    actions:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - service: script.send_main_menu
+        data:
+          chat_id: "{{ trigger.event.data.chat_id }}"
+
+  - id: "telegram_bot_room_navigation"
+    alias: "Telegram Bot: Навигация по комнатам"
+    initial_state: true
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/livingroom_control"
+        id: "livingroom"
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/workroom_control"
+        id: "workroom"
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/bedroom_control"
+        id: "bedroom"
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/kitchen_control"
+        id: "kitchen"
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/bathroom_control"
+        id: "bathroom"
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/hallway_control"
+        id: "hallway"
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/system_control"
+        id: "system"
+    actions:
+      - service: telegram_bot.delete_message
+        data:
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: "livingroom"
+            sequence:
+              - service: script.send_livingroom_status
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "workroom"
+            sequence:
+              - service: script.send_workroom_status
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "bedroom"
+            sequence:
+              - service: script.send_bedroom_status
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "kitchen"
+            sequence:
+              - service: script.send_kitchen_status
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "bathroom"
+            sequence:
+              - service: script.send_bathroom_status
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "hallway"
+            sequence:
+              - service: script.send_hallway_status
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+          - conditions:
+              - condition: trigger
+                id: "system"
+            sequence:
+              - service: script.send_system_status
+                data:
+                  chat_id: "{{ trigger.event.data.chat_id }}"
+
+  # --- ГОСТИНАЯ ---
+  - id: "telegram_bot_toggle_livingroom_main_switch_left"
+    alias: "TG: Livingroom Main Left"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_main_switch_left"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: light.livingroom_main_switch_left
+          domain: light
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_livingroom_main_switch_right"
+    alias: "TG: Livingroom Main Right"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_main_switch_right"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: light.livingroom_main_switch_right
+          domain: light
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_livingroom_scone_dimmer"
+    alias: "TG: Livingroom Scone"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_scone_dimmer"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: light.livingroom_scone_dimmer
+          domain: light
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_livingroom_socket_corner_r"
+    alias: "TG: Livingroom Socket Corner R"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_socket_corner_r"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: switch.livingroom_socket_corner_r
+          domain: switch
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_livingroom_socket_l"
+    alias: "TG: Livingroom Socket L"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_socket_l"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: switch.livingroom_socket_l
+          domain: switch
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_livingroom_socket_r"
+    alias: "TG: Livingroom Socket R"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_socket_r"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: switch.livingroom_socket_r
+          domain: switch
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "toggle_livingroom_humidifier"
+    alias: "TG: Livingroom Humidifier"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_humidifier"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: humidifier.xiaomi_p3_946a_humidifier
+          domain: humidifier
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "toggle_livingroom_air_purifier"
+    alias: "TG: Livingroom Air Purifier"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_air_purifier"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: fan.zhimi_mb3_a5d3_air_purifier
+          domain: fan
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "toggle_livingroom_konditsioner"
+    alias: "TG: Livingroom Konditsioner"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_konditsioner"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: climate.konditsioner
+          domain: climate
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  # --- КАБИНЕТ ---
+  - id: "telegram_bot_toggle_workroom_light"
+    alias: "TG: Workroom Light"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_workroom_light"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: light.workroom_switch
+          domain: light
+          menu_script: script.send_workroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_workroom_led"
+    alias: "TG: Workroom LED"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_workroom_led"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: light.working_room_led
+          domain: light
+          menu_script: script.send_workroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_workroom_plug"
+    alias: "TG: Workroom Plug"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_workroom_plug"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: switch.smart_plug_in_unit_vykliuchatel
+          domain: switch
+          menu_script: script.send_workroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  # --- СПАЛЬНЯ ---
+  - id: "telegram_bot_toggle_bedroom_light"
+    alias: "TG: Bedroom Light"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_light"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: light.bedroom_switch_main
+          domain: light
+          menu_script: script.send_bedroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_bedroom_scone_t"
+    alias: "TG: Bedroom Scone T"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_scone_t"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: light.bedroom_left_switch_right
+          domain: light
+          menu_script: script.send_bedroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_bedroom_scone_a_small"
+    alias: "TG: Bedroom Scone A Small"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_scone_a_small"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: light.bedroom_right_switch_left
+          domain: light
+          menu_script: script.send_bedroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_bedroom_scone_a_big"
+    alias: "TG: Bedroom Scone A Big"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_scone_a_big"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: light.bedroom_right_switch_right
+          domain: light
+          menu_script: script.send_bedroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_bedroom_plug_left"
+    alias: "TG: Bedroom Plug Left"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_plug_left"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: switch.0x00158d0002530bd9
+          domain: switch
+          menu_script: script.send_bedroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  - id: "telegram_bot_toggle_bedroom_plug_right"
+    alias: "TG: Bedroom Plug Right"
+    triggers:
+      - platform: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_bedroom_plug_right"
+    actions:
+      - service: script.toggle_device
+        data:
+          entity: switch.0x00158d0002530ba3
+          domain: switch
+          menu_script: script.send_bedroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"
+
+  # --- КУХНЯ ---
+  - id: "telegram_bot_toggle_kitchen_main_light"
+    alias: "TG: Kitchen Main Light"
+    triggers:
+      - platform: event
         event_type: telegram_callback
         event_data:
           data: "/toggle_kitchen_main_light"
@@ -791,15 +1348,15 @@ script:
               "/start_zigbee2mqtt": "button.lxc_alpine_zigbee2mqtt_116_start",
               "/stop_zigbee2mqtt": "button.lxc_alpine_zigbee2mqtt_116_stop",
               "/reboot_zigbee2mqtt": "button.lxc_alpine_zigbee2mqtt_116_reboot",
-              "/start_postgresql": "button.lxc_postgresql_118_start",
-              "/stop_postgresql": "button.lxc_postgresql_118_stop",
-              "/reboot_postgresql": "button.lxc_postgresql_118_reboot",
-              "/start_gas_api": "button.lxc_gas_meters_api_119_start",
-              "/stop_gas_api": "button.lxc_gas_meters_api_119_stop",
-              "/reboot_gas_api": "button.lxc_gas_meters_api_119_reboot",
-              "/start_gas_web": "button.lxc_gas_meters_web_admin_120_start",
-              "/stop_gas_web": "button.lxc_gas_meters_web_admin_120_stop",
-              "/reboot_gas_web": "button.lxc_gas_meters_web_admin_120_reboot"
+            "/start_postgresql": "button.lxc_postgresql_118_start",
+            "/stop_postgresql": "button.lxc_postgresql_118_stop",
+            "/reboot_postgresql": "button.lxc_postgresql_118_reboot",
+            "/start_gas_api": "button.lxc_gas_meters_api_119_start",
+            "/stop_gas_api": "button.lxc_gas_meters_api_119_stop",
+            "/reboot_gas_api": "button.lxc_gas_meters_api_119_reboot",
+            "/start_gas_web": "button.lxc_gas_meters_web_admin_120_start",
+            "/stop_gas_web": "button.lxc_gas_meters_web_admin_120_stop",
+            "/reboot_gas_web": "button.lxc_gas_meters_web_admin_120_reboot"
             } %}
             {{ map[cmd] }}
           chat_id: "{{ trigger.event.data.chat_id }}"
@@ -831,4 +1388,3 @@ script:
           page: "{{ page }}"
           delete_message_id: "{{ trigger.event.data.message.message_id }}"
           delete_chat_id: "{{ trigger.event.data.chat_id }}"
-
