@@ -111,7 +111,6 @@
 | `packages/plant_*.yaml` | Правила конкретных растений |
 | `packages/telegram_bot.yaml` | Меню и команды Telegram-бота |
 | `packages/telegram_notifications.yaml` | Telegram-уведомления и прогноз погоды |
-| `packages/telegram_helper.yaml` | Архивные заметки по Telegram; интеграция настраивается в UI |
 | `packages/yandex_helper.yaml` | Скрипты Yandex Station TTS |
 | `packages/yandex_notifications.yaml` | События и голосовые уведомления Yandex Station |
 | `packages/weather_variables.yaml` | Русские описания и направление ветра для Open-Meteo |

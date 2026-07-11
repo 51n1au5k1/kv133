@@ -111,7 +111,6 @@ automations.
 | `packages/plant_*.yaml` | Per-plant monitoring rules |
 | `packages/telegram_bot.yaml` | Telegram bot menus and commands |
 | `packages/telegram_notifications.yaml` | Telegram alerts and weather forecast |
-| `packages/telegram_helper.yaml` | Legacy Telegram notes; integration is configured in the UI |
 | `packages/yandex_helper.yaml` | Yandex Station TTS scripts |
 | `packages/yandex_notifications.yaml` | Yandex Station events and voice alerts |
 | `packages/weather_variables.yaml` | Open-Meteo Russian condition and wind helpers |
