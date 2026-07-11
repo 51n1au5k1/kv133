@@ -39,7 +39,7 @@
 # ЗАВИСИМОСТИ:
 # • script.yandex_tts_click_outdoor_button — голосовое уведомление о звонке
 # • script.yandex_tts_shaking_outdoor_button — уведомление о попытке снятия
-# • notify.master — Telegram-уведомления
+# • notify.telegram_master — Telegram-уведомления
 # • input_boolean.bathroom_cleaning_mode — режим уборки
 #
 ################################################################################
@@ -787,3 +787,4 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.strongbox_hum_text_notified
+
