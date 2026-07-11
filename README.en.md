@@ -1,92 +1,166 @@
-# Home Assistant Configuration
+# Home Assistant Configuration: Apartment 133
 
-## Introduction
+[Русская версия](README.md)
 
-This repository contains my Home Assistant configuration, designed to automate smart home management. It covers a wide range of functionality, including lighting automation, climate control, plant care, and notifications.
+This repository contains a Home Assistant YAML configuration for lighting,
+climate, security, household workflows, infrastructure monitoring, and
+notifications. Most logic is organized with
+[`homeassistant.packages`](https://www.home-assistant.io/docs/configuration/packages/),
+so each package owns its related helpers, templates, timers, scripts, and
+automations.
+
+## Design principles
+
+- Hysteresis for climate equipment and ventilation.
+- State confirmation with `for:`, `delay_on`, `delay_off`, and `timer`.
+- Minimum run/idle times to prevent rapid switching.
+- Reading stabilization with filter, statistics, and template sensors.
+- Startup guards and periodic watchdog reconciliation after HA restarts.
+- Entity availability checks and conservative defaults.
+- Runtime thresholds exposed as `input_number` helpers.
 
 ## Features
 
-- **Lighting Automation**: Smart lighting control in various rooms ensures comfort and energy efficiency. Scenarios for the bathroom and home office allow lighting to be adjusted for specific tasks or times of day, increasing convenience and reducing energy consumption.
+### Presence and system modes
 
-- **Climate Control**: Maintaining comfortable conditions: air conditioning, heating, humidification by hysteresis (on < low threshold / off > high), air purification by PM2.5 (hysteresis + anti-chatter + minimum operating/idle time), and kitchen exhaust fan by comparative temperature/humidity deltas with the living room (hysteresis, anti-spam, and delayed shutdown).
+- Andrei and Hanna presence from `person.*` with Wi-Fi fallback.
+- Composite `resident_is_home` and `someone_is_home` sensors.
+- Guest, silent, bathroom cleaning, and forced camera-off modes.
+- Camera control based on real resident presence and guest mode.
+- Lights, TVs, and the garment steamer are turned off while the home is empty.
 
-- **Plant Care**: Configurations for monitoring plant conditions, such as Euphorbia and Ficus lyrata, include notification mechanisms for watering, fertilizing, or changing environmental conditions. This ensures their optimal growth and health.
+### Lighting
 
-- **Notifications**: Integration with Telegram and Yandex allows for instant notifications about smart home events, whether it's security, system changes, or plant care reminders. This increases awareness and allows for timely responses to various situations.
+- Bathroom day/night scenes, motion and door activation, shutdown timer, and
+  false-trigger protection after startup and arrival.
+- Power supervision and automatic recovery for Philips Wi-Fi spotlights.
+- Hallway door, motion, illuminance, arrival-window, and doorbell workflows.
+- Physical MQTT switch controls for the kitchen, living room, and office.
+- Living-room cabinet light brightness follows illuminance; color temperature
+  follows solar elevation.
 
-## Key Principles (Technical)
+### Climate and ventilation
 
-- **Hysteresis** wherever possible (humidifier, purifier, kitchen exhaust fan) — no "twitching."
+- Averaged living-room temperature and humidity.
+- Humidifier with 47/50% RH hysteresis, minimum run/idle times, and blocking for
+  open balcony doors, low water, or unstable Xiaomi Home state.
+- Air purifier with a five-minute PM2.5 mean, 20/10 µg/m³ hysteresis, and
+  minimum run/idle times.
+- Air-conditioner winter lockout, restart state handling, and balcony-door
+  protection.
+- Weekday away cooling that only turns off an AC session started by the same
+  automation.
+- Kitchen exhaust based on kitchen-to-living-room temperature and humidity
+  deltas: two-minute start confirmation, 15-minute minimum run time,
+  five-minute normalization confirmation, and ten-minute final ventilation.
+  Renewed demand cancels pending shutdown.
+- Bathroom humidity exhaust with hysteresis and a final cooldown period.
+- Server-room fan control with temperature hysteresis and two-stage delayed
+  shutdown.
 
-- **Anti-chatter/anti-spam** via `for:` and timers/flags (minimum operating/idle intervals).
+### Washing machine
 
-- **Averaging readings** (template and statistics sensors) to reduce the impact of short-term spikes.
+- A cycle starts after power remains above 8 W for one minute.
+- Completion requires 20 continuous minutes at or below 2 W.
+- Default minimum cycle duration is 30 minutes.
+- Program pauses do not close the cycle or clear tracking flags.
+- A watchdog restores tracking after restarts or missed state events.
+- Telegram and Yandex Station completion alerts, a delayed laundry reminder,
+  and socket power-loss/restoration alerts.
 
-- **Safe defaults and protection against incorrect thresholds** (e.g., if low ≥ high — automatically corrected).
+### Plants
 
-- **Fault tolerance on restart** — "min. time" checks account for HA restarts.
+- Ficus lyrata: soil moisture and temperature monitoring.
+- Euphorbia leuconeura: soil moisture, temperature, and illuminance monitoring.
+- One-hour smoothing, notification cooldown, recent notification history, and
+  a pending-condition check when the resident returns home.
+- Telegram notifications use local images from
+  `/config/www/images/plants_alerts/`.
 
-## Configuration Files
+### Notifications and remote control
 
-- `configuration.yaml` — the main configuration file, linking all components together.
-- `helper_main.yaml`,`helper_mikrotik.yaml`,`helper_proxmox.yaml`, `variables.yaml` — helper functions and entities for smart home monitoring and control.
-- `notifications_telegram.yaml` and `notifications_yandex.yaml`  — notification settings via Telegram and Yandex.
-- Telegram (UI integration):
-    - `telegram_helper.yaml` — starting with version 2026.5.0, configuration via UI, old service configurations: Telegram, `notify.*`, recipient groups.
-    - `telegram_notifications.yaml` — notifications via Telegram.    
-    - `telegram_bot.yaml` — bot scripts (commands, inline buttons, menus, device control).
-- Plant monitoring:
-    - `plant_common.yaml` — configuration for plant monitoring.  
-    - `plant_euphorbia_leuconeura.yaml`, `plant_ficus_lyrata.yaml` — plant monitoring configuration.
-- Rooms and domain packages
-    - `room_bathroom.yaml`, `room_hallway.yaml`, `room_livingroom.yaml`, `room_workroom.yaml`, `room_bedroom.yaml`, `room_kitchen.yaml`, `room_server.yaml`: Automations for various rooms.
-    - `room_bathroom_light.yaml` — Philips Zhirui (philips.light.downlight) lights via Xiaomi Philips Lights.
-    - *New:* `helper_climate_common.yaml` — common climate automation mechanisms used in room packages (`room_livingroom_*.yaml`).
-    - *New:* `room_livingroom_humidifier.yaml` — auto-mode humidifier by hysteresis (humidity < low / > high thresholds, anti-chatter, min. time).
-    - *New:* `room_livingroom_air_purifier.yaml` — auto-mode purifier by PM2.5 (statistics smoothing, hysteresis, anti-chatter, min. time).
-    - *Updated:* `room_kitchen.yaml` — exhaust fan by comparative T/RH deltas of kitchen to living room, transition to averaged living room sensors, delayed shutdown, anti-spam.
+- Daily Telegram forecast at 07:45. Official Yandex Pogoda is primary;
+  Open-Meteo is the fallback provider.
+- Telegram alerts for doors, HA lifecycle, updates, Proxmox, ZFS, S.M.A.R.T.,
+  critical services, and safe microclimate.
+- HTML/inline-keyboard Telegram bot for rooms, lights, sockets, climate,
+  system status, Proxmox control, and confirmed HA restart.
+- Yandex Station TTS for doorbell, climate, CO₂, washing-machine, and system
+  events. Silent mode suppresses voice output.
 
-**Additionally**: Features of the implemented Telegram bot for smart home control
-A multifunctional Telegram bot is implemented in the configuration, providing device control and real-time status updates for smart home systems. The bot uses interactive buttons and supports commands for convenient user interaction.
+### Infrastructure and history
 
-## Main bot functions:
-📋 Main menu – select a room or system for control.
-🔄 Status monitoring – display temperature, humidity, CO₂, PM2.5, door status, and other parameters in real time.
-💡 Lighting control – turn lights on/off in the living room, bedroom, bathroom, home office, and kitchen.
-🔌 Socket control – ability to turn sockets on and off for various devices (e.g., router, mini PC, humidifier, etc.).
-🔇 Silent mode – enable/disable `input_boolean.silent_mode`, which mutes sound notifications during certain hours.
-🌡 Climate control – receive current temperature and humidity data in different areas of the house.
-🌍 Internet speed check – display current ping, download, and upload values via `sensor.speedtest_*`.
-⚠️ Forced system restart – allows safely restarting Home Assistant from Telegram.
+- MariaDB recorder with daily manual purge and a 90-day retention policy.
+- Normalized CPU usage and host contribution for Proxmox VMs and LXCs.
+- ZFS, S.M.A.R.T., updates, and critical add-on monitoring.
+- Safe dew point, absolute humidity, and mold-risk calculation.
 
-## Bot menu structure:
-Each room or system is represented by buttons that lead to the corresponding section:
+## Repository structure
 
-- 🏠 Living Room (/livingroom_control)
-- 🍽 Kitchen (/kitchen_control)
-- 🏢 Home Office (/workroom_control)
-- 🛏 Bedroom (/bedroom_control)
-- 🛁 Bathroom (/bathroom_control)
-- 🚪 Hallway (/hallway_control)
-- 🖥 System (/system_control)
+| Path | Purpose |
+| --- | --- |
+| `configuration.yaml` | Entry point, packages, themes, recorder, logger, HTTP proxy |
+| `includes/recorder.yaml` | MariaDB and history include/exclude policy |
+| `packages/helper_main.yaml` | Presence, modes, cameras, and global helpers |
+| `packages/helper_climate_common.yaml` | Shared climate infrastructure and balcony-door protection |
+| `packages/helper_proxmox.yaml` | VM/LXC CPU normalization |
+| `packages/room_*.yaml` | Room lighting, climate, and workflows |
+| `packages/livingroom_summer_cooling.yaml` | Away-mode summer cooling |
+| `packages/washing_machine.yaml` | Laundry cycle tracking and alerts |
+| `packages/plants_common.yaml` | Shared plant scripts and notification cooldown |
+| `packages/plant_*.yaml` | Per-plant monitoring rules |
+| `packages/telegram_bot.yaml` | Telegram bot menus and commands |
+| `packages/telegram_notifications.yaml` | Telegram alerts and weather forecast |
+| `packages/telegram_helper.yaml` | Legacy Telegram notes; integration is configured in the UI |
+| `packages/yandex_helper.yaml` | Yandex Station TTS scripts |
+| `packages/yandex_notifications.yaml` | Yandex Station events and voice alerts |
+| `packages/weather_variables.yaml` | Open-Meteo Russian condition and wind helpers |
+| `packages/scene_n_automation.yaml` | At-work scene |
+| `secrets.yaml.sample` | Required secret names without real values |
 
-**Functions:** statuses (T/RH/CO₂/PM2.5/doors, etc.), light/socket/ventilation control, internet speed, HA restart.
-**UX:** HTML messages, inline buttons, automatic deletion of old messages, minimization of duplication via `script.*`.
+## External dependencies
 
-*Configuration note: the bot itself is configured via UI integration; `allowed_chat_ids` and keys are stored in `secrets.yaml`; handlers are via `telegram_command`/`telegram_callback` events.*
+Integrations and devices are configured separately in Home Assistant. The
+repository intentionally excludes `.storage`, API keys, and real secrets.
 
-## Telegram bot implementation features:
-✅ Interactive interface – all commands and statuses are formatted in HTML, and button states are updated automatically.
-✅ Deleting old messages – the bot clears previous commands to avoid cluttering the chat.
-✅ Optimization via scripts – control is performed via `script.*`, minimizing code duplication in automations.
-✅ Flexible control – each command automatically updates the current state of the room or system.
+- MQTT/Zigbee events from physical controls and sensors.
+- Xiaomi Home and Xiaomi Miio Philips Light.
+- Yandex Station and official
+  [Yandex Pogoda](https://github.com/yandex/pogoda-home-assistant).
+- Built-in Open-Meteo integration as the forecast fallback.
+- Telegram Bot, Proxmox VE, MariaDB, and Speedtest/Cloudflare sensors.
+- HACS frontend resources `ha-yandex-icons` and `hass-hue-icons`.
 
-📌 Bot configuration file: `telegram_bot.yaml`
-📌 Notifications file: `telegram_notifications.yaml`
+Entity IDs, device IDs, IP addresses, and tokens are specific to the current
+installation and must be replaced when reusing this configuration elsewhere.
 
-⚙️ The bot provides a simple and convenient way to control your smart home without needing to access the Home Assistant web interface! 🚀
+## Deployment and updates
 
-## Nota Bene
+1. Create `secrets.yaml` using `secrets.yaml.sample` as a reference.
+2. Configure UI integrations and verify all referenced entity IDs.
+3. Pull changes in the Home Assistant `/config` repository:
 
-In "Silent" mode, Yandex.Station sound notifications are limited; humidification/purification logic can operate 24/7 (quiet devices).
-Climate logic considers balcony door openings: devices are temporarily turned off, and upon closing, only those that were active are restored.
+   ```bash
+   git pull
+   ```
+
+4. Validate before restarting:
+
+   ```bash
+   ha core check
+   ```
+
+5. Restart Home Assistant only after a successful check.
+
+Tune operational thresholds through the corresponding `input_number` helpers.
+After changing automation logic, inspect automation traces and source-sensor
+graphs in History.
+
+## Security
+
+- Never commit `secrets.yaml`, tokens, or passwords.
+- Commit or stash local Home Assistant edits before `git pull` to avoid merge
+  conflicts.
+- Telegram restart requires confirmation, but bot access must still be limited
+  to approved chat IDs.
+
