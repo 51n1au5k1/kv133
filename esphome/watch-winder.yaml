@@ -3,11 +3,10 @@ esphome:
   friendly_name: Заводчик часов
 
 esp32:
-  board: esp32-c3-devkitm-1
+  variant: esp32c3
   framework:
     type: esp-idf
 
-  variant: ESP32C3
 logger:
 
 wifi:
