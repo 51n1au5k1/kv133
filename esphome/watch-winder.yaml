@@ -26,4 +26,146 @@ wifi:
     ssid: watch-winder Fallback Hotspot
     password: "oTGrdX8hNc3v"
 
-captive_portal:
+output:
+
+  - platform: ledc
+
+    id: motor_input_a
+
+    pin: GPIO4
+
+    frequency: 1220Hz
+
+
+
+  - platform: ledc
+
+    id: motor_input_b
+
+    pin: GPIO5
+
+    frequency: 1220Hz
+
+
+
+fan:
+
+  - platform: hbridge
+
+    id: watch_winder_motor
+
+    name: "Мотор заводчика"
+
+
+
+    pin_a: motor_input_a
+
+    pin_b: motor_input_b
+
+
+
+    # Только полная скорость.
+
+    speed_count: 1
+
+
+
+    # После включения или перезагрузки мотор всегда выключен.
+
+    restore_mode: ALWAYS_OFF
+
+
+
+    # При выключении мотор свободно останавливается без резкого торможения.
+
+    decay_mode: slow
+
+
+
+number:
+
+  - platform: template
+
+    id: rotation_time
+
+    name: "Длительность вращения"
+
+    unit_of_measurement: "с"
+
+    entity_category: config
+
+    mode: box
+
+
+
+    min_value: 1
+
+    max_value: 300
+
+    step: 1
+
+
+
+    optimistic: true
+
+    restore_value: true
+
+    initial_value: 10
+
+
+
+script:
+
+  - id: run_rotation_cycle
+
+    mode: restart
+
+    then:
+
+      - fan.turn_on:
+
+          id: watch_winder_motor
+
+          speed: 1
+
+
+
+      - delay: !lambda |-
+
+          return static_cast<uint32_t>(
+
+            id(rotation_time).state * 1000.0f
+
+          );
+
+
+
+      - fan.turn_off: watch_winder_motor
+
+
+
+button:
+
+  - platform: template
+
+    name: "Запустить цикл"
+
+    icon: mdi:play
+
+    on_press:
+
+      - script.execute: run_rotation_cycle
+
+
+
+  - platform: template
+
+    name: "Остановить"
+
+    icon: mdi:stop
+
+    on_press:
+
+      - script.stop: run_rotation_cycle
+
+      - fan.turn_off: watch_winder_motor
