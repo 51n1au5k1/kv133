@@ -7,6 +7,7 @@ esp32:
   framework:
     type: esp-idf
 
+  variant: ESP32C3
 logger:
 
 wifi:
