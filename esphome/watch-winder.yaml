@@ -20,8 +20,8 @@ ota:
   - platform: esphome
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  ssid: mdhouse
+  password: skarbskarbskarb
   ap:
     ssid: watch-winder Fallback Hotspot
     password: "oTGrdX8hNc3v"
