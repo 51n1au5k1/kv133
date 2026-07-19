@@ -14,10 +14,10 @@ logger:
 
 api:
   encryption:
-    key: !secret watch_winder_encryption_key
-
+    key: !secret watch_winder__encryption_key
 ota:
   - platform: esphome
+    password: !secret watch_winder__ota_password
 
 wifi:
   ssid: !secret wifi_ssid
