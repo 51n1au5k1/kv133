@@ -42,7 +42,6 @@ _*.*_
 *.*_
 /go2rtc.yaml
 .shopping_list.json
-/esphome
 
 # Home Assistant and ESPHome secrets
 **/secrets.yaml
@@ -54,3 +53,6 @@ _*.*_
 /esphome/*.bin
 /esphome/*.elf
 /esphome/*.map
+**/secrets.yml
+/esphome/.esphome/
+/esphome/.device-builder*
