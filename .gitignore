@@ -42,3 +42,15 @@ _*.*_
 *.*_
 /go2rtc.yaml
 .shopping_list.json
+/esphome
+
+# Home Assistant and ESPHome secrets
+**/secrets.yaml
+
+# ESPHome generated files
+**/.esphome/
+**/*.backup
+/esphome/.cache/
+/esphome/*.bin
+/esphome/*.elf
+/esphome/*.map

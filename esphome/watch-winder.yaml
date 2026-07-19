@@ -14,7 +14,7 @@ logger:
 
 api:
   encryption:
-    key: "7wYxVkxKdoByV4cPZqxf6Meq9/qLDBoeJ3iqsmKLHKQ="
+    key: !secret watch_winder__encryption_key
 
 ota:
   - platform: esphome
