@@ -91,26 +91,26 @@ automation:
     actions:
       - action: script.yandex_tts_door_status
 
-  # Гостиная: очиститель — фильтр <10%
-  - id: "01419dd5-e5e1-4767-957a-b5ca66d04403"
-    alias: "Яндекс: очиститель — фильтр <10%"
-    mode: single
-    triggers:
-      - trigger: numeric_state
-        entity_id: sensor.zhimi_mb3_a5d3_filter_life_level
-        below: 10
-        for: "00:01:00"
-    conditions:
-      - condition: state
-        entity_id: input_boolean.silent_mode
-        state: "off"
-      - condition: state
-        entity_id: binary_sensor.someone_is_home
-        state: "on"
-    actions:
-      - action: script.yandex_tts_generic
-        data:
-          text: "Очиститель воздуха сообщает: ресурс фильтра менее десяти процентов. Пора заменить фильтр."
+  # # Гостиная: очиститель — фильтр <10%
+  # - id: "01419dd5-e5e1-4767-957a-b5ca66d04403"
+  #   alias: "Яндекс: очиститель — фильтр <10%"
+  #   mode: single
+  #   triggers:
+  #     - trigger: numeric_state
+  #       entity_id: sensor.zhimi_mb3_a5d3_filter_life_level
+  #       below: 10
+  #       for: "00:01:00"
+  #   conditions:
+  #     - condition: state
+  #       entity_id: input_boolean.silent_mode
+  #       state: "off"
+  #     - condition: state
+  #       entity_id: binary_sensor.someone_is_home
+  #       state: "on"
+  #   actions:
+  #     - action: script.yandex_tts_generic
+  #       data:
+  #         text: "Очиститель воздуха сообщает: ресурс фильтра менее десяти процентов. Пора заменить фильтр."
 
   # Гостиная: увлажнитель — фильтр <10%
   - id: "0946c623-c1c3-42f5-8f91-3289455f9d76"

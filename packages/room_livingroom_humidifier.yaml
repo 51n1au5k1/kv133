@@ -244,5 +244,3 @@ automation:
                 humidity={{ states('sensor.livingroom_average_humidity') }};
                 low={{ states('input_number.livingroom_hum_low') }};
                 high={{ states('input_number.livingroom_hum_high') }};
-
-

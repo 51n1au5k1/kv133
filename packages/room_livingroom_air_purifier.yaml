@@ -250,5 +250,3 @@ automation:
                   entity_id: input_datetime.air_purifier_last_off
                 data:
                   datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
-
-

@@ -608,16 +608,3 @@ automation:
           - action: homeassistant.turn_off
             target:
               entity_id: group.living_room_tv
-
-  - id: "ee320693-2e76-435b-8012-3a908046d4d0"
-    alias: "Выключение отпаривателя при отсутствии дома"
-    mode: single
-    triggers:
-      - trigger: state
-        entity_id: binary_sensor.someone_is_home
-        to: "off"
-    actions:
-      - action: switch.turn_off
-        target:
-          entity_id: switch.smart_plug_in_unit_vykliuchatel
-

@@ -208,7 +208,6 @@ script:
             {{ [
                 [ ["🔴 Основной свет" if is_state("light.workroom_switch", "off") else "🟢 Основной свет", "/toggle_workroom_light"],
                   ["🔴 Подсветка" if is_state("light.working_room_led", "off") else "🟢 Подсветка", "/toggle_workroom_led"] ],
-                [ ["🔴 Розетка отпаривателя" if is_state("switch.smart_plug_in_unit_vykliuchatel", "off") else "🟢 Розетка отпаривателя", "/toggle_workroom_plug"] ],
                 [ ["👈 В меню", "/menu_back"], ["↻ Обновить", "/workroom_control"] ]
               ] | tojson }}
 
@@ -813,23 +812,6 @@ automation:
           chat_id: "{{ trigger.event.data.chat_id }}"
           user_id: "{{ trigger.event.data.user_id }}"
 
-  - id: "telegram_bot_toggle_workroom_plug"
-    alias: "TG: Workroom Plug"
-    triggers:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/toggle_workroom_plug"
-    actions:
-      - service: script.toggle_device
-        data:
-          entity: switch.smart_plug_in_unit_vykliuchatel
-          domain: switch
-          menu_script: script.send_workroom_status
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-          user_id: "{{ trigger.event.data.user_id }}"
-
   # --- СПАЛЬНЯ ---
   - id: "telegram_bot_toggle_bedroom_light"
     alias: "TG: Bedroom Light"
@@ -1056,40 +1038,6 @@ automation:
           user_id: "{{ trigger.event.data.user_id }}"
 
   # --- СИСТЕМА ---
-  - id: "telegram_bot_toggle_router_socket"
-    alias: "TG: Router Socket"
-    triggers:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/toggle_router_socket"
-    actions:
-      - service: script.toggle_device
-        data:
-          entity: switch.my_multi_outlet_left
-          domain: switch
-          menu_script: script.send_system_status
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-          user_id: "{{ trigger.event.data.user_id }}"
-
-  - id: "telegram_bot_toggle_minipc_socket"
-    alias: "TG: MiniPC Socket"
-    triggers:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/toggle_minipc_socket"
-    actions:
-      - service: script.toggle_device
-        data:
-          entity: switch.my_multi_outlet_right
-          domain: switch
-          menu_script: script.send_system_status
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-          user_id: "{{ trigger.event.data.user_id }}"
-
   - id: "telegram_bot_toggle_bathroom_power"
     alias: "TG: Bathroom Power"
     triggers:
