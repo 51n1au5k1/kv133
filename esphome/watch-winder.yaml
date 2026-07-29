@@ -58,7 +58,7 @@ number:
     entity_category: config
     mode: box
     min_value: 1
-    max_value: 300
+    max_value: 500
     step: 1
     optimistic: true
     restore_value: true
