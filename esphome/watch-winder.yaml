@@ -4,14 +4,16 @@
 esphome:
   name: watch-winder
   friendly_name: watch-winder
-
+  project:
+    name: a.5in watch winder
+    version: "1.0"
 esp32:
   variant: esp32c3
   framework:
     type: esp-idf
 
 logger:
-  level: ERROR
+  level: DEBUG
 
 api:
   encryption:
@@ -19,6 +21,9 @@ api:
 ota:
   - platform: esphome
     password: !secret watch_winder__ota_password
+
+safe_mode:
+  disabled: true
 
 wifi:
   ssid: !secret wifi_ssid
