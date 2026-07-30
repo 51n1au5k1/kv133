@@ -2,49 +2,21 @@
 # /packages/helper_climate_common.yaml
 ################################################################################
 #
-# ИНФРАСТРУКТУРА КЛИМАТИЧЕСКОЙ СИСТЕМЫ
+# ОБЩАЯ ИНФРАСТРУКТУРА КЛИМАТИЧЕСКОЙ СИСТЕМЫ
 #
-# Этот пакет предоставляет общие механизмы для автоматизации климата,
-# используемые в пакетах комнат (room_livingroom_*.yaml):
+# Пакет содержит только общие и постоянно используемые механизмы:
+# 1. Усреднённые датчики гостиной.
+# 2. CO₂ и необходимость проветривания.
+# 3. Зимний режим.
+# 4. Сохранение/восстановление режима кондиционера.
+# 5. Отключение кондиционера при открытии балконных дверей.
 #
-# ВКЛЮЧАЕТ:
-# 1. ТАЙМЕРЫ РАБОТЫ (input_datetime)
-# 2. УНИВЕРСАЛЬНЫЙ СКРИПТ обновления таймеров
-# 3. PRE-RESTART сохранение/восстановление
-# 4. АНТИПРОВЕТРИВАНИЕ (дверь → климат)
-# 5. ЗИМНИЙ РЕЖИМ
-# 6. CO₂ уведомления
-# 7. Усреднённые датчики (гостиная)
-# 8. Бинарные сенсоры
-#
+# Логика снятых с эксплуатации или временно отсутствующих устройств хранится
+# вне /packages в /archive/devices и Home Assistant не загружается.
 ################################################################################
 
-# === ОБЩИЕ ТАЙМЕРЫ ===
-input_datetime:
-  humidifier_last_on:
-    name: "Время последнего включения увлажнителя"
-    has_date: true
-    has_time: true
-    icon: mdi:clock-start
-
-  humidifier_last_off:
-    name: "Время последнего выключения увлажнителя"
-    has_date: true
-    has_time: true
-    icon: mdi:clock-end
-
-  air_purifier_last_on:
-    name: "Очиститель: последнее включение"
-    has_date: true
-    has_time: true
-
-  air_purifier_last_off:
-    name: "Очиститель: последнее выключение"
-    has_date: true
-    has_time: true
-
 ################################################################################
-# БИНАРНЫЕ СЕНСОРЫ
+# БИНАРНЫЕ И ШАБЛОННЫЕ СЕНСОРЫ
 ################################################################################
 
 template:
@@ -153,31 +125,18 @@ sensor:
         window_size: "00:02"
         precision: 2
 
-##############################################################################
-#  ВХОДНЫЕ ПАРАМЕТРЫ
-##############################################################################
+################################################################################
+# ВХОДНЫЕ ПАРАМЕТРЫ
+################################################################################
+
 input_boolean:
   winter_mode:
     name: "Зимний режим"
     initial: false
     icon: mdi:snowflake
 
-  fan_pre_restart_state:
-    name: "Fan Pre-Restart State"
-
-  humidifier_pre_restart_state:
-    name: "Humidifier Pre-Restart State"
-
   door_open_climate_pre_state:
     name: "Climate Pre-State When Door Opened"
-    initial: false
-
-  door_open_fan_pre_state:
-    name: "Fan Pre-State When Door Opened"
-    initial: false
-
-  door_open_humidifier_pre_state:
-    name: "Humidifier Pre-State When Door Opened"
     initial: false
 
 input_text:
@@ -215,155 +174,11 @@ input_number:
     step: 50
     initial: 550
 
-##############################################################################
-# УНИВЕРСАЛЬНЫЙ СКРИПТ
-##############################################################################
-script:
-  climate_update_timers:
-    alias: "Обновить таймеры климата"
-    mode: parallel
-    fields:
-      device_on_entity:
-        description: "Entity включённого устройства (например, fan.xxx или humidifier.xxx)"
-        required: true
-      last_on_entity:
-        description: "input_datetime последнего включения"
-        required: true
-      last_off_entity:
-        description: "input_datetime последнего выключения"
-        required: true
-      force_update:
-        description: "Перезаписать время даже если там уже есть значение"
-        required: false
-    sequence:
-      - variables:
-          dev: "{{ device_on_entity }}"
-          last_on: "{{ last_on_entity }}"
-          last_off: "{{ last_off_entity }}"
-          force: "{{ force_update | default(false) }}"
-
-      - choose:
-          - conditions:
-              - condition: template
-                value_template: >
-                  {{ states(dev) in ['unknown', 'unavailable', ''] }}
-            sequence:
-              - action: script.log_helper_event
-                data:
-                  level: error
-                  message: >
-                    climate_update_timers: сущность {{ dev }} недоступна, таймеры не обновлены.
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ dev }}"
-                  trigger_from: ""
-                  trigger_to: "{{ states(dev) }}"
-                  extra: "last_on={{ last_on }}, last_off={{ last_off }}, force={{ force }}"
-              - stop: "device_on_entity unavailable, aborting timers update"
-
-          - conditions:
-              - condition: template
-                value_template: >-
-                  {{ is_state(dev, 'on')
-                     and (force or states(last_on) in ['unknown','unavailable','']) }}
-            sequence:
-              - action: input_datetime.set_datetime
-                target:
-                  entity_id: "{{ last_on }}"
-                data:
-                  datetime: "{{ now().isoformat() }}"
-
-          - conditions:
-              - condition: template
-                value_template: >-
-                  {{ is_state(dev, 'off')
-                     and (force or states(last_off) in ['unknown','unavailable','']) }}
-            sequence:
-              - action: input_datetime.set_datetime
-                target:
-                  entity_id: "{{ last_off }}"
-                data:
-                  datetime: "{{ now().isoformat() }}"
-              - action: script.log_helper_event
-                data:
-                  level: info
-                  message: >
-                    climate_update_timers: обновлён {{ last_off }} по состоянию {{ dev }} = 'off'.
-                  source: "{{ this.entity_id }}"
-                  trigger_entity: "{{ dev }}"
-                  trigger_from: ""
-                  trigger_to: "off"
-                  extra: "force={{ force }}"
-        default:
-          - action: script.log_helper_event
-            data:
-              level: debug
-              message: >
-                climate_update_timers: состояние {{ dev }} = '{{ states(dev) }}',
-                явных действий по таймерам не предпринято.
-              source: "{{ this.entity_id }}"
-              trigger_entity: "{{ dev }}"
-              trigger_from: ""
-              trigger_to: "{{ states(dev) }}"
-              extra: "force={{ force }}, last_on={{ last_on }}, last_off={{ last_off }}"
-
-##############################################################################
+################################################################################
 # АВТОМАТИЗАЦИИ
-##############################################################################
+################################################################################
+
 automation:
-  - id: "humidifier_timer_update"
-    alias: "HELPER: Увлажнитель: обновить таймеры"
-    description: >
-      Обновляет input_datetime.humidifier_last_on и humidifier_last_off
-      при каждом изменении состояния увлажнителя.
-    triggers:
-      - trigger: state
-        entity_id: humidifier.xiaomi_p3_946a_humidifier
-    actions:
-      - action: script.climate_update_timers
-        data:
-          device_on_entity: humidifier.xiaomi_p3_946a_humidifier
-          last_on_entity: input_datetime.humidifier_last_on
-          last_off_entity: input_datetime.humidifier_last_off
-          force_update: true
-
-  - id: "air_purifier_timer_update"
-    alias: "HELPER: Очиститель: обновить таймеры"
-    description: >
-      Обновляет input_datetime.air_purifier_last_on и air_purifier_last_off
-      при каждом изменении состояния очистителя воздуха.
-    triggers:
-      - trigger: state
-        entity_id: fan.zhimi_mb3_a5d3_air_purifier
-    actions:
-      - action: script.climate_update_timers
-        data:
-          device_on_entity: fan.zhimi_mb3_a5d3_air_purifier
-          last_on_entity: input_datetime.air_purifier_last_on
-          last_off_entity: input_datetime.air_purifier_last_off
-          force_update: true
-
-  - id: "climate_timers_init"
-    alias: "HELPER: Инициализация таймеров климата при старте"
-    description: >
-      Инициализирует таймеры климатических устройств при старте Home Assistant.
-    triggers:
-      - trigger: homeassistant
-        event: start
-    actions:
-      - delay: "00:00:05"
-
-      - action: script.climate_update_timers
-        data:
-          device_on_entity: humidifier.xiaomi_p3_946a_humidifier
-          last_on_entity: input_datetime.humidifier_last_on
-          last_off_entity: input_datetime.humidifier_last_off
-
-      - action: script.climate_update_timers
-        data:
-          device_on_entity: fan.zhimi_mb3_a5d3_air_purifier
-          last_on_entity: input_datetime.air_purifier_last_on
-          last_off_entity: input_datetime.air_purifier_last_off
-
   - id: "d8084e61-405b-4f92-8c86-527254cc6753"
     alias: "HELPER: Переключение зимнего режима по месяцам"
     mode: single
@@ -387,11 +202,8 @@ automation:
             target:
               entity_id: input_boolean.winter_mode
 
-  # ========================================================================
-  # PRE-RESTART: СОХРАНЕНИЕ И ВОССТАНОВЛЕНИЕ СОСТОЯНИЙ
-  # ========================================================================
   - id: "5b187cde-0ad5-4132-bb68-a622dd15d6ff"
-    alias: "HELPER: Сохранение состояний климатической техники"
+    alias: "HELPER: Сохранение состояния кондиционера"
     mode: single
     triggers:
       - trigger: homeassistant
@@ -405,36 +217,8 @@ automation:
             {% set mode = states('climate.konditsioner') %}
             {{ mode if mode in ['heat', 'dry', 'cool', 'fan_only', 'heat_cool'] else 'off' }}
 
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: fan.zhimi_mb3_a5d3_air_purifier
-                state: "on"
-            sequence:
-              - action: input_boolean.turn_on
-                target:
-                  entity_id: input_boolean.fan_pre_restart_state
-        default:
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.fan_pre_restart_state
-
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: humidifier.xiaomi_p3_946a_humidifier
-                state: "on"
-            sequence:
-              - action: input_boolean.turn_on
-                target:
-                  entity_id: input_boolean.humidifier_pre_restart_state
-        default:
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.humidifier_pre_restart_state
-
   - id: "457a6711-67fa-4cb2-bcab-63c0cc58e054"
-    alias: "HELPER: Восстановление состояний климатической техники"
+    alias: "HELPER: Восстановление состояния кондиционера"
     mode: single
     triggers:
       - trigger: homeassistant
@@ -450,6 +234,9 @@ automation:
                      in ['heat', 'dry', 'cool', 'fan_only', 'heat_cool'] }}
               - condition: template
                 value_template: "{{ 4 <= now().month <= 10 }}"
+              - condition: state
+                entity_id: binary_sensor.doors_in_kitchen_livingroom
+                state: "off"
             sequence:
               - action: climate.set_hvac_mode
                 target:
@@ -457,43 +244,14 @@ automation:
                 data:
                   hvac_mode: "{{ states('input_text.climate_pre_restart_hvac_mode') }}"
 
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.fan_pre_restart_state
-                state: "on"
-            sequence:
-              - action: fan.turn_on
-                target:
-                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
-
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.humidifier_pre_restart_state
-                state: "on"
-            sequence:
-              - action: humidifier.turn_on
-                target:
-                  entity_id: humidifier.xiaomi_p3_946a_humidifier
-
-      - action: input_boolean.turn_off
-        target:
-          entity_id:
-            - input_boolean.fan_pre_restart_state
-            - input_boolean.humidifier_pre_restart_state
-
       - action: input_text.set_value
         target:
           entity_id: input_text.climate_pre_restart_hvac_mode
         data:
           value: "off"
 
-  # ========================================================================
-  # АНТИПРОВЕТРИВАНИЕ: УПРАВЛЕНИЕ КЛИМАТОМ ПРИ ОТКРЫТИИ ДВЕРЕЙ
-  # ========================================================================
   - id: "f4e42442-155e-4d0a-87c2-3f21fd72025d"
-    alias: "HELPER: Гостиная: Климат, отключить устройства при открытии двери"
+    alias: "HELPER: Гостиная: отключить кондиционер при открытии двери"
     mode: single
     triggers:
       - trigger: state
@@ -501,6 +259,10 @@ automation:
         to: "on"
         for: "00:01:00"
     actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.door_open_climate_pre_state
+
       - choose:
           - conditions:
               - condition: template
@@ -516,41 +278,8 @@ automation:
                 target:
                   entity_id: climate.konditsioner
 
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: fan.zhimi_mb3_a5d3_air_purifier
-                state: "on"
-            sequence:
-              - action: input_boolean.turn_on
-                target:
-                  entity_id: input_boolean.door_open_fan_pre_state
-              - action: fan.turn_off
-                target:
-                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
-
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: humidifier.xiaomi_p3_946a_humidifier
-                state: "on"
-            sequence:
-              - action: input_boolean.turn_on
-                target:
-                  entity_id: input_boolean.door_open_humidifier_pre_state
-              - action: humidifier.turn_off
-                target:
-                  entity_id: humidifier.xiaomi_p3_946a_humidifier
-
   - id: "0347cae6-1b2f-436a-a54c-792feafa9620"
-    alias: "HELPER: Гостиная: Климат, восстановление состояния устройств"
-    description: >
-      Восстанавливает климатические устройства после закрытия балконных дверей.
-      Важно: увлажнитель включаем только если это разрешено авто-логикой:
-      • авто-режим увлажнителя включен
-      • нет флага "нет воды"
-      • Xiaomi Home не нестабилен
-      • устройство доступно
+    alias: "HELPER: Гостиная: восстановить кондиционер после закрытия двери"
     mode: single
     triggers:
       - trigger: state
@@ -570,38 +299,9 @@ automation:
                 target:
                   entity_id: climate.konditsioner
 
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.door_open_fan_pre_state
-                state: "on"
-            sequence:
-              - action: fan.turn_on
-                target:
-                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
-
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: input_boolean.door_open_humidifier_pre_state
-                state: "on"
-              - condition: state
-                entity_id: input_boolean.livingroom_humidifier_auto
-                state: "on"
-              - condition: template
-                value_template: >
-                  {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable','unknown',''] }}
-            sequence:
-              - action: humidifier.turn_on
-                target:
-                  entity_id: humidifier.xiaomi_p3_946a_humidifier
-
       - action: input_boolean.turn_off
         target:
-          entity_id:
-            - input_boolean.door_open_climate_pre_state
-            - input_boolean.door_open_fan_pre_state
-            - input_boolean.door_open_humidifier_pre_state
+          entity_id: input_boolean.door_open_climate_pre_state
 
   - id: "b9867c28-be9f-425e-9fee-0aea777d04c0"
     alias: "HELPER: Защита — не включать кондиционер при активном зимнем режиме"
@@ -624,4 +324,3 @@ automation:
         data:
           message: "Кондиционер принудительно отключён: активен зимний режим."
       - action: script.yandex_tts_kondicioner_warning
-

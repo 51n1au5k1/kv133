@@ -1,0 +1,385 @@
+################################################################################
+# /archive/devices/humidifier/room_livingroom_humidifier.yaml.disabled
+################################################################################
+# STATUS: MAINTENANCE
+#
+# Увлажнитель временно отсутствует из-за ремонта.
+# Файл хранится как рабочий архив и Home Assistant не загружается.
+# Для возврата устройства см. /archive/devices/README.md.
+################################################################################
+
+input_boolean:
+  livingroom_humidifier_auto:
+    name: "Гостиная: авто-режим увлажнителя"
+    icon: mdi:autorenew
+
+  humidifier_pre_restart_state:
+    name: "Увлажнитель: состояние перед перезапуском"
+    initial: false
+
+  door_open_humidifier_pre_state:
+    name: "Увлажнитель: состояние перед открытием двери"
+    initial: false
+
+input_datetime:
+  humidifier_last_on:
+    name: "Время последнего включения увлажнителя"
+    has_date: true
+    has_time: true
+    icon: mdi:clock-start
+
+  humidifier_last_off:
+    name: "Время последнего выключения увлажнителя"
+    has_date: true
+    has_time: true
+    icon: mdi:clock-end
+
+input_number:
+  livingroom_hum_low:
+    name: "Гостиная: нижний порог RH (%)"
+    min: 20
+    max: 60
+    step: 1
+    initial: 47
+    unit_of_measurement: "%"
+
+  livingroom_hum_high:
+    name: "Гостиная: верхний порог RH (%)"
+    min: 30
+    max: 70
+    step: 1
+    initial: 50
+    unit_of_measurement: "%"
+
+  livingroom_hum_min_on_min:
+    name: "Мин. время работы увлажнителя (мин)"
+    min: 1
+    max: 60
+    step: 1
+    initial: 10
+
+  livingroom_hum_min_off_min:
+    name: "Мин. время простоя увлажнителя (мин)"
+    min: 1
+    max: 60
+    step: 1
+    initial: 15
+
+template:
+  - binary_sensor:
+      - unique_id: livingroom_need_humidify
+        name: "Гостиная: нужна влажность (гистерезис)"
+        device_class: moisture
+        icon: >-
+          {% if is_state('binary_sensor.livingroom_need_humidify', 'on') %}
+            mdi:water-alert
+          {% else %}
+            mdi:water-check
+          {% endif %}
+        availability: >-
+          {{ states('sensor.livingroom_average_humidity') not in ['unknown','unavailable',''] }}
+        state: >-
+          {% set rh = states('sensor.livingroom_average_humidity') | float(default=none) %}
+          {% if rh is none %}
+            {{ states('binary_sensor.livingroom_need_humidify') }}
+          {% else %}
+            {% set low = states('input_number.livingroom_hum_low') | float(47) %}
+            {% set high = states('input_number.livingroom_hum_high') | float(50) %}
+            {% if low >= high %}{% set high = low + 1 %}{% endif %}
+            {% set was_on = is_state('binary_sensor.livingroom_need_humidify','on') %}
+            {{ rh < high if was_on else rh < low }}
+          {% endif %}
+
+automation:
+  - id: "humidifier_timer_update"
+    alias: "Увлажнитель: обновить таймер состояния"
+    mode: queued
+    max: 5
+    triggers:
+      - trigger: state
+        entity_id: humidifier.xiaomi_p3_946a_humidifier
+        to: "on"
+        id: turned_on
+      - trigger: state
+        entity_id: humidifier.xiaomi_p3_946a_humidifier
+        to: "off"
+        id: turned_off
+    actions:
+      - choose:
+          - conditions: "{{ trigger.id == 'turned_on' }}"
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.humidifier_last_on
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - conditions: "{{ trigger.id == 'turned_off' }}"
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.humidifier_last_off
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  - id: "humidifier_timer_init"
+    alias: "Увлажнитель: инициализировать таймер после запуска"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: "00:00:10"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: humidifier.xiaomi_p3_946a_humidifier
+                state: "on"
+              - condition: template
+                value_template: >-
+                  {{ states('input_datetime.humidifier_last_on') in ['unknown','unavailable',''] }}
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.humidifier_last_on
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - conditions:
+              - condition: state
+                entity_id: humidifier.xiaomi_p3_946a_humidifier
+                state: "off"
+              - condition: template
+                value_template: >-
+                  {{ states('input_datetime.humidifier_last_off') in ['unknown','unavailable',''] }}
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.humidifier_last_off
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  - id: "livingroom_humidifier_controller_aio"
+    alias: "Гостиная: Управление увлажнителем (All-in-One)"
+    description: >
+      Управляет увлажнителем по RH-гистерезису, открытым дверям и минимальному
+      времени работы/простоя. Отдельная проверка наличия воды не включена,
+      поскольку в исходной конфигурации нет подтверждённой сущности датчика воды.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.livingroom_need_humidify
+        to: "on"
+        for: "00:03:00"
+      - trigger: state
+        entity_id: binary_sensor.livingroom_need_humidify
+        to: "off"
+        for: "00:03:00"
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom
+        to: "off"
+        for: "00:01:00"
+      - trigger: state
+        entity_id: input_boolean.livingroom_humidifier_auto
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.livingroom_humidifier_auto
+        state: "on"
+      - condition: template
+        value_template: >-
+          {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable','unknown',''] }}
+    actions:
+      - variables:
+          last_on: "{{ states('input_datetime.humidifier_last_on') }}"
+          last_off: "{{ states('input_datetime.humidifier_last_off') }}"
+          min_on: "{{ states('input_number.livingroom_hum_min_on_min') | int(10) }}"
+          min_off: "{{ states('input_number.livingroom_hum_min_off_min') | int(15) }}"
+          diff_on_min: >-
+            {% if last_on in ['unknown','unavailable','', none] %}
+              999999
+            {% else %}
+              {{ ((as_timestamp(now()) - as_timestamp(last_on)) / 60) | round(1) }}
+            {% endif %}
+          diff_off_min: >-
+            {% if last_off in ['unknown','unavailable','', none] %}
+              999999
+            {% else %}
+              {{ ((as_timestamp(now()) - as_timestamp(last_off)) / 60) | round(1) }}
+            {% endif %}
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.livingroom_need_humidify
+                state: "on"
+              - condition: state
+                entity_id: humidifier.xiaomi_p3_946a_humidifier
+                state: "off"
+              - condition: state
+                entity_id: binary_sensor.doors_in_kitchen_livingroom
+                state: "off"
+              - condition: template
+                value_template: "{{ diff_off_min >= min_off }}"
+            sequence:
+              - action: humidifier.turn_on
+                target:
+                  entity_id: humidifier.xiaomi_p3_946a_humidifier
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.livingroom_need_humidify
+                state: "off"
+              - condition: state
+                entity_id: humidifier.xiaomi_p3_946a_humidifier
+                state: "on"
+              - condition: template
+                value_template: "{{ diff_on_min >= min_on }}"
+            sequence:
+              - action: humidifier.turn_off
+                target:
+                  entity_id: humidifier.xiaomi_p3_946a_humidifier
+
+  - id: "humidifier_save_pre_restart_state"
+    alias: "Увлажнитель: сохранить состояние перед перезапуском"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: shutdown
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: humidifier.xiaomi_p3_946a_humidifier
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.humidifier_pre_restart_state
+        default:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.humidifier_pre_restart_state
+
+  - id: "humidifier_restore_pre_restart_state"
+    alias: "Увлажнитель: восстановить состояние после перезапуска"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: "00:00:15"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.humidifier_pre_restart_state
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.livingroom_humidifier_auto
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.doors_in_kitchen_livingroom
+                state: "off"
+              - condition: template
+                value_template: >-
+                  {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable','unknown',''] }}
+            sequence:
+              - action: humidifier.turn_on
+                target:
+                  entity_id: humidifier.xiaomi_p3_946a_humidifier
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.humidifier_pre_restart_state
+
+  - id: "humidifier_off_when_balcony_open"
+    alias: "Увлажнитель: выключить при открытии балконной двери"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom
+        to: "on"
+        for: "00:01:00"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.door_open_humidifier_pre_state
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: humidifier.xiaomi_p3_946a_humidifier
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.door_open_humidifier_pre_state
+              - action: humidifier.turn_off
+                target:
+                  entity_id: humidifier.xiaomi_p3_946a_humidifier
+
+  - id: "humidifier_restore_when_balcony_closed"
+    alias: "Увлажнитель: восстановить после закрытия балконной двери"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom
+        to: "off"
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.door_open_humidifier_pre_state
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.livingroom_humidifier_auto
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.livingroom_need_humidify
+                state: "on"
+              - condition: template
+                value_template: >-
+                  {{ states('humidifier.xiaomi_p3_946a_humidifier') not in ['unavailable','unknown',''] }}
+            sequence:
+              - action: humidifier.turn_on
+                target:
+                  entity_id: humidifier.xiaomi_p3_946a_humidifier
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.door_open_humidifier_pre_state
+
+  - id: "0946c623-c1c3-42f5-8f91-3289455f9d76"
+    alias: "Яндекс: увлажнитель — фильтр <10%"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.xiaomi_p3_946a_filter_life_level
+        below: 10
+        for: "00:01:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.silent_mode
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.someone_is_home
+        state: "on"
+    actions:
+      - action: script.yandex_tts_generic
+        data:
+          text: "Фильтр увлажнителя требует замены. Его ресурс менее десяти процентов."
+
+  - id: "toggle_livingroom_humidifier"
+    alias: "TG: Livingroom Humidifier"
+    triggers:
+      - trigger: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_humidifier"
+    actions:
+      - action: script.toggle_device
+        data:
+          entity: humidifier.xiaomi_p3_946a_humidifier
+          domain: humidifier
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"

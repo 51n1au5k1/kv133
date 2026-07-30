@@ -173,16 +173,13 @@ script:
             🌡 <b>Температура:</b> {{ states('sensor.livingroom_climat_sensor_temperature') | default('N/A') }}°C
             💧 <b>Влажность:</b> {{ states('sensor.livingroom_climat_sensor_humidity') | default('N/A') }}%
             🌿 <b>CO₂:</b> {{ states('sensor.co2_monitor_co2') | default('N/A') }} ppm
-            💨 <b>PM2.5:</b> {{ states('sensor.zhimi_mb3_a5d3_pm25') | default('N/A') }} µg/m³
             🚪 <b>Статус дверей:</b> {% if is_state('binary_sensor.gostinaia_balkon_contact','on') or is_state('binary_sensor.0x00158d0003ce9922_contact','on') %}Открыта{% else %}Закрыта{% endif %}
           inline_keyboard: >
             {{ [
                 [ ["🔴 Люстра" if is_state("light.livingroom_main_switch_left", "off") else "🟢 Люстра", "/toggle_livingroom_main_switch_left"],
                   ["🔴 Свет над диваном" if is_state("light.livingroom_main_switch_right", "off") else "🟢 Свет над диваном", "/toggle_livingroom_main_switch_right"],
                   ["🔴 Бра" if is_state("light.livingroom_scone_dimmer", "off") else "🟢 Бра", "/toggle_livingroom_scone_dimmer"] ],
-                [ ["🔴 Кондиционер" if is_state("climate.konditsioner", "off") else "🟢 Кондиционер", "/toggle_livingroom_konditsioner"],
-                  ["🔴 Очиститель" if is_state("fan.zhimi_mb3_a5d3_air_purifier", "off") else "🟢 Очиститель", "/toggle_livingroom_air_purifier"],
-                  ["🔴 Увлажнитель" if is_state("humidifier.xiaomi_p3_946a_humidifier", "off") else "🟢 Увлажнитель", "/toggle_livingroom_humidifier"] ],
+                [ ["🔴 Кондиционер" if is_state("climate.konditsioner", "off") else "🟢 Кондиционер", "/toggle_livingroom_konditsioner"] ],
                 [ ["🔴 Угловая розетка" if is_state("switch.livingroom_socket_corner_r", "off") else "🟢 Угловая розетка", "/toggle_livingroom_socket_corner_r"],
                   ["🔴 Левая розетка" if is_state("switch.livingroom_socket_l", "off") else "🟢 Левая розетка", "/toggle_livingroom_socket_l"],
                   ["🔴 Правая розетка" if is_state("switch.livingroom_socket_r", "off") else "🟢 Правая розетка", "/toggle_livingroom_socket_r"] ],
@@ -721,40 +718,6 @@ automation:
         data:
           entity: switch.livingroom_socket_r
           domain: switch
-          menu_script: script.send_livingroom_status
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-          user_id: "{{ trigger.event.data.user_id }}"
-
-  - id: "toggle_livingroom_humidifier"
-    alias: "TG: Livingroom Humidifier"
-    triggers:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/toggle_livingroom_humidifier"
-    actions:
-      - service: script.toggle_device
-        data:
-          entity: humidifier.xiaomi_p3_946a_humidifier
-          domain: humidifier
-          menu_script: script.send_livingroom_status
-          message_id: "{{ trigger.event.data.message.message_id }}"
-          chat_id: "{{ trigger.event.data.chat_id }}"
-          user_id: "{{ trigger.event.data.user_id }}"
-
-  - id: "toggle_livingroom_air_purifier"
-    alias: "TG: Livingroom Air Purifier"
-    triggers:
-      - platform: event
-        event_type: telegram_callback
-        event_data:
-          data: "/toggle_livingroom_air_purifier"
-    actions:
-      - service: script.toggle_device
-        data:
-          entity: fan.zhimi_mb3_a5d3_air_purifier
-          domain: fan
           menu_script: script.send_livingroom_status
           message_id: "{{ trigger.event.data.message.message_id }}"
           chat_id: "{{ trigger.event.data.chat_id }}"

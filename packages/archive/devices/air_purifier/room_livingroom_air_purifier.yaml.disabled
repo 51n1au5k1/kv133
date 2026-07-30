@@ -1,0 +1,374 @@
+################################################################################
+# /archive/devices/air_purifier/room_livingroom_air_purifier.yaml.disabled
+################################################################################
+# STATUS: RETIRED
+#
+# Очиститель физически убран из квартиры на постоянной основе.
+# Файл хранится как рабочий архив и Home Assistant не загружается.
+# Для возврата устройства см. /archive/devices/README.md.
+################################################################################
+
+input_boolean:
+  livingroom_air_purifier_auto:
+    name: "Гостиная: авто-режим очистителя"
+    icon: mdi:autorenew
+
+  air_purifier_pre_restart_state:
+    name: "Очиститель: состояние перед перезапуском"
+    initial: false
+
+  door_open_air_purifier_pre_state:
+    name: "Очиститель: состояние перед открытием двери"
+    initial: false
+
+input_datetime:
+  air_purifier_last_on:
+    name: "Очиститель: последнее включение"
+    has_date: true
+    has_time: true
+
+  air_purifier_last_off:
+    name: "Очиститель: последнее выключение"
+    has_date: true
+    has_time: true
+
+input_number:
+  livingroom_pm25_low:
+    name: "Гостиная: нижний порог PM2.5 (µg/m³)"
+    min: 0
+    max: 75
+    step: 1
+    initial: 10
+    unit_of_measurement: "µg/m³"
+
+  livingroom_pm25_high:
+    name: "Гостиная: верхний порог PM2.5 (µg/m³)"
+    min: 5
+    max: 100
+    step: 1
+    initial: 20
+    unit_of_measurement: "µg/m³"
+
+  livingroom_air_min_on_min:
+    name: "Очиститель: мин. время работы (мин)"
+    min: 1
+    max: 120
+    step: 1
+    initial: 10
+
+  livingroom_air_min_off_min:
+    name: "Очиститель: мин. время простоя (мин)"
+    min: 1
+    max: 120
+    step: 1
+    initial: 15
+
+sensor:
+  - platform: statistics
+    name: "Living Room PM2.5 Avg"
+    unique_id: living_room_pm2_5_avg
+    entity_id: sensor.zhimi_mb3_a5d3_pm25
+    state_characteristic: mean
+    sampling_size: 120
+    max_age:
+      minutes: 5
+    precision: 1
+
+template:
+  - binary_sensor:
+      - unique_id: livingroom_need_air_purify
+        name: "Гостиная: нужна очистка воздуха"
+        device_class: problem
+        icon: >-
+          {% if is_state('binary_sensor.livingroom_need_air_purify', 'on') %}
+            mdi:air-filter
+          {% else %}
+            mdi:check-circle-outline
+          {% endif %}
+        availability: >-
+          {{ states('sensor.zhimi_mb3_a5d3_pm25') not in ['unknown','unavailable','']
+             or states('sensor.living_room_pm2_5_avg') not in ['unknown','unavailable',''] }}
+        state: >-
+          {% set pm_raw = states('sensor.zhimi_mb3_a5d3_pm25') | float(default=none) %}
+          {% set pm_avg = states('sensor.living_room_pm2_5_avg') | float(default=none) %}
+          {% set pm = pm_avg if pm_avg is not none else pm_raw %}
+          {% if pm is none %}
+            {{ states('binary_sensor.livingroom_need_air_purify') }}
+          {% else %}
+            {% set low = states('input_number.livingroom_pm25_low') | float(10) %}
+            {% set high = states('input_number.livingroom_pm25_high') | float(20) %}
+            {% if low >= high %}{% set high = low + 1 %}{% endif %}
+            {% set was_on = is_state('binary_sensor.livingroom_need_air_purify', 'on') %}
+            {{ pm > low if was_on else pm > high }}
+          {% endif %}
+
+automation:
+  - id: "air_purifier_timer_update"
+    alias: "Очиститель: обновить таймер состояния"
+    mode: queued
+    max: 5
+    triggers:
+      - trigger: state
+        entity_id: fan.zhimi_mb3_a5d3_air_purifier
+        to: "on"
+        id: turned_on
+      - trigger: state
+        entity_id: fan.zhimi_mb3_a5d3_air_purifier
+        to: "off"
+        id: turned_off
+    actions:
+      - choose:
+          - conditions: "{{ trigger.id == 'turned_on' }}"
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.air_purifier_last_on
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - conditions: "{{ trigger.id == 'turned_off' }}"
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.air_purifier_last_off
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  - id: "air_purifier_timer_init"
+    alias: "Очиститель: инициализировать таймер после запуска"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: "00:00:10"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
+                state: "on"
+              - condition: template
+                value_template: >-
+                  {{ states('input_datetime.air_purifier_last_on') in ['unknown','unavailable',''] }}
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.air_purifier_last_on
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - conditions:
+              - condition: state
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
+                state: "off"
+              - condition: template
+                value_template: >-
+                  {{ states('input_datetime.air_purifier_last_off') in ['unknown','unavailable',''] }}
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.air_purifier_last_off
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  - id: "livingroom_air_purifier_controller_aio"
+    alias: "Гостиная: Управление очистителем (All-in-One)"
+    description: >
+      Управляет очистителем по сглаженному PM2.5, гистерезису и минимальному
+      времени работы/простоя. Watchdog повторяет проверку каждые пять минут.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.livingroom_need_air_purify
+        to:
+          - "on"
+          - "off"
+        for: "00:05:00"
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: state
+        entity_id: input_boolean.livingroom_air_purifier_auto
+        to: "on"
+      - trigger: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom
+        to: "off"
+        for: "00:01:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.system_startup_phase
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.livingroom_air_purifier_auto
+        state: "on"
+      - condition: template
+        value_template: >-
+          {{ states('fan.zhimi_mb3_a5d3_air_purifier') not in ['unavailable','unknown',''] }}
+    actions:
+      - variables:
+          last_on: "{{ states('input_datetime.air_purifier_last_on') }}"
+          last_off: "{{ states('input_datetime.air_purifier_last_off') }}"
+          min_on: "{{ states('input_number.livingroom_air_min_on_min') | int(10) }}"
+          min_off: "{{ states('input_number.livingroom_air_min_off_min') | int(15) }}"
+          diff_on_min: >-
+            {% if last_on in ['unknown','unavailable','', none] %}
+              999999
+            {% else %}
+              {{ ((as_timestamp(now()) - as_timestamp(last_on)) / 60) | round(1) }}
+            {% endif %}
+          diff_off_min: >-
+            {% if last_off in ['unknown','unavailable','', none] %}
+              999999
+            {% else %}
+              {{ ((as_timestamp(now()) - as_timestamp(last_off)) / 60) | round(1) }}
+            {% endif %}
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.livingroom_need_air_purify
+                state: "on"
+              - condition: state
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
+                state: "off"
+              - condition: state
+                entity_id: binary_sensor.doors_in_kitchen_livingroom
+                state: "off"
+              - condition: template
+                value_template: "{{ diff_off_min >= min_off }}"
+            sequence:
+              - action: fan.turn_on
+                target:
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.livingroom_need_air_purify
+                state: "off"
+              - condition: state
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
+                state: "on"
+              - condition: template
+                value_template: "{{ diff_on_min >= min_on }}"
+            sequence:
+              - action: fan.turn_off
+                target:
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
+
+  - id: "air_purifier_save_pre_restart_state"
+    alias: "Очиститель: сохранить состояние перед перезапуском"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: shutdown
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.air_purifier_pre_restart_state
+        default:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.air_purifier_pre_restart_state
+
+  - id: "air_purifier_restore_pre_restart_state"
+    alias: "Очиститель: восстановить состояние после перезапуска"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: "00:00:15"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.air_purifier_pre_restart_state
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.livingroom_air_purifier_auto
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.doors_in_kitchen_livingroom
+                state: "off"
+              - condition: template
+                value_template: >-
+                  {{ states('fan.zhimi_mb3_a5d3_air_purifier') not in ['unavailable','unknown',''] }}
+            sequence:
+              - action: fan.turn_on
+                target:
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.air_purifier_pre_restart_state
+
+  - id: "air_purifier_off_when_balcony_open"
+    alias: "Очиститель: выключить при открытии балконной двери"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom
+        to: "on"
+        for: "00:01:00"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.door_open_air_purifier_pre_state
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: fan.zhimi_mb3_a5d3_air_purifier
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.door_open_air_purifier_pre_state
+              - action: fan.turn_off
+                target:
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
+
+  - id: "air_purifier_restore_when_balcony_closed"
+    alias: "Очиститель: восстановить после закрытия балконной двери"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.doors_in_kitchen_livingroom
+        to: "off"
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.door_open_air_purifier_pre_state
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.livingroom_air_purifier_auto
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.livingroom_need_air_purify
+                state: "on"
+              - condition: template
+                value_template: >-
+                  {{ states('fan.zhimi_mb3_a5d3_air_purifier') not in ['unavailable','unknown',''] }}
+            sequence:
+              - action: fan.turn_on
+                target:
+                  entity_id: fan.zhimi_mb3_a5d3_air_purifier
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.door_open_air_purifier_pre_state
+
+  - id: "toggle_livingroom_air_purifier"
+    alias: "TG: Livingroom Air Purifier"
+    triggers:
+      - trigger: event
+        event_type: telegram_callback
+        event_data:
+          data: "/toggle_livingroom_air_purifier"
+    actions:
+      - action: script.toggle_device
+        data:
+          entity: fan.zhimi_mb3_a5d3_air_purifier
+          domain: fan
+          menu_script: script.send_livingroom_status
+          message_id: "{{ trigger.event.data.message.message_id }}"
+          chat_id: "{{ trigger.event.data.chat_id }}"
+          user_id: "{{ trigger.event.data.user_id }}"

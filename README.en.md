@@ -23,7 +23,7 @@ automations.
 
 ### Presence and system modes
 
-- Andrei and Hanna presence from `person.*` with Wi-Fi fallback.
+- Users presence from `person.*` with Wi-Fi fallback.
 - Composite `resident_is_home` and `someone_is_home` sensors.
 - Guest, silent, bathroom cleaning, and forced camera-off modes.
 - Camera control based on real resident presence and guest mode.
@@ -42,10 +42,10 @@ automations.
 ### Climate and ventilation
 
 - Averaged living-room temperature and humidity.
-- Humidifier with 47/50% RH hysteresis, minimum run/idle times, and an
-  open-balcony-door interlock.
-- Air purifier with a five-minute PM2.5 mean, 20/10 µg/m³ hysteresis, and
-  minimum run/idle times.
+- The humidifier is currently in `maintenance`; its self-contained package is
+  retained under `archive/devices/humidifier` and is not loaded by Home Assistant.
+- The air purifier is `retired`; its self-contained package is retained under
+  `archive/devices/air_purifier` and is not loaded by Home Assistant.
 - Air-conditioner winter lockout, restart state handling, and balcony-door
   protection.
 - Weekday away cooling that only turns off an AC session started by the same
@@ -102,9 +102,9 @@ automations.
 | `configuration.yaml` | Entry point, packages, themes, recorder, logger, HTTP proxy |
 | `includes/recorder.yaml` | MariaDB and history include/exclude policy |
 | `packages/helper_main.yaml` | Presence, modes, cameras, and global helpers |
-| `packages/helper_climate_common.yaml` | Shared climate infrastructure and balcony-door protection |
+| `packages/helper_climate_common.yaml` | Shared sensors, CO₂, winter mode, and AC protection |
 | `packages/helper_proxmox.yaml` | VM/LXC CPU normalization |
-| `packages/room_*.yaml` | Room lighting, climate, and workflows |
+| `packages/room_*.yaml` | Active room lighting, climate, and workflows |
 | `packages/livingroom_summer_cooling.yaml` | Away-mode summer cooling |
 | `packages/washing_machine.yaml` | Laundry cycle tracking and alerts |
 | `packages/plants_common.yaml` | Shared plant scripts and notification cooldown |
@@ -114,6 +114,7 @@ automations.
 | `packages/yandex_helper.yaml` | Yandex Station TTS scripts |
 | `packages/yandex_notifications.yaml` | Yandex Station events and voice alerts |
 | `packages/weather_variables.yaml` | Open-Meteo Russian condition and wind helpers |
+| `archive/devices/` | Disabled device packages with `maintenance` and `retired` status |
 | `secrets.yaml.sample` | Required secret names without real values |
 
 ## External dependencies

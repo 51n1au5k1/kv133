@@ -23,7 +23,7 @@
 
 ### Присутствие и системные режимы
 
-- Присутствие Андрея и Hanna по `person.*` с Wi-Fi fallback.
+- Присутствие пользователей по `person.*` с Wi-Fi fallback.
 - Общие сенсоры `resident_is_home` и `someone_is_home`.
 - Гостевой режим, режим тишины, режим уборки ванной и блокировка камер.
 - Управление камерами в зависимости от присутствия и гостевого режима.
@@ -42,10 +42,10 @@
 ### Климат и вентиляция
 
 - Усреднённые температура и влажность гостиной.
-- Увлажнитель: RH-гистерезис 47/50%, минимальное время работы/простоя и
-  блокировка по открытым дверям.
-- Очиститель: среднее PM2.5 за 5 минут, гистерезис 20/10 мкг/м³,
-  минимальное время работы/простоя.
+- Увлажнитель временно переведён в статус `maintenance`; автономный пакет
+  сохранён в `archive/devices/humidifier` и не загружается Home Assistant.
+- Очиститель переведён в статус `retired`; автономный пакет сохранён в
+  `archive/devices/air_purifier` и не загружается Home Assistant.
 - Кондиционер: зимняя блокировка, сохранение состояния и отключение при
   открытых балконных дверях.
 - Летнее автоохлаждение в рабочие дни, когда дома никого нет; автоматизация
@@ -102,9 +102,9 @@
 | `configuration.yaml` | Точка входа, packages, themes, recorder, logger, HTTP proxy |
 | `includes/recorder.yaml` | MariaDB, include/exclude и политика хранения истории |
 | `packages/helper_main.yaml` | Присутствие, режимы, камеры, системные helper-сущности |
-| `packages/helper_climate_common.yaml` | Общая климатическая инфраструктура и защита от проветривания |
+| `packages/helper_climate_common.yaml` | Общие датчики, CO₂, зимний режим и защита кондиционера |
 | `packages/helper_proxmox.yaml` | Нормализация CPU VM/LXC |
-| `packages/room_*.yaml` | Освещение, климат и сценарии отдельных помещений |
+| `packages/room_*.yaml` | Активные освещение, климат и сценарии отдельных помещений |
 | `packages/livingroom_summer_cooling.yaml` | Летнее автоохлаждение пустой квартиры |
 | `packages/washing_machine.yaml` | Tracking цикла стирки и уведомления |
 | `packages/plants_common.yaml` | Общие скрипты и cooldown уведомлений растений |
@@ -114,6 +114,7 @@
 | `packages/yandex_helper.yaml` | Скрипты Yandex Station TTS |
 | `packages/yandex_notifications.yaml` | События и голосовые уведомления Yandex Station |
 | `packages/weather_variables.yaml` | Русские описания и направление ветра для Open-Meteo |
+| `archive/devices/` | Отключённые device-пакеты со статусами `maintenance` и `retired` |
 | `secrets.yaml.sample` | Пример обязательных секретов без реальных значений |
 
 ## Внешние зависимости
