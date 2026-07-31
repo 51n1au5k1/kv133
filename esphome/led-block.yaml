@@ -1,5 +1,5 @@
 # Board: DOIT ESP32 DEVKIT V1 (DOIT)
-# Рабочая прошивка A5IN LED Block v1.0
+# Рабочая прошивка A5IN LED Block v1.1
 #
 # Аппаратный контракт:
 # - WS2812B DIN       <- 330 Ом <- ESP32 D18 / GPIO18
@@ -13,7 +13,7 @@
 esphome:
   name: a5in-led-block
   friendly_name: a5in-led-block
-  comment: "Рабочая лампа ESP32, WS2812B 16x16, MAX9814 и TTP223"
+  comment: "Рабочая лампа v1.1: правильная ориентация, свеча и прямой выбор эффектов"
 
 esp32:
   variant: esp32
@@ -140,14 +140,51 @@ number:
     restore_value: true
     optimistic: true
 
+
+# ============================================================
+# Прямой выбор эффекта.
+#
+# Сущность появится в Home Assistant как обычный select.
+# Выбранный пункт сразу включает лампу и запускает нужный эффект.
+# Состояние select сохраняется.
+# ============================================================
+
+select:
+  - platform: template
+    id: effect_selector
+    name: "Эффект лампы [EFFECT]"
+    icon: "mdi:animation-play"
+    optimistic: true
+    restore_value: true
+    initial_option: "Огонь 2D"
+
+    options:
+      - "Радуга"
+      - "Светлячки"
+      - "Фейерверк"
+      - "Свеча"
+      - "Огонь 2D"
+      - "Цифровой дождь"
+      - "Плазма"
+      - "Цветомузыка — пульс"
+      - "Цветомузыка — VU"
+      - "Цветомузыка — центр"
+
+    set_action:
+      - lambda: |-
+          auto call = id(matrix).turn_on();
+          call.set_effect(x);
+          call.perform();
+
 # ============================================================
 # Конфигурационные переключатели.
 #
-# Flip X / Flip Y позволяют исправить ориентацию эффектов,
-# не перепаивая и не поворачивая матрицу.
+# SWAP_XY включён по умолчанию, потому что фактическая матрица
+# разведена колонками: без транспонирования изображение лежит
+# на боку, а логический низ отображается слева.
 #
-# Serpentine должен оставаться включённым для типовой матрицы
-# 16x16 со змейкой.
+# Flip X / Flip Y позволяют дополнительно отразить изображение.
+# Serpentine должен оставаться включённым для данной матрицы.
 # ============================================================
 
 switch:
@@ -155,6 +192,15 @@ switch:
     id: sound_overlay_enabled
     name: "Реакция обычных эффектов на звук [SOUND_OVERLAY]"
     icon: "mdi:music-note-plus"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+
+  - platform: template
+    id: matrix_swap_xy
+    name: "Ориентация матрицы — поменять X/Y [SWAP_XY]"
+    icon: "mdi:rotate-90-degrees-clockwise"
     entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
@@ -294,9 +340,9 @@ binary_sensor:
           - OFF for at least 250ms
         invalid_cooldown: 500ms
         then:
-          - light.effect.next:
-              id: matrix
-              include_none: false
+          - select.next:
+              id: effect_selector
+              cycle: true
 
       - timing:
           - ON for 700ms to 5s
@@ -375,10 +421,60 @@ light:
     restore_mode: RESTORE_DEFAULT_OFF
 
     effects:
-      - addressable_rainbow:
+      - addressable_lambda:
           name: "Радуга"
-          speed: 10
-          width: 64
+          update_interval: 30ms
+          lambda: |-
+            static float phase = 0.0f;
+
+            auto xy = [&](int x, int y) -> int {
+              if (x < 0 || x >= 16 || y < 0 || y >= 16) {
+                return -1;
+              }
+
+              int px = id(matrix_flip_x).state ? 15 - x : x;
+              int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              if (id(matrix_swap_xy).state) {
+                const int tmp = px;
+                px = py;
+                py = tmp;
+              }
+
+              if (id(matrix_serpentine).state && (py & 1)) {
+                px = 15 - px;
+              }
+
+              return py * 16 + px;
+            };
+
+            if (initial_run) {
+              phase = 0.0f;
+              it.all() = Color::BLACK;
+            }
+
+            phase += 0.004f + id(effect_speed).state * 0.00020f;
+            const float scale = 2.5f + id(effect_scale).state * 0.10f;
+
+            for (int y = 0; y < 16; y++) {
+              for (int x = 0; x < 16; x++) {
+                const float hue =
+                    phase + static_cast<float>(y) / scale +
+                    static_cast<float>(x) / (scale * 2.0f);
+
+                const uint8_t r = static_cast<uint8_t>(
+                    127.5f + 127.5f * sinf(hue * 6.28318f));
+                const uint8_t g = static_cast<uint8_t>(
+                    127.5f + 127.5f * sinf(hue * 6.28318f + 2.094f));
+                const uint8_t b = static_cast<uint8_t>(
+                    127.5f + 127.5f * sinf(hue * 6.28318f + 4.188f));
+
+                const int index = xy(x, y);
+                if (index >= 0) {
+                  it[index] = Color(r, g, b);
+                }
+              }
+            }
 
       - addressable_random_twinkle:
           name: "Светлячки"
@@ -392,10 +488,97 @@ light:
           use_random_color: true
           fade_out_rate: 120
 
-      - addressable_flicker:
+      - addressable_lambda:
           name: "Свеча"
-          update_interval: 24ms
-          intensity: 6%
+          update_interval: 45ms
+          lambda: |-
+            static uint8_t flicker[256];
+            static float phase = 0.0f;
+
+            auto xy = [&](int x, int y) -> int {
+              if (x < 0 || x >= 16 || y < 0 || y >= 16) {
+                return -1;
+              }
+
+              int px = id(matrix_flip_x).state ? 15 - x : x;
+              int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              if (id(matrix_swap_xy).state) {
+                const int tmp = px;
+                px = py;
+                py = tmp;
+              }
+
+              if (id(matrix_serpentine).state && (py & 1)) {
+                px = 15 - px;
+              }
+
+              return py * 16 + px;
+            };
+
+            if (initial_run) {
+              phase = 0.0f;
+
+              for (int i = 0; i < 256; i++) {
+                flicker[i] = static_cast<uint8_t>(
+                    150 + random_uint32() % 80);
+              }
+
+              it.all() = Color::BLACK;
+            }
+
+            phase += 0.015f + id(effect_speed).state * 0.00025f;
+
+            float sound = id(microphone_normalized).state / 100.0f;
+            if (isnan(sound) || !id(sound_overlay_enabled).state) {
+              sound = 0.0f;
+            }
+
+            for (int y = 0; y < 16; y++) {
+              for (int x = 0; x < 16; x++) {
+                const int logical = y * 16 + x;
+                const uint8_t target = static_cast<uint8_t>(
+                    145 + random_uint32() % 100);
+
+                flicker[logical] = static_cast<uint8_t>(
+                    (static_cast<uint16_t>(flicker[logical]) * 3 +
+                     target) /
+                    4);
+
+                const float vertical =
+                    1.00f - static_cast<float>(y) * 0.018f;
+                const float center =
+                    1.00f - fabsf(static_cast<float>(x) - 7.5f) * 0.025f;
+                const float wave =
+                    0.88f + 0.12f *
+                    sinf(phase * 6.28318f + x * 0.37f + y * 0.19f);
+                const float audio_gain = 1.0f + sound * 0.20f;
+
+                float level =
+                    (static_cast<float>(flicker[logical]) / 255.0f) *
+                    vertical * center * wave * audio_gain;
+
+                if (level < 0.0f) {
+                  level = 0.0f;
+                } else if (level > 1.0f) {
+                  level = 1.0f;
+                }
+
+                const uint8_t red =
+                    static_cast<uint8_t>(255.0f * level);
+                const uint8_t green =
+                    static_cast<uint8_t>(
+                        (75.0f + (random_uint32() % 75)) * level);
+                const uint8_t blue =
+                    static_cast<uint8_t>(
+                        (random_uint32() % 8) * level);
+
+                const int index = xy(x, y);
+                if (index >= 0) {
+                  it[index] = Color(red, green, blue);
+                }
+              }
+            }
 
       - addressable_lambda:
           name: "Огонь 2D"
@@ -408,8 +591,19 @@ light:
                 return -1;
               }
 
+              // Логические координаты:
+              // x — слева направо;
+              // y — снизу вверх.
               int px = id(matrix_flip_x).state ? 15 - x : x;
               int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              // На данной матрице группы по 16 LED идут колонками,
+              // поэтому физические оси X/Y нужно поменять местами.
+              if (id(matrix_swap_xy).state) {
+                const int tmp = px;
+                px = py;
+                py = tmp;
+              }
 
               if (id(matrix_serpentine).state && (py & 1)) {
                 px = 15 - px;
@@ -499,8 +693,19 @@ light:
                 return -1;
               }
 
+              // Логические координаты:
+              // x — слева направо;
+              // y — снизу вверх.
               int px = id(matrix_flip_x).state ? 15 - x : x;
               int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              // На данной матрице группы по 16 LED идут колонками,
+              // поэтому физические оси X/Y нужно поменять местами.
+              if (id(matrix_swap_xy).state) {
+                const int tmp = px;
+                px = py;
+                py = tmp;
+              }
 
               if (id(matrix_serpentine).state && (py & 1)) {
                 px = 15 - px;
@@ -573,8 +778,19 @@ light:
                 return -1;
               }
 
+              // Логические координаты:
+              // x — слева направо;
+              // y — снизу вверх.
               int px = id(matrix_flip_x).state ? 15 - x : x;
               int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              // На данной матрице группы по 16 LED идут колонками,
+              // поэтому физические оси X/Y нужно поменять местами.
+              if (id(matrix_swap_xy).state) {
+                const int tmp = px;
+                px = py;
+                py = tmp;
+              }
 
               if (id(matrix_serpentine).state && (py & 1)) {
                 px = 15 - px;
@@ -686,8 +902,19 @@ light:
                 return -1;
               }
 
+              // Логические координаты:
+              // x — слева направо;
+              // y — снизу вверх.
               int px = id(matrix_flip_x).state ? 15 - x : x;
               int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              // На данной матрице группы по 16 LED идут колонками,
+              // поэтому физические оси X/Y нужно поменять местами.
+              if (id(matrix_swap_xy).state) {
+                const int tmp = px;
+                px = py;
+                py = tmp;
+              }
 
               if (id(matrix_serpentine).state && (py & 1)) {
                 px = 15 - px;
@@ -753,8 +980,19 @@ light:
                 return -1;
               }
 
+              // Логические координаты:
+              // x — слева направо;
+              // y — снизу вверх.
               int px = id(matrix_flip_x).state ? 15 - x : x;
               int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              // На данной матрице группы по 16 LED идут колонками,
+              // поэтому физические оси X/Y нужно поменять местами.
+              if (id(matrix_swap_xy).state) {
+                const int tmp = px;
+                px = py;
+                py = tmp;
+              }
 
               if (id(matrix_serpentine).state && (py & 1)) {
                 px = 15 - px;
@@ -821,6 +1059,8 @@ light:
 
 # ============================================================
 # Управляющие кнопки Home Assistant / web_server.
+# Кнопки next/previous меняют effect_selector, поэтому список
+# эффекта остаётся синхронизирован с аппаратным управлением.
 # ============================================================
 
 button:
@@ -830,9 +1070,9 @@ button:
     icon: "mdi:skip-next"
     on_press:
       then:
-        - light.effect.next:
-            id: matrix
-            include_none: false
+        - select.next:
+            id: effect_selector
+            cycle: true
 
   - platform: template
     id: previous_effect
@@ -840,9 +1080,9 @@ button:
     icon: "mdi:skip-previous"
     on_press:
       then:
-        - light.effect.previous:
-            id: matrix
-            include_none: false
+        - select.previous:
+            id: effect_selector
+            cycle: true
 
   - platform: template
     id: calibrate_microphone
