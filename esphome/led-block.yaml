@@ -1,10 +1,19 @@
 # Board: DOIT ESP32 DEVKIT V1 (DOIT)
-# Definition: definitions/boards/esp32doit-devkit-v1/manifest.yaml
+# Рабочая прошивка A5IN LED Block v1.0
+#
+# Аппаратный контракт:
+# - WS2812B DIN       <- 330 Ом <- ESP32 D18 / GPIO18
+# - TTP223 I/O        -> ESP32 D27 / GPIO27
+# - MAX9814 Output    -> ESP32 VP / GPIO36
+# - MAX9814 VDD       -> ESP32 3V3
+# - MAX9814 Gain, AR  -> не подключать
+# - ESP32 VIN и матрица +5V питаются параллельно от БП 5V 3A
+# - GND всех узлов объединены
 
 esphome:
   name: a5in-led-block
   friendly_name: a5in-led-block
-  comment: "Диагностика ESP32, WS2812B 16x16, MAX9814 и TTP223"
+  comment: "Рабочая лампа ESP32, WS2812B 16x16, MAX9814 и TTP223"
 
 esp32:
   variant: esp32
@@ -14,6 +23,9 @@ esp32:
     advanced:
       minimum_chip_revision: "3.1"
       sram1_as_iram: true
+
+preferences:
+  flash_write_interval: 1min
 
 logger:
   level: INFO
@@ -40,101 +52,226 @@ web_server:
   version: 3
 
 # ============================================================
-# Матрица WS2812B 16x16
+# Сохраняемый индекс ступени яркости для длительного касания.
 #
-# ESP32 D18 = GPIO18.
-# GPIO18 -> резистор 330 Ом -> DIN матрицы.
-# Матрица питается напрямую от блока питания 5V 3A.
+# 0 = 5%
+# 1 = 10%
+# 2 = 20%
+# 3 = 40%
+# 4 = 70%
+# 5 = 100%
 #
-# Для аппаратной диагностики:
-# - color_correct временно не используется;
-# - gamma_correct установлен в 1.0;
-# - яркость ограничивается в командах включения.
+# Физический предел потребления задаётся color_correct: 14%,
+# поэтому даже 100% яркости в HA остаётся безопасным режимом
+# для блока питания 5V 3A.
 # ============================================================
 
-light:
-  - platform: esp32_rmt_led_strip
-    id: matrix
-    name: "Матрица 16x16"
-    icon: "mdi:grid"
-
-    pin: GPIO18
-    num_leds: 256
-    chipset: ws2812
-    rgb_order: GRB
-
-    gamma_correct: 1.0
-    default_transition_length: 0s
-    restore_mode: ALWAYS_OFF
-
-    effects:
-      - addressable_lambda:
-          name: "Диагностика: все светодиоды по очереди"
-          update_interval: 60ms
-          lambda: |-
-            static uint16_t position = 0;
-
-            if (initial_run) {
-              position = 0;
-              it.all() = Color::BLACK;
-            }
-
-            it.all() = Color::BLACK;
-            it[position] = Color(255, 255, 255);
-
-            position++;
-
-            if (position >= it.size()) {
-              position = 0;
-            }
-
-      - addressable_lambda:
-          name: "Диагностика: контрольные индексы"
-          update_interval: 1s
-          lambda: |-
-            it.all() = Color::BLACK;
-
-            // Контрольные светодиоды:
-            // 0   — красный;
-            // 15  — зелёный;
-            // 240 — синий;
-            // 255 — белый.
-            //
-            // Эти точки позволяют определить ориентацию
-            // и внутреннюю разводку матрицы.
-            it[0] = Color(255, 0, 0);
-            it[15] = Color(0, 255, 0);
-            it[240] = Color(0, 0, 255);
-            it[255] = Color(255, 255, 255);
-
-      - addressable_scan:
-          name: "Диагностика: бегущая точка"
-          move_interval: 50ms
-          scan_width: 1
-
-      - addressable_rainbow:
-          name: "Диагностика: радуга"
-          speed: 10
-          width: 64
+globals:
+  - id: brightness_step_index
+    type: int
+    restore_value: true
+    update_interval: 10s
+    initial_value: "2"
 
 # ============================================================
-# Сенсорная кнопка TTP223
-#
-# TTP223 VCC -> ESP32 3V3
-# TTP223 GND -> ESP32 GND
-# TTP223 I/O -> ESP32 D27 / GPIO27
-#
-# Короткое касание:
-# - если матрица выключена — запускает последовательный тест;
-# - если матрица включена — выключает её.
+# Настройки эффектов и микрофона.
+# Все значения сохраняются во flash.
 # ============================================================
+
+number:
+  - platform: template
+    id: effect_speed
+    name: "Скорость эффектов [FX_SPEED]"
+    icon: "mdi:speedometer"
+    entity_category: config
+    min_value: 1
+    max_value: 100
+    step: 1
+    initial_value: 45
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    id: effect_scale
+    name: "Масштаб эффектов [FX_SCALE]"
+    icon: "mdi:resize"
+    entity_category: config
+    min_value: 1
+    max_value: 100
+    step: 1
+    initial_value: 50
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    id: microphone_sensitivity
+    name: "Чувствительность микрофона [MIC_SENS]"
+    icon: "mdi:microphone-settings"
+    entity_category: config
+    min_value: 0.5
+    max_value: 12.0
+    step: 0.1
+    initial_value: 3.0
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    id: microphone_noise_floor
+    name: "Шумовой порог микрофона [MIC_FLOOR]"
+    icon: "mdi:waveform"
+    entity_category: config
+    unit_of_measurement: "V"
+    min_value: 0.0
+    max_value: 1.5
+    step: 0.01
+    initial_value: 0.45
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    id: microphone_smoothing
+    name: "Сглаживание цветомузыки [MIC_SMOOTH]"
+    icon: "mdi:chart-bell-curve"
+    entity_category: config
+    min_value: 0.0
+    max_value: 0.95
+    step: 0.05
+    initial_value: 0.70
+    restore_value: true
+    optimistic: true
+
+# ============================================================
+# Конфигурационные переключатели.
+#
+# Flip X / Flip Y позволяют исправить ориентацию эффектов,
+# не перепаивая и не поворачивая матрицу.
+#
+# Serpentine должен оставаться включённым для типовой матрицы
+# 16x16 со змейкой.
+# ============================================================
+
+switch:
+  - platform: template
+    id: sound_overlay_enabled
+    name: "Реакция обычных эффектов на звук [SOUND_OVERLAY]"
+    icon: "mdi:music-note-plus"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+  - platform: template
+    id: matrix_flip_x
+    name: "Ориентация матрицы — отражение X [FLIP_X]"
+    icon: "mdi:flip-horizontal"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+
+  - platform: template
+    id: matrix_flip_y
+    name: "Ориентация матрицы — отражение Y [FLIP_Y]"
+    icon: "mdi:flip-vertical"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+
+  - platform: template
+    id: matrix_serpentine
+    name: "Разводка матрицы — змейка [SERPENTINE]"
+    icon: "mdi:swap-horizontal-bold"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+# ============================================================
+# MAX9814
+#
+# Текущий анализатор v1 измеряет амплитуду сигнала:
+# - пик напряжения;
+# - условный уровень выше смещения 1,23V;
+# - нормированный уровень 0..100%.
+#
+# Это уже даёт рабочую цветомузыку по громкости. Настоящий FFT
+# с частотными полосами будет отдельным следующим обновлением.
+# ============================================================
+
+sensor:
+  - platform: adc
+    id: microphone_peak_voltage
+    name: "Микрофон — пиковое напряжение [MIC_PEAK]"
+    icon: "mdi:sine-wave"
+    pin: GPIO36
+    attenuation: 12db
+    samples: 255
+    sampling_mode: max
+    update_interval: 100ms
+    accuracy_decimals: 3
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    force_update: true
+
+  - platform: copy
+    source_id: microphone_peak_voltage
+    id: microphone_level
+    name: "Микрофон — уровень выше смещения [MIC_LEVEL]"
+    icon: "mdi:waveform"
+    unit_of_measurement: "V"
+    accuracy_decimals: 3
+    state_class: measurement
+    force_update: true
+    filters:
+      - lambda: |-
+          const float microphone_bias = 1.23f;
+          const float level = x - microphone_bias;
+          return level > 0.0f ? level : 0.0f;
+
+  - platform: template
+    id: microphone_normalized
+    name: "Микрофон — нормированный уровень [MIC_NORMALIZED]"
+    icon: "mdi:signal"
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    state_class: measurement
+    update_interval: 100ms
+    lambda: |-
+      const float level = id(microphone_level).state;
+
+      if (isnan(level)) {
+        return NAN;
+      }
+
+      float normalized =
+          (level - id(microphone_noise_floor).state) *
+          id(microphone_sensitivity).state;
+
+      if (normalized < 0.0f) {
+        normalized = 0.0f;
+      } else if (normalized > 1.0f) {
+        normalized = 1.0f;
+      }
+
+      return normalized * 100.0f;
+
+  - platform: wifi_signal
+    id: wifi_signal_db
+    name: "Уровень Wi-Fi [WIFI_DB]"
+    icon: "mdi:wifi"
+    update_interval: 30s
+    entity_category: diagnostic
+
+  - platform: uptime
+    id: device_uptime
+    name: "Время работы [UPTIME]"
+    icon: "mdi:timer-outline"
+    update_interval: 60s
+    entity_category: diagnostic
 
 binary_sensor:
   - platform: gpio
     id: touch_button
-    name: "Сенсорная кнопка"
+    name: "Сенсорная кнопка [TOUCH]"
     icon: "mdi:gesture-tap-button"
-
     pin:
       number: GPIO27
       mode:
@@ -144,233 +281,598 @@ binary_sensor:
       inverted: false
 
     filters:
-      - delayed_on: 20ms
-      - delayed_off: 20ms
+      - delayed_on_off: 20ms
 
-    on_press:
-      then:
-        - if:
-            condition:
-              light.is_off: matrix
+    # Двойное касание: следующий эффект.
+    # Длинное касание: следующая ступень яркости.
+    # Короткое касание: включение/выключение.
+    on_multi_click:
+      - timing:
+          - ON for 40ms to 500ms
+          - OFF for 40ms to 400ms
+          - ON for 40ms to 500ms
+          - OFF for at least 250ms
+        invalid_cooldown: 500ms
+        then:
+          - light.effect.next:
+              id: matrix
+              include_none: false
 
-            then:
-              - light.turn_on:
-                  id: matrix
-                  brightness: 10%
-                  effect: "Диагностика: все светодиоды по очереди"
+      - timing:
+          - ON for 700ms to 5s
+          - OFF for at least 250ms
+        invalid_cooldown: 500ms
+        then:
+          - lambda: |-
+              static const float LEVELS[] = {
+                  0.05f,
+                  0.10f,
+                  0.20f,
+                  0.40f,
+                  0.70f,
+                  1.00f,
+              };
 
-            else:
-              - light.turn_off:
-                  id: matrix
-                  transition_length: 0s
+              id(brightness_step_index) =
+                  (id(brightness_step_index) + 1) % 6;
+
+              auto call = id(matrix).turn_on();
+              call.set_brightness(LEVELS[id(brightness_step_index)]);
+              call.perform();
+
+      - timing:
+          - ON for 40ms to 500ms
+          - OFF for at least 500ms
+        invalid_cooldown: 500ms
+        then:
+          - light.toggle:
+              id: matrix
+              transition_length: 0s
 
   - platform: status
     id: connection_status
-    name: "Состояние подключения"
+    name: "Состояние подключения [CONNECTION]"
     entity_category: diagnostic
 
-# ============================================================
-# Микрофонный модуль MAX9814
-#
-# MAX9814 VDD    -> ESP32 3V3
-# MAX9814 GND    -> ESP32 GND
-# MAX9814 Output -> ESP32 VP / GPIO36
-# MAX9814 Gain   -> не подключать
-# MAX9814 AR     -> не подключать
-#
-# GPIO36:
-# - на плате подписан как VP;
-# - относится к ADC1;
-# - является только входом;
-# - работает одновременно с Wi-Fi.
-#
-# Это диагностический замер максимального значения ADC,
-# а не полноценный FFT-анализ звука.
-# ============================================================
-
-sensor:
-  - platform: adc
-    id: microphone_peak_voltage
-    name: "Микрофон — пиковое напряжение"
-    icon: "mdi:sine-wave"
-
-    pin: GPIO36
-    attenuation: 12db
-    samples: 255
-    sampling_mode: max
-    update_interval: 100ms
-
-    accuracy_decimals: 3
-    unit_of_measurement: "V"
-    device_class: voltage
-    state_class: measurement
-    force_update: true
-
-  - platform: copy
-    source_id: microphone_peak_voltage
-    id: microphone_conditional_level
-    name: "Микрофон — условный уровень звука"
-    icon: "mdi:waveform"
-
-    unit_of_measurement: "V"
-    accuracy_decimals: 3
-    state_class: measurement
-    force_update: true
-
+  - platform: analog_threshold
+    id: sound_activity
+    name: "Обнаружен звук [SOUND_ACTIVITY]"
+    icon: "mdi:music-note"
+    sensor_id: microphone_normalized
+    threshold: 10.0
     filters:
-      - lambda: |-
-          // Приблизительное постоянное смещение выхода MAX9814.
-          // Используется только для первичной диагностики.
-          const float microphone_bias = 1.23f;
-          const float level = x - microphone_bias;
-
-          if (level < 0.0f) {
-            return 0.0f;
-          }
-
-          return level;
-
-  - platform: wifi_signal
-    id: wifi_signal_db
-    name: "Уровень Wi-Fi"
-    icon: "mdi:wifi"
-    update_interval: 30s
-    entity_category: diagnostic
-
-  - platform: uptime
-    id: device_uptime
-    name: "Время работы"
-    icon: "mdi:timer-outline"
-    update_interval: 60s
-    entity_category: diagnostic
+      - delayed_off: 500ms
 
 # ============================================================
-# Кнопки аппаратной диагностики матрицы.
+# Матрица WS2812B 16x16.
 #
-# У каждой кнопки:
-# - уникальный латинский id;
-# - уникальная ASCII-часть в name.
+# color_correct: 14% ограничивает расчётный максимум матрицы
+# примерно до 2,15 А при полном белом поле:
+# 256 x 60 mA x 0,14 ~= 2,15 A.
 #
-# Безопасные уровни:
-# - отдельные цвета: 10%;
-# - белый: 5%;
-# - адресные эффекты: 10%.
+# Оставшийся запас нужен ESP32, MAX9814, TTP223 и самому БП.
+# gamma_correct: 1.0 не обнуляет малые значения эффектов.
+# ============================================================
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: matrix
+    name: "Лампа 16x16 [MATRIX]"
+    icon: "mdi:lava-lamp"
+
+    pin: GPIO18
+    num_leds: 256
+    chipset: ws2812
+    rgb_order: GRB
+
+    color_correct:
+      - 14%
+      - 14%
+      - 14%
+
+    gamma_correct: 1.0
+    default_transition_length: 0s
+    restore_mode: RESTORE_DEFAULT_OFF
+
+    effects:
+      - addressable_rainbow:
+          name: "Радуга"
+          speed: 10
+          width: 64
+
+      - addressable_random_twinkle:
+          name: "Светлячки"
+          twinkle_probability: 4%
+          progress_interval: 24ms
+
+      - addressable_fireworks:
+          name: "Фейерверк"
+          update_interval: 24ms
+          spark_probability: 8%
+          use_random_color: true
+          fade_out_rate: 120
+
+      - addressable_flicker:
+          name: "Свеча"
+          update_interval: 24ms
+          intensity: 6%
+
+      - addressable_lambda:
+          name: "Огонь 2D"
+          update_interval: 35ms
+          lambda: |-
+            static uint8_t heat[256];
+
+            auto xy = [&](int x, int y) -> int {
+              if (x < 0 || x >= 16 || y < 0 || y >= 16) {
+                return -1;
+              }
+
+              int px = id(matrix_flip_x).state ? 15 - x : x;
+              int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              if (id(matrix_serpentine).state && (py & 1)) {
+                px = 15 - px;
+              }
+
+              return py * 16 + px;
+            };
+
+            if (initial_run) {
+              memset(heat, 0, sizeof(heat));
+              it.all() = Color::BLACK;
+            }
+
+            const int speed = static_cast<int>(id(effect_speed).state);
+            const int scale = static_cast<int>(id(effect_scale).state);
+
+            float sound = id(microphone_normalized).state / 100.0f;
+            if (isnan(sound) || !id(sound_overlay_enabled).state) {
+              sound = 0.0f;
+            }
+
+            const uint8_t cooling =
+                static_cast<uint8_t>(8 + (100 - scale) / 5);
+
+            for (int i = 0; i < 256; i++) {
+              const uint8_t loss =
+                  static_cast<uint8_t>(random_uint32() % (cooling + 1));
+              heat[i] = heat[i] > loss ? heat[i] - loss : 0;
+            }
+
+            for (int x = 0; x < 16; x++) {
+              for (int y = 15; y >= 2; y--) {
+                heat[y * 16 + x] = static_cast<uint8_t>(
+                    (static_cast<uint16_t>(heat[(y - 1) * 16 + x]) +
+                     static_cast<uint16_t>(heat[(y - 2) * 16 + x]) +
+                     static_cast<uint16_t>(heat[(y - 2) * 16 + x])) /
+                    3);
+              }
+            }
+
+            const uint32_t ignition_chance =
+                static_cast<uint32_t>(25 + speed / 2 + sound * 80.0f);
+
+            for (int x = 0; x < 16; x++) {
+              if ((random_uint32() % 100) < ignition_chance) {
+                heat[x] = static_cast<uint8_t>(
+                    160 + (random_uint32() % 96));
+              }
+            }
+
+            for (int y = 0; y < 16; y++) {
+              for (int x = 0; x < 16; x++) {
+                const uint8_t t = heat[y * 16 + x];
+
+                uint8_t r = 0;
+                uint8_t g = 0;
+                uint8_t b = 0;
+
+                if (t < 85) {
+                  r = static_cast<uint8_t>(t * 3);
+                } else if (t < 170) {
+                  r = 255;
+                  g = static_cast<uint8_t>((t - 85) * 3);
+                } else {
+                  r = 255;
+                  g = 255;
+                  b = static_cast<uint8_t>((t - 170) * 3);
+                }
+
+                const int index = xy(x, y);
+                if (index >= 0) {
+                  it[index] = Color(r, g, b);
+                }
+              }
+            }
+
+      - addressable_lambda:
+          name: "Цифровой дождь"
+          update_interval: 45ms
+          lambda: |-
+            static int16_t heads[16];
+            static uint8_t lengths[16];
+            static uint8_t tick = 0;
+
+            auto xy = [&](int x, int y) -> int {
+              if (x < 0 || x >= 16 || y < 0 || y >= 16) {
+                return -1;
+              }
+
+              int px = id(matrix_flip_x).state ? 15 - x : x;
+              int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              if (id(matrix_serpentine).state && (py & 1)) {
+                px = 15 - px;
+              }
+
+              return py * 16 + px;
+            };
+
+            if (initial_run) {
+              it.all() = Color::BLACK;
+
+              for (int x = 0; x < 16; x++) {
+                heads[x] = 15 + static_cast<int>(random_uint32() % 24);
+                lengths[x] =
+                    static_cast<uint8_t>(3 + random_uint32() % 8);
+              }
+            }
+
+            it.all().fade_to_black(45);
+
+            const uint8_t divider =
+                static_cast<uint8_t>(1 + (100 - id(effect_speed).state) / 20);
+
+            tick++;
+            if (tick < divider) {
+              return;
+            }
+            tick = 0;
+
+            for (int x = 0; x < 16; x++) {
+              heads[x]--;
+
+              if (heads[x] < -static_cast<int>(lengths[x])) {
+                heads[x] = 15 + static_cast<int>(random_uint32() % 20);
+                lengths[x] =
+                    static_cast<uint8_t>(3 + random_uint32() % 8);
+              }
+
+              for (int trail = 0; trail < lengths[x]; trail++) {
+                const int y = heads[x] + trail;
+
+                if (y < 0 || y >= 16) {
+                  continue;
+                }
+
+                const int index = xy(x, y);
+                if (index < 0) {
+                  continue;
+                }
+
+                if (trail == 0) {
+                  it[index] = Color(180, 255, 180);
+                } else {
+                  const uint8_t green = static_cast<uint8_t>(
+                      220 - (trail * 180 / lengths[x]));
+                  it[index] = Color(0, green, 0);
+                }
+              }
+            }
+
+      - addressable_lambda:
+          name: "Плазма"
+          update_interval: 30ms
+          lambda: |-
+            static float phase = 0.0f;
+            static float smoothed_sound = 0.0f;
+
+            auto xy = [&](int x, int y) -> int {
+              if (x < 0 || x >= 16 || y < 0 || y >= 16) {
+                return -1;
+              }
+
+              int px = id(matrix_flip_x).state ? 15 - x : x;
+              int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              if (id(matrix_serpentine).state && (py & 1)) {
+                px = 15 - px;
+              }
+
+              return py * 16 + px;
+            };
+
+            if (initial_run) {
+              phase = 0.0f;
+              smoothed_sound = 0.0f;
+              it.all() = Color::BLACK;
+            }
+
+            float sound = id(microphone_normalized).state / 100.0f;
+            if (isnan(sound) || !id(sound_overlay_enabled).state) {
+              sound = 0.0f;
+            }
+
+            const float smoothing = id(microphone_smoothing).state;
+            smoothed_sound =
+                smoothed_sound * smoothing + sound * (1.0f - smoothing);
+
+            const float speed =
+                0.02f + id(effect_speed).state * 0.0015f;
+            const float scale =
+                2.0f + id(effect_scale).state * 0.08f;
+
+            phase += speed * (1.0f + smoothed_sound * 2.0f);
+
+            for (int y = 0; y < 16; y++) {
+              for (int x = 0; x < 16; x++) {
+                const float value =
+                    sinf((x + phase * 18.0f) / scale) +
+                    sinf((y - phase * 14.0f) / (scale * 0.85f)) +
+                    sinf((x + y + phase * 10.0f) / (scale * 1.25f));
+
+                const float normalized = (value + 3.0f) / 6.0f;
+
+                const uint8_t r = static_cast<uint8_t>(
+                    127.5f + 127.5f * sinf(normalized * 6.28318f));
+                const uint8_t g = static_cast<uint8_t>(
+                    127.5f + 127.5f * sinf(normalized * 6.28318f + 2.094f));
+                const uint8_t b = static_cast<uint8_t>(
+                    127.5f + 127.5f * sinf(normalized * 6.28318f + 4.188f));
+
+                const float gain = 0.35f + smoothed_sound * 0.65f;
+
+                const int index = xy(x, y);
+                if (index >= 0) {
+                  it[index] = Color(
+                      static_cast<uint8_t>(r * gain),
+                      static_cast<uint8_t>(g * gain),
+                      static_cast<uint8_t>(b * gain));
+                }
+              }
+            }
+
+      - addressable_lambda:
+          name: "Цветомузыка — пульс"
+          update_interval: 25ms
+          lambda: |-
+            static float envelope = 0.0f;
+            static float hue_phase = 0.0f;
+
+            if (initial_run) {
+              envelope = 0.0f;
+              hue_phase = 0.0f;
+              it.all() = Color::BLACK;
+            }
+
+            float target = id(microphone_normalized).state / 100.0f;
+            if (isnan(target)) {
+              target = 0.0f;
+            }
+
+            const float smoothing = id(microphone_smoothing).state;
+
+            if (target > envelope) {
+              envelope = target;
+            } else {
+              envelope =
+                  envelope * smoothing + target * (1.0f - smoothing);
+            }
+
+            hue_phase +=
+                0.005f + id(effect_speed).state * 0.00025f;
+
+            const uint8_t r = static_cast<uint8_t>(
+                (127.5f + 127.5f * sinf(hue_phase * 6.28318f)) *
+                envelope);
+            const uint8_t g = static_cast<uint8_t>(
+                (127.5f + 127.5f * sinf(hue_phase * 6.28318f + 2.094f)) *
+                envelope);
+            const uint8_t b = static_cast<uint8_t>(
+                (127.5f + 127.5f * sinf(hue_phase * 6.28318f + 4.188f)) *
+                envelope);
+
+            it.all() = Color(r, g, b);
+
+      - addressable_lambda:
+          name: "Цветомузыка — VU"
+          update_interval: 30ms
+          lambda: |-
+            static float envelope = 0.0f;
+
+            auto xy = [&](int x, int y) -> int {
+              if (x < 0 || x >= 16 || y < 0 || y >= 16) {
+                return -1;
+              }
+
+              int px = id(matrix_flip_x).state ? 15 - x : x;
+              int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              if (id(matrix_serpentine).state && (py & 1)) {
+                px = 15 - px;
+              }
+
+              return py * 16 + px;
+            };
+
+            if (initial_run) {
+              envelope = 0.0f;
+              it.all() = Color::BLACK;
+            }
+
+            float target = id(microphone_normalized).state / 100.0f;
+            if (isnan(target)) {
+              target = 0.0f;
+            }
+
+            const float smoothing = id(microphone_smoothing).state;
+
+            if (target > envelope) {
+              envelope = target;
+            } else {
+              envelope =
+                  envelope * smoothing + target * (1.0f - smoothing);
+            }
+
+            int height = static_cast<int>(envelope * 16.0f + 0.5f);
+            if (height < 0) {
+              height = 0;
+            } else if (height > 16) {
+              height = 16;
+            }
+
+            it.all().fade_to_black(80);
+
+            for (int x = 0; x < 16; x++) {
+              for (int y = 0; y < height; y++) {
+                const int index = xy(x, y);
+                if (index < 0) {
+                  continue;
+                }
+
+                if (y < 9) {
+                  it[index] = Color(0, 255, 0);
+                } else if (y < 13) {
+                  it[index] = Color(255, 180, 0);
+                } else {
+                  it[index] = Color(255, 0, 0);
+                }
+              }
+            }
+
+      - addressable_lambda:
+          name: "Цветомузыка — центр"
+          update_interval: 30ms
+          lambda: |-
+            static float envelope = 0.0f;
+            static float phase = 0.0f;
+
+            auto xy = [&](int x, int y) -> int {
+              if (x < 0 || x >= 16 || y < 0 || y >= 16) {
+                return -1;
+              }
+
+              int px = id(matrix_flip_x).state ? 15 - x : x;
+              int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              if (id(matrix_serpentine).state && (py & 1)) {
+                px = 15 - px;
+              }
+
+              return py * 16 + px;
+            };
+
+            if (initial_run) {
+              envelope = 0.0f;
+              phase = 0.0f;
+              it.all() = Color::BLACK;
+            }
+
+            float target = id(microphone_normalized).state / 100.0f;
+            if (isnan(target)) {
+              target = 0.0f;
+            }
+
+            const float smoothing = id(microphone_smoothing).state;
+
+            if (target > envelope) {
+              envelope = target;
+            } else {
+              envelope =
+                  envelope * smoothing + target * (1.0f - smoothing);
+            }
+
+            phase += 0.02f + id(effect_speed).state * 0.0008f;
+            it.all().fade_to_black(70);
+
+            const float radius = envelope * 10.5f;
+
+            for (int y = 0; y < 16; y++) {
+              for (int x = 0; x < 16; x++) {
+                const float dx = x - 7.5f;
+                const float dy = y - 7.5f;
+                const float distance = sqrtf(dx * dx + dy * dy);
+                const float delta = fabsf(distance - radius);
+
+                if (delta > 1.2f) {
+                  continue;
+                }
+
+                const float intensity =
+                    (1.2f - delta) / 1.2f * envelope;
+
+                const uint8_t r = static_cast<uint8_t>(
+                    (127.5f + 127.5f * sinf(phase * 6.28318f)) *
+                    intensity);
+                const uint8_t g = static_cast<uint8_t>(
+                    (127.5f + 127.5f * sinf(phase * 6.28318f + 2.094f)) *
+                    intensity);
+                const uint8_t b = static_cast<uint8_t>(
+                    (127.5f + 127.5f * sinf(phase * 6.28318f + 4.188f)) *
+                    intensity);
+
+                const int index = xy(x, y);
+                if (index >= 0) {
+                  it[index] = Color(r, g, b);
+                }
+              }
+            }
+
+# ============================================================
+# Управляющие кнопки Home Assistant / web_server.
 # ============================================================
 
 button:
   - platform: template
-    id: matrix_test_red
-    name: "Тест матрицы — красный [RED]"
-    icon: "mdi:lightbulb-on"
-
+    id: next_effect
+    name: "Следующий эффект [NEXT_FX]"
+    icon: "mdi:skip-next"
     on_press:
       then:
-        - light.turn_on:
+        - light.effect.next:
             id: matrix
-            brightness: 10%
-            red: 100%
-            green: 0%
-            blue: 0%
-            effect: "None"
+            include_none: false
 
   - platform: template
-    id: matrix_test_green
-    name: "Тест матрицы — зелёный [GREEN]"
-    icon: "mdi:lightbulb-on"
-
+    id: previous_effect
+    name: "Предыдущий эффект [PREV_FX]"
+    icon: "mdi:skip-previous"
     on_press:
       then:
-        - light.turn_on:
+        - light.effect.previous:
             id: matrix
-            brightness: 10%
-            red: 0%
-            green: 100%
-            blue: 0%
-            effect: "None"
+            include_none: false
 
   - platform: template
-    id: matrix_test_blue
-    name: "Тест матрицы — синий [BLUE]"
-    icon: "mdi:lightbulb-on"
-
+    id: calibrate_microphone
+    name: "Калибровать шумовой порог [CAL_MIC]"
+    icon: "mdi:microphone-settings"
     on_press:
       then:
-        - light.turn_on:
-            id: matrix
-            brightness: 10%
-            red: 0%
-            green: 0%
-            blue: 100%
-            effect: "None"
+        - number.set:
+            id: microphone_noise_floor
+            value: !lambda |-
+              float level = id(microphone_level).state;
+
+              if (isnan(level)) {
+                return 0.45f;
+              }
+
+              level += 0.02f;
+
+              if (level < 0.0f) {
+                level = 0.0f;
+              } else if (level > 1.5f) {
+                level = 1.5f;
+              }
+
+              return level;
 
   - platform: template
-    id: matrix_test_white
-    name: "Тест матрицы — белый [WHITE]"
-    icon: "mdi:lightbulb-on"
-
-    on_press:
-      then:
-        - light.turn_on:
-            id: matrix
-            brightness: 5%
-            red: 100%
-            green: 100%
-            blue: 100%
-            effect: "None"
-
-  - platform: template
-    id: matrix_test_all_leds
-    name: "Тест матрицы — все светодиоды [ALL]"
-    icon: "mdi:dots-grid"
-
-    on_press:
-      then:
-        - light.turn_on:
-            id: matrix
-            brightness: 10%
-            effect: "Диагностика: все светодиоды по очереди"
-
-  - platform: template
-    id: matrix_test_indices
-    name: "Тест матрицы — контрольные индексы [INDEX]"
-    icon: "mdi:grid-large"
-
-    on_press:
-      then:
-        - light.turn_on:
-            id: matrix
-            brightness: 10%
-            effect: "Диагностика: контрольные индексы"
-
-  - platform: template
-    id: matrix_test_scan
-    name: "Тест матрицы — бегущая точка [SCAN]"
-    icon: "mdi:motion-play"
-
-    on_press:
-      then:
-        - light.turn_on:
-            id: matrix
-            brightness: 10%
-            effect: "Диагностика: бегущая точка"
-
-  - platform: template
-    id: matrix_test_rainbow
-    name: "Тест матрицы — радуга [RAINBOW]"
-    icon: "mdi:looks"
-
-    on_press:
-      then:
-        - light.turn_on:
-            id: matrix
-            brightness: 10%
-            effect: "Диагностика: радуга"
-
-  - platform: template
-    id: matrix_turn_off
-    name: "Выключить матрицу [OFF]"
+    id: matrix_off
+    name: "Выключить лампу [OFF]"
     icon: "mdi:lightbulb-off"
-
     on_press:
       then:
         - light.turn_off:
@@ -383,21 +885,17 @@ button:
     icon: "mdi:restart"
     entity_category: diagnostic
 
-# ============================================================
-# Диагностические текстовые сенсоры.
-# ============================================================
-
 text_sensor:
   - platform: wifi_info
     ip_address:
       id: device_ip_address
-      name: "IP-адрес"
+      name: "IP-адрес [IP]"
       icon: "mdi:ip-network"
       entity_category: diagnostic
 
     ssid:
       id: connected_wifi_ssid
-      name: "Подключённая сеть"
+      name: "Подключённая сеть [SSID]"
       icon: "mdi:wifi"
       entity_category: diagnostic
 
@@ -409,5 +907,5 @@ text_sensor:
 
   - platform: version
     id: esphome_version
-    name: "Версия ESPHome"
+    name: "Версия ESPHome [VERSION]"
     entity_category: diagnostic
