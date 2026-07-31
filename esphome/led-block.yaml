@@ -23,8 +23,8 @@ ota:
   - platform: esphome
 
 wifi:
-  ssid: mdhouse
-  password: skarbskarbskarb
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
 
   ap:
     ssid: "led-block Fallback Hotspot"
