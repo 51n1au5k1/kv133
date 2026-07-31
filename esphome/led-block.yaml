@@ -42,6 +42,11 @@ web_server:
 # ESP32 D18 = GPIO18.
 # GPIO18 -> резистор 330 Ом -> DIN матрицы.
 # Матрица питается напрямую от блока питания 5V 3A.
+#
+# Для аппаратной диагностики:
+# - color_correct временно не используется;
+# - gamma_correct установлен в 1.0;
+# - яркость ограничивается в командах включения.
 # ============================================================
 
 light:
@@ -49,20 +54,13 @@ light:
     id: matrix
     name: "Матрица 16x16"
     icon: "mdi:grid"
+
     pin: GPIO18
     num_leds: 256
     chipset: ws2812
     rgb_order: GRB
 
-    # Временное ограничение яркости всех цветовых каналов.
-    # Используется на этапе диагностики, чтобы снизить нагрузку
-    # на блок питания и исключить слишком яркий первый запуск.
-    color_correct:
-      - 15%
-      - 15%
-      - 15%
-
-    gamma_correct: 2.8
+    gamma_correct: 1.0
     default_transition_length: 0s
     restore_mode: ALWAYS_OFF
 
@@ -99,8 +97,8 @@ light:
             // 240 — синий;
             // 255 — белый.
             //
-            // Они позволят определить ориентацию матрицы
-            // и направление её внутренней разводки.
+            // Эти точки позволяют определить ориентацию
+            // и внутреннюю разводку матрицы.
             it[0] = Color(255, 0, 0);
             it[15] = Color(0, 255, 0);
             it[240] = Color(0, 0, 255);
@@ -123,8 +121,9 @@ light:
 # TTP223 GND -> ESP32 GND
 # TTP223 I/O -> ESP32 D27 / GPIO27
 #
-# Перемычки A и B на TTP223 должны оставаться в заводском
-# состоянии на этапе диагностики.
+# Короткое касание:
+# - если матрица выключена — запускает последовательный тест;
+# - если матрица включена — выключает её.
 # ============================================================
 
 binary_sensor:
@@ -154,7 +153,7 @@ binary_sensor:
             then:
               - light.turn_on:
                   id: matrix
-                  brightness: 30%
+                  brightness: 10%
                   effect: "Диагностика: все светодиоды по очереди"
 
             else:
@@ -180,11 +179,10 @@ binary_sensor:
 # - на плате подписан как VP;
 # - относится к ADC1;
 # - является только входом;
-# - подходит для работы ADC одновременно с Wi-Fi.
+# - работает одновременно с Wi-Fi.
 #
-# Эта конфигурация измеряет пиковое напряжение, а не выполняет
-# полноценный FFT-анализ. Она предназначена только для проверки
-# работоспособности MAX9814 и правильности пайки.
+# Это диагностический замер максимального значения ADC,
+# а не полноценный FFT-анализ звука.
 # ============================================================
 
 sensor:
@@ -219,7 +217,7 @@ sensor:
     filters:
       - lambda: |-
           // Приблизительное постоянное смещение выхода MAX9814.
-          // Это временная диагностическая оценка.
+          // Используется только для первичной диагностики.
           const float microphone_bias = 1.23f;
           const float level = x - microphone_bias;
 
@@ -244,13 +242,16 @@ sensor:
     entity_category: diagnostic
 
 # ============================================================
-# Кнопки аппаратной диагностики.
+# Кнопки аппаратной диагностики матрицы.
 #
 # У каждой кнопки:
 # - уникальный латинский id;
 # - уникальная ASCII-часть в name.
 #
-# Это предотвращает коллизии object_id для русских названий.
+# Безопасные уровни:
+# - отдельные цвета: 10%;
+# - белый: 5%;
+# - адресные эффекты: 10%.
 # ============================================================
 
 button:
@@ -263,7 +264,7 @@ button:
       then:
         - light.turn_on:
             id: matrix
-            brightness: 30%
+            brightness: 10%
             red: 100%
             green: 0%
             blue: 0%
@@ -278,7 +279,7 @@ button:
       then:
         - light.turn_on:
             id: matrix
-            brightness: 30%
+            brightness: 10%
             red: 0%
             green: 100%
             blue: 0%
@@ -293,7 +294,7 @@ button:
       then:
         - light.turn_on:
             id: matrix
-            brightness: 30%
+            brightness: 10%
             red: 0%
             green: 0%
             blue: 100%
@@ -308,7 +309,7 @@ button:
       then:
         - light.turn_on:
             id: matrix
-            brightness: 20%
+            brightness: 5%
             red: 100%
             green: 100%
             blue: 100%
@@ -323,7 +324,7 @@ button:
       then:
         - light.turn_on:
             id: matrix
-            brightness: 40%
+            brightness: 10%
             effect: "Диагностика: все светодиоды по очереди"
 
   - platform: template
@@ -335,7 +336,7 @@ button:
       then:
         - light.turn_on:
             id: matrix
-            brightness: 40%
+            brightness: 10%
             effect: "Диагностика: контрольные индексы"
 
   - platform: template
@@ -347,7 +348,7 @@ button:
       then:
         - light.turn_on:
             id: matrix
-            brightness: 40%
+            brightness: 10%
             effect: "Диагностика: бегущая точка"
 
   - platform: template
@@ -359,7 +360,7 @@ button:
       then:
         - light.turn_on:
             id: matrix
-            brightness: 40%
+            brightness: 10%
             effect: "Диагностика: радуга"
 
   - platform: template
@@ -395,6 +396,12 @@ text_sensor:
       id: connected_wifi_ssid
       name: "Подключённая сеть"
       icon: "mdi:wifi"
+      entity_category: diagnostic
+
+    mac_address:
+      id: device_wifi_mac
+      name: "Wi-Fi MAC [MAC]"
+      icon: "mdi:network-outline"
       entity_category: diagnostic
 
   - platform: version
