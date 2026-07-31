@@ -2,8 +2,9 @@
 # Definition: definitions/boards/esp32doit-devkit-v1/manifest.yaml
 
 esphome:
-  name: led-block
-  friendly_name: led-block
+  name: a5in-led-block
+  friendly_name: a5in-led-block
+  comment: "Диагностика ESP32, WS2812B 16x16, MAX9814 и TTP223"
 
 esp32:
   variant: esp32
@@ -12,6 +13,7 @@ esp32:
     type: esp-idf
 
 logger:
+  level: INFO
 
 api:
   encryption:
@@ -23,8 +25,361 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+
   ap:
-    ssid: led-block Fallback Hotspot
+    ssid: "led-block Fallback Hotspot"
     password: "jzKOJdWDbugW"
 
 captive_portal:
+
+web_server:
+  port: 80
+  version: 3
+
+# ============================================================
+# Матрица WS2812B 16x16
+#
+# ESP32 D18 = GPIO18.
+# GPIO18 -> резистор 330 Ом -> DIN матрицы.
+# Матрица питается напрямую от блока питания 5V 3A.
+# ============================================================
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: matrix
+    name: "Матрица 16x16"
+    icon: "mdi:grid"
+    pin: GPIO18
+    num_leds: 256
+    chipset: ws2812
+    rgb_order: GRB
+
+    # Временное ограничение яркости всех цветовых каналов.
+    # Используется на этапе диагностики, чтобы снизить нагрузку
+    # на блок питания и исключить слишком яркий первый запуск.
+    color_correct:
+      - 15%
+      - 15%
+      - 15%
+
+    gamma_correct: 2.8
+    default_transition_length: 0s
+    restore_mode: ALWAYS_OFF
+
+    effects:
+      - addressable_lambda:
+          name: "Диагностика: все светодиоды по очереди"
+          update_interval: 60ms
+          lambda: |-
+            static uint16_t position = 0;
+
+            if (initial_run) {
+              position = 0;
+              it.all() = Color::BLACK;
+            }
+
+            it.all() = Color::BLACK;
+            it[position] = Color(255, 255, 255);
+
+            position++;
+
+            if (position >= it.size()) {
+              position = 0;
+            }
+
+      - addressable_lambda:
+          name: "Диагностика: контрольные индексы"
+          update_interval: 1s
+          lambda: |-
+            it.all() = Color::BLACK;
+
+            // Контрольные светодиоды:
+            // 0   — красный;
+            // 15  — зелёный;
+            // 240 — синий;
+            // 255 — белый.
+            //
+            // Они позволят определить ориентацию матрицы
+            // и направление её внутренней разводки.
+            it[0] = Color(255, 0, 0);
+            it[15] = Color(0, 255, 0);
+            it[240] = Color(0, 0, 255);
+            it[255] = Color(255, 255, 255);
+
+      - addressable_scan:
+          name: "Диагностика: бегущая точка"
+          move_interval: 50ms
+          scan_width: 1
+
+      - addressable_rainbow:
+          name: "Диагностика: радуга"
+          speed: 10
+          width: 64
+
+# ============================================================
+# Сенсорная кнопка TTP223
+#
+# TTP223 VCC -> ESP32 3V3
+# TTP223 GND -> ESP32 GND
+# TTP223 I/O -> ESP32 D27 / GPIO27
+#
+# Перемычки A и B на TTP223 должны оставаться в заводском
+# состоянии на этапе диагностики.
+# ============================================================
+
+binary_sensor:
+  - platform: gpio
+    id: touch_button
+    name: "Сенсорная кнопка"
+    icon: "mdi:gesture-tap-button"
+
+    pin:
+      number: GPIO27
+      mode:
+        input: true
+        pullup: false
+        pulldown: false
+      inverted: false
+
+    filters:
+      - delayed_on: 20ms
+      - delayed_off: 20ms
+
+    on_press:
+      then:
+        - if:
+            condition:
+              light.is_off: matrix
+
+            then:
+              - light.turn_on:
+                  id: matrix
+                  brightness: 30%
+                  effect: "Диагностика: все светодиоды по очереди"
+
+            else:
+              - light.turn_off:
+                  id: matrix
+                  transition_length: 0s
+
+  - platform: status
+    name: "Состояние подключения"
+    entity_category: diagnostic
+
+# ============================================================
+# Микрофонный модуль MAX9814
+#
+# MAX9814 VDD    -> ESP32 3V3
+# MAX9814 GND    -> ESP32 GND
+# MAX9814 Output -> ESP32 VP / GPIO36
+# MAX9814 Gain   -> не подключать
+# MAX9814 AR     -> не подключать
+#
+# GPIO36:
+# - на плате подписан как VP;
+# - относится к ADC1;
+# - является только входом;
+# - подходит для работы ADC одновременно с Wi-Fi.
+#
+# Эта конфигурация измеряет пиковое напряжение, а не выполняет
+# полноценный FFT-анализ. Она предназначена только для проверки
+# работоспособности MAX9814 и правильности пайки.
+# ============================================================
+
+sensor:
+  - platform: adc
+    id: microphone_peak_voltage
+    name: "Микрофон — пиковое напряжение"
+    icon: "mdi:sine-wave"
+
+    pin: GPIO36
+    attenuation: 12db
+    samples: 256
+    sampling_mode: max
+    update_interval: 100ms
+
+    accuracy_decimals: 3
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    force_update: true
+
+  - platform: copy
+    source_id: microphone_peak_voltage
+    id: microphone_conditional_level
+    name: "Микрофон — условный уровень звука"
+    icon: "mdi:waveform"
+
+    unit_of_measurement: "V"
+    accuracy_decimals: 3
+    state_class: measurement
+    force_update: true
+
+    filters:
+      - lambda: |-
+          // Приблизительное постоянное смещение выхода MAX9814.
+          // Это временная диагностическая оценка.
+          const float microphone_bias = 1.23f;
+          const float level = x - microphone_bias;
+
+          if (level < 0.0f) {
+            return 0.0f;
+          }
+
+          return level;
+
+  - platform: wifi_signal
+    name: "Уровень Wi-Fi"
+    icon: "mdi:wifi"
+    update_interval: 30s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: "Время работы"
+    icon: "mdi:timer-outline"
+    update_interval: 60s
+    entity_category: diagnostic
+
+# ============================================================
+# Кнопки аппаратной диагностики.
+#
+# Они появятся:
+# - в Home Assistant;
+# - во встроенном web-интерфейсе ESPHome.
+# ============================================================
+
+button:
+  - platform: template
+    name: "Тест матрицы — красный"
+    icon: "mdi:lightbulb-on"
+
+    on_press:
+      then:
+        - light.turn_on:
+            id: matrix
+            brightness: 30%
+            red: 100%
+            green: 0%
+            blue: 0%
+            effect: "None"
+
+  - platform: template
+    name: "Тест матрицы — зелёный"
+    icon: "mdi:lightbulb-on"
+
+    on_press:
+      then:
+        - light.turn_on:
+            id: matrix
+            brightness: 30%
+            red: 0%
+            green: 100%
+            blue: 0%
+            effect: "None"
+
+  - platform: template
+    name: "Тест матрицы — синий"
+    icon: "mdi:lightbulb-on"
+
+    on_press:
+      then:
+        - light.turn_on:
+            id: matrix
+            brightness: 30%
+            red: 0%
+            green: 0%
+            blue: 100%
+            effect: "None"
+
+  - platform: template
+    name: "Тест матрицы — белый"
+    icon: "mdi:lightbulb-on"
+
+    on_press:
+      then:
+        - light.turn_on:
+            id: matrix
+            brightness: 20%
+            red: 100%
+            green: 100%
+            blue: 100%
+            effect: "None"
+
+  - platform: template
+    name: "Тест матрицы — все светодиоды"
+    icon: "mdi:dots-grid"
+
+    on_press:
+      then:
+        - light.turn_on:
+            id: matrix
+            brightness: 40%
+            effect: "Диагностика: все светодиоды по очереди"
+
+  - platform: template
+    name: "Тест матрицы — контрольные индексы"
+    icon: "mdi:grid-large"
+
+    on_press:
+      then:
+        - light.turn_on:
+            id: matrix
+            brightness: 40%
+            effect: "Диагностика: контрольные индексы"
+
+  - platform: template
+    name: "Тест матрицы — бегущая точка"
+    icon: "mdi:motion-play"
+
+    on_press:
+      then:
+        - light.turn_on:
+            id: matrix
+            brightness: 40%
+            effect: "Диагностика: бегущая точка"
+
+  - platform: template
+    name: "Тест матрицы — радуга"
+    icon: "mdi:looks"
+
+    on_press:
+      then:
+        - light.turn_on:
+            id: matrix
+            brightness: 40%
+            effect: "Диагностика: радуга"
+
+  - platform: template
+    name: "Выключить матрицу"
+    icon: "mdi:lightbulb-off"
+
+    on_press:
+      then:
+        - light.turn_off:
+            id: matrix
+            transition_length: 0s
+
+  - platform: restart
+    name: "Перезагрузить a5in-led-block"
+    icon: "mdi:restart"
+    entity_category: diagnostic
+
+# ============================================================
+# Диагностические текстовые сенсоры.
+# ============================================================
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "IP-адрес"
+      icon: "mdi:ip-network"
+      entity_category: diagnostic
+
+    ssid:
+      name: "Подключённая сеть"
+      icon: "mdi:wifi"
+      entity_category: diagnostic
+
+  - platform: version
+    name: "Версия ESPHome"
+    entity_category: diagnostic
