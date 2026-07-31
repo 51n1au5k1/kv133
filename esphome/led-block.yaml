@@ -1,0 +1,30 @@
+# Board: DOIT ESP32 DEVKIT V1 (DOIT)
+# Definition: definitions/boards/esp32doit-devkit-v1/manifest.yaml
+
+esphome:
+  name: led-block
+  friendly_name: led-block
+
+esp32:
+  variant: esp32
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: "156Ci5/iHQGSqI1tj4H2Z/nOsrRgqE2sDpqFpWcr1to="
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: led-block Fallback Hotspot
+    password: "jzKOJdWDbugW"
+
+captive_portal:
