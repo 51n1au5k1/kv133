@@ -1,5 +1,5 @@
 # Board: DOIT ESP32 DEVKIT V1 (DOIT)
-# Рабочая прошивка A5IN LED Block v1.1.1
+# Рабочая прошивка A5IN LED Block v1.2.1
 #
 # Аппаратный контракт:
 # - WS2812B DIN       <- 330 Ом <- ESP32 D18 / GPIO18
@@ -13,7 +13,7 @@
 esphome:
   name: a5in-led-block
   friendly_name: a5in-led-block
-  comment: "Рабочая лампа v1.1.1: исправлена совместимость select с ESPHome 2026.7"
+  comment: "Рабочая лампа v1.2.1: яркость HA и 16-полосный FFT 512 точек"
 
 esp32:
   variant: esp32
@@ -47,6 +47,14 @@ wifi:
 
 captive_portal:
 
+# Локальный компонент высокоскоростного ADC и FFT.
+# Каталог components/audio_fft должен лежать рядом с этим YAML.
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [audio_fft]
+
 web_server:
   port: 80
   version: 3
@@ -79,6 +87,26 @@ globals:
 # ============================================================
 
 number:
+  # Отдельный программный регулятор яркости в Home Assistant.
+  # Физический датчик освещённости не используется.
+  # Значение дополнительно ограничено color_correct: 14%.
+  - platform: template
+    id: lamp_brightness
+    name: "Яркость лампы [BRIGHTNESS]"
+    icon: "mdi:brightness-6"
+    unit_of_measurement: "%"
+    min_value: 1
+    max_value: 100
+    step: 1
+    initial_value: 40
+    restore_value: true
+    optimistic: true
+    set_action:
+      - light.turn_on:
+          id: matrix
+          brightness: !lambda return x / 100.0f;
+          transition_length: 0s
+
   - platform: template
     id: effect_speed
     name: "Скорость эффектов [FX_SPEED]"
@@ -109,9 +137,9 @@ number:
     icon: "mdi:microphone-settings"
     entity_category: config
     min_value: 0.5
-    max_value: 12.0
+    max_value: 30.0
     step: 0.1
-    initial_value: 3.0
+    initial_value: 8.0
     restore_value: true
     optimistic: true
 
@@ -122,9 +150,9 @@ number:
     entity_category: config
     unit_of_measurement: "V"
     min_value: 0.0
-    max_value: 1.5
-    step: 0.01
-    initial_value: 0.45
+    max_value: 0.20
+    step: 0.001
+    initial_value: 0.010
     restore_value: true
     optimistic: true
 
@@ -137,6 +165,44 @@ number:
     max_value: 0.95
     step: 0.05
     initial_value: 0.70
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    id: fft_gain
+    name: "Усиление спектра FFT [FFT_GAIN]"
+    icon: "mdi:chart-bar"
+    entity_category: config
+    min_value: 1
+    max_value: 80
+    step: 1
+    initial_value: 18
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    id: fft_noise_floor
+    name: "Шумовой порог FFT [FFT_FLOOR]"
+    icon: "mdi:waveform"
+    entity_category: config
+    unit_of_measurement: "V"
+    min_value: 0.000
+    max_value: 0.100
+    step: 0.001
+    initial_value: 0.003
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    id: fft_peak_decay
+    name: "Скорость падения пиков FFT [FFT_PEAK_DECAY]"
+    icon: "mdi:arrow-down-bold"
+    entity_category: config
+    unit_of_measurement: "px/frame"
+    min_value: 0.1
+    max_value: 2.0
+    step: 0.1
+    initial_value: 0.4
     restore_value: true
     optimistic: true
 
@@ -166,6 +232,8 @@ select:
       - "Огонь 2D"
       - "Цифровой дождь"
       - "Плазма"
+      - "Спектр — радуга FFT"
+      - "Полосы и пики — FFT"
       - "Цветомузыка — пульс"
       - "Цветомузыка — VU"
       - "Цветомузыка — центр"
@@ -230,48 +298,43 @@ switch:
     restore_mode: RESTORE_DEFAULT_ON
 
 # ============================================================
-# MAX9814
+# MAX9814 + настоящий 16-полосный FFT на текущем железе.
 #
-# Текущий анализатор v1 измеряет амплитуду сигнала:
-# - пик напряжения;
-# - условный уровень выше смещения 1,23V;
-# - нормированный уровень 0..100%.
+# GPIO36 / VP относится к ADC1 и работает одновременно с Wi-Fi.
+# Компонент audio_fft:
+# - непрерывно оцифровывает MAX9814 с частотой 20 кГц через DMA;
+# - удаляет постоянное смещение микрофона;
+# - применяет окно Хэмминга;
+# - выполняет FFT 512 точек;
+# - формирует 16 полос примерно от 39 Гц до 10 кГц.
 #
-# Это уже даёт рабочую цветомузыку по громкости. Настоящий FFT
-# с частотными полосами будет отдельным следующим обновлением.
+# Стандартный platform: adc здесь намеренно удалён: один ADC unit
+# не может одновременно работать в oneshot и continuous режимах.
 # ============================================================
 
-sensor:
-  - platform: adc
+audio_fft:
+  id: audio_fft_analyzer
+  pin: 36
+  sample_rate: 20000
+  publish_interval: 100
+
+  peak_voltage:
     id: microphone_peak_voltage
     name: "Микрофон — пиковое напряжение [MIC_PEAK]"
-    icon: "mdi:sine-wave"
-    pin: GPIO36
-    attenuation: 12db
-    samples: 255
-    sampling_mode: max
-    update_interval: 100ms
-    accuracy_decimals: 3
-    unit_of_measurement: "V"
-    device_class: voltage
-    state_class: measurement
-    force_update: true
 
-  - platform: copy
-    source_id: microphone_peak_voltage
+  rms_level:
     id: microphone_level
-    name: "Микрофон — уровень выше смещения [MIC_LEVEL]"
-    icon: "mdi:waveform"
-    unit_of_measurement: "V"
-    accuracy_decimals: 3
-    state_class: measurement
-    force_update: true
-    filters:
-      - lambda: |-
-          const float microphone_bias = 1.23f;
-          const float level = x - microphone_bias;
-          return level > 0.0f ? level : 0.0f;
+    name: "Микрофон — действующий уровень AC [MIC_RMS]"
 
+  dc_voltage:
+    id: microphone_dc_voltage
+    name: "Микрофон — постоянное смещение [MIC_DC]"
+
+  frame_rate:
+    id: microphone_fft_frame_rate
+    name: "Микрофон — частота кадров FFT [FFT_FPS]"
+
+sensor:
   - platform: template
     id: microphone_normalized
     name: "Микрофон — нормированный уровень [MIC_NORMALIZED]"
@@ -281,9 +344,9 @@ sensor:
     state_class: measurement
     update_interval: 100ms
     lambda: |-
-      const float level = id(microphone_level).state;
+      const float level = id(audio_fft_analyzer).get_rms_voltage();
 
-      if (isnan(level)) {
+      if (!id(audio_fft_analyzer).is_ready() || isnan(level)) {
         return NAN;
       }
 
@@ -362,8 +425,13 @@ binary_sensor:
               id(brightness_step_index) =
                   (id(brightness_step_index) + 1) % 6;
 
+              const float brightness =
+                  LEVELS[id(brightness_step_index)];
+
+              id(lamp_brightness).publish_state(brightness * 100.0f);
+
               auto call = id(matrix).turn_on();
-              call.set_brightness(LEVELS[id(brightness_step_index)]);
+              call.set_brightness(brightness);
               call.perform();
 
       - timing:
@@ -419,6 +487,18 @@ light:
     gamma_correct: 1.0
     default_transition_length: 0s
     restore_mode: RESTORE_DEFAULT_OFF
+
+    # Синхронизация отдельного HA-регулятора с нативной
+    # яркостью light-сущности. Никакой физический датчик не нужен.
+    on_state:
+      then:
+        - lambda: |-
+            const float brightness = id(matrix).current_values.get_brightness();
+            const float percent = brightness * 100.0f;
+
+            if (fabsf(id(lamp_brightness).state - percent) >= 0.5f) {
+              id(lamp_brightness).publish_state(percent);
+            }
 
     effects:
       - addressable_lambda:
@@ -850,6 +930,243 @@ light:
             }
 
       - addressable_lambda:
+          name: "Спектр — радуга FFT"
+          update_interval: 25ms
+          lambda: |-
+            static float levels[16] = {0.0f};
+
+            auto xy = [&](int x, int y) -> int {
+              if (x < 0 || x >= 16 || y < 0 || y >= 16) {
+                return -1;
+              }
+
+              int px = id(matrix_flip_x).state ? 15 - x : x;
+              int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              if (id(matrix_swap_xy).state) {
+                const int tmp = px;
+                px = py;
+                py = tmp;
+              }
+
+              if (id(matrix_serpentine).state && (py & 1)) {
+                px = 15 - px;
+              }
+
+              return py * 16 + px;
+            };
+
+            auto hsv = [](float h, float s, float v) -> Color {
+              h = h - floorf(h);
+              s = fmaxf(0.0f, fminf(1.0f, s));
+              v = fmaxf(0.0f, fminf(1.0f, v));
+
+              const float scaled = h * 6.0f;
+              const int sector = static_cast<int>(floorf(scaled));
+              const float fraction = scaled - floorf(scaled);
+              const float p = v * (1.0f - s);
+              const float q = v * (1.0f - s * fraction);
+              const float t = v * (1.0f - s * (1.0f - fraction));
+
+              float r = 0.0f;
+              float g = 0.0f;
+              float b = 0.0f;
+
+              switch (sector % 6) {
+                case 0: r = v; g = t; b = p; break;
+                case 1: r = q; g = v; b = p; break;
+                case 2: r = p; g = v; b = t; break;
+                case 3: r = p; g = q; b = v; break;
+                case 4: r = t; g = p; b = v; break;
+                default: r = v; g = p; b = q; break;
+              }
+
+              return Color(
+                  static_cast<uint8_t>(r * 255.0f),
+                  static_cast<uint8_t>(g * 255.0f),
+                  static_cast<uint8_t>(b * 255.0f));
+            };
+
+            if (initial_run) {
+              for (float &level : levels) {
+                level = 0.0f;
+              }
+              it.all() = Color::BLACK;
+            }
+
+            const float smoothing = id(microphone_smoothing).state;
+            const float floor = id(fft_noise_floor).state;
+            const float gain = id(fft_gain).state;
+
+            it.all() = Color::BLACK;
+
+            for (int x = 0; x < 16; x++) {
+              float target =
+                  (id(audio_fft_analyzer).get_band(x) - floor) * gain;
+
+              if (target < 0.0f) {
+                target = 0.0f;
+              } else if (target > 1.0f) {
+                target = 1.0f;
+              }
+
+              // Быстрая атака и регулируемое плавное затухание.
+              if (target >= levels[x]) {
+                levels[x] = levels[x] * 0.20f + target * 0.80f;
+              } else {
+                levels[x] =
+                    levels[x] * smoothing + target * (1.0f - smoothing);
+              }
+
+              const int height = static_cast<int>(ceilf(levels[x] * 16.0f));
+              const float hue = static_cast<float>(x) / 18.0f;
+              const float saturation = 0.35f + levels[x] * 0.65f;
+
+              for (int y = 0; y < height && y < 16; y++) {
+                const float vertical =
+                    0.30f + 0.70f * static_cast<float>(y + 1) /
+                                      static_cast<float>(height);
+                const int index = xy(x, y);
+                if (index >= 0) {
+                  it[index] = hsv(hue, saturation, vertical);
+                }
+              }
+            }
+
+      - addressable_lambda:
+          name: "Полосы и пики — FFT"
+          update_interval: 25ms
+          lambda: |-
+            static float levels[16] = {0.0f};
+            static float peaks[16] = {0.0f};
+            static uint8_t hold[16] = {0};
+
+            auto xy = [&](int x, int y) -> int {
+              if (x < 0 || x >= 16 || y < 0 || y >= 16) {
+                return -1;
+              }
+
+              int px = id(matrix_flip_x).state ? 15 - x : x;
+              int py = id(matrix_flip_y).state ? 15 - y : y;
+
+              if (id(matrix_swap_xy).state) {
+                const int tmp = px;
+                px = py;
+                py = tmp;
+              }
+
+              if (id(matrix_serpentine).state && (py & 1)) {
+                px = 15 - px;
+              }
+
+              return py * 16 + px;
+            };
+
+            auto hsv = [](float h, float s, float v) -> Color {
+              h = h - floorf(h);
+              s = fmaxf(0.0f, fminf(1.0f, s));
+              v = fmaxf(0.0f, fminf(1.0f, v));
+
+              const float scaled = h * 6.0f;
+              const int sector = static_cast<int>(floorf(scaled));
+              const float fraction = scaled - floorf(scaled);
+              const float p = v * (1.0f - s);
+              const float q = v * (1.0f - s * fraction);
+              const float t = v * (1.0f - s * (1.0f - fraction));
+
+              float r = 0.0f;
+              float g = 0.0f;
+              float b = 0.0f;
+
+              switch (sector % 6) {
+                case 0: r = v; g = t; b = p; break;
+                case 1: r = q; g = v; b = p; break;
+                case 2: r = p; g = v; b = t; break;
+                case 3: r = p; g = q; b = v; break;
+                case 4: r = t; g = p; b = v; break;
+                default: r = v; g = p; b = q; break;
+              }
+
+              return Color(
+                  static_cast<uint8_t>(r * 255.0f),
+                  static_cast<uint8_t>(g * 255.0f),
+                  static_cast<uint8_t>(b * 255.0f));
+            };
+
+            if (initial_run) {
+              for (int i = 0; i < 16; i++) {
+                levels[i] = 0.0f;
+                peaks[i] = 0.0f;
+                hold[i] = 0;
+              }
+              it.all() = Color::BLACK;
+            }
+
+            const float floor = id(fft_noise_floor).state;
+            const float gain = id(fft_gain).state;
+            const float smoothing = id(microphone_smoothing).state;
+            const float fall = id(fft_peak_decay).state;
+
+            it.all() = Color::BLACK;
+
+            for (int x = 0; x < 16; x++) {
+              float target =
+                  (id(audio_fft_analyzer).get_band(x) - floor) * gain;
+
+              if (target < 0.0f) {
+                target = 0.0f;
+              } else if (target > 1.0f) {
+                target = 1.0f;
+              }
+
+              if (target >= levels[x]) {
+                levels[x] = target;
+              } else {
+                const float decay = 0.76f + smoothing * 0.22f;
+                levels[x] *= decay;
+              }
+
+              const float current_height = levels[x] * 15.0f;
+
+              if (current_height >= peaks[x]) {
+                peaks[x] = current_height;
+                hold[x] = 8;
+              } else if (hold[x] > 0) {
+                hold[x]--;
+              } else {
+                peaks[x] -= fall;
+                if (peaks[x] < 0.0f) {
+                  peaks[x] = 0.0f;
+                }
+              }
+
+              const int bar_height =
+                  static_cast<int>(floorf(current_height + 0.5f));
+              const float hue = static_cast<float>(x) / 18.0f;
+
+              for (int y = 0; y <= bar_height && y < 16; y++) {
+                const float value =
+                    0.25f + 0.75f * static_cast<float>(y + 1) / 16.0f;
+                const int index = xy(x, y);
+                if (index >= 0) {
+                  it[index] = hsv(hue, 1.0f, value);
+                }
+              }
+
+              int peak_y = static_cast<int>(floorf(peaks[x] + 0.5f));
+              if (peak_y < 0) {
+                peak_y = 0;
+              } else if (peak_y > 15) {
+                peak_y = 15;
+              }
+
+              const int peak_index = xy(x, peak_y);
+              if (peak_index >= 0 && peaks[x] > 0.1f) {
+                it[peak_index] = Color(255, 255, 255);
+              }
+            }
+
+      - addressable_lambda:
           name: "Цветомузыка — пульс"
           update_interval: 25ms
           lambda: |-
@@ -1086,28 +1403,53 @@ button:
 
   - platform: template
     id: calibrate_microphone
-    name: "Калибровать шумовой порог [CAL_MIC]"
+    name: "Калибровать общий шумовой порог [CAL_MIC]"
     icon: "mdi:microphone-settings"
     on_press:
       then:
         - number.set:
             id: microphone_noise_floor
             value: !lambda |-
-              float level = id(microphone_level).state;
+              float level = id(audio_fft_analyzer).get_rms_voltage();
 
-              if (isnan(level)) {
-                return 0.45f;
+              if (!id(audio_fft_analyzer).is_ready() || isnan(level)) {
+                return 0.010f;
               }
 
-              level += 0.02f;
+              level = level * 1.15f + 0.002f;
 
               if (level < 0.0f) {
                 level = 0.0f;
-              } else if (level > 1.5f) {
-                level = 1.5f;
+              } else if (level > 0.20f) {
+                level = 0.20f;
               }
 
               return level;
+
+  - platform: template
+    id: calibrate_fft
+    name: "Калибровать шумовой порог FFT [CAL_FFT]"
+    icon: "mdi:chart-bar"
+    on_press:
+      then:
+        - number.set:
+            id: fft_noise_floor
+            value: !lambda |-
+              float floor = id(audio_fft_analyzer).get_max_band();
+
+              if (!id(audio_fft_analyzer).is_ready() || isnan(floor)) {
+                return 0.003f;
+              }
+
+              floor = floor * 1.25f + 0.001f;
+
+              if (floor < 0.0f) {
+                floor = 0.0f;
+              } else if (floor > 0.10f) {
+                floor = 0.10f;
+              }
+
+              return floor;
 
   - platform: template
     id: matrix_off
