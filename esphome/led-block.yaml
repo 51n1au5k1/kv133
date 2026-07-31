@@ -163,6 +163,7 @@ binary_sensor:
                   transition_length: 0s
 
   - platform: status
+    id: connection_status
     name: "Состояние подключения"
     entity_category: diagnostic
 
@@ -229,12 +230,14 @@ sensor:
           return level;
 
   - platform: wifi_signal
+    id: wifi_signal_db
     name: "Уровень Wi-Fi"
     icon: "mdi:wifi"
     update_interval: 30s
     entity_category: diagnostic
 
   - platform: uptime
+    id: device_uptime
     name: "Время работы"
     icon: "mdi:timer-outline"
     update_interval: 60s
@@ -243,14 +246,17 @@ sensor:
 # ============================================================
 # Кнопки аппаратной диагностики.
 #
-# Они появятся:
-# - в Home Assistant;
-# - во встроенном web-интерфейсе ESPHome.
+# У каждой кнопки:
+# - уникальный латинский id;
+# - уникальная ASCII-часть в name.
+#
+# Это предотвращает коллизии object_id для русских названий.
 # ============================================================
 
 button:
   - platform: template
-    name: "Тест матрицы — красный"
+    id: matrix_test_red
+    name: "Тест матрицы — красный [RED]"
     icon: "mdi:lightbulb-on"
 
     on_press:
@@ -264,7 +270,8 @@ button:
             effect: "None"
 
   - platform: template
-    name: "Тест матрицы — зелёный"
+    id: matrix_test_green
+    name: "Тест матрицы — зелёный [GREEN]"
     icon: "mdi:lightbulb-on"
 
     on_press:
@@ -278,7 +285,8 @@ button:
             effect: "None"
 
   - platform: template
-    name: "Тест матрицы — синий"
+    id: matrix_test_blue
+    name: "Тест матрицы — синий [BLUE]"
     icon: "mdi:lightbulb-on"
 
     on_press:
@@ -292,7 +300,8 @@ button:
             effect: "None"
 
   - platform: template
-    name: "Тест матрицы — белый"
+    id: matrix_test_white
+    name: "Тест матрицы — белый [WHITE]"
     icon: "mdi:lightbulb-on"
 
     on_press:
@@ -306,7 +315,8 @@ button:
             effect: "None"
 
   - platform: template
-    name: "Тест матрицы — все светодиоды"
+    id: matrix_test_all_leds
+    name: "Тест матрицы — все светодиоды [ALL]"
     icon: "mdi:dots-grid"
 
     on_press:
@@ -317,7 +327,8 @@ button:
             effect: "Диагностика: все светодиоды по очереди"
 
   - platform: template
-    name: "Тест матрицы — контрольные индексы"
+    id: matrix_test_indices
+    name: "Тест матрицы — контрольные индексы [INDEX]"
     icon: "mdi:grid-large"
 
     on_press:
@@ -328,7 +339,8 @@ button:
             effect: "Диагностика: контрольные индексы"
 
   - platform: template
-    name: "Тест матрицы — бегущая точка"
+    id: matrix_test_scan
+    name: "Тест матрицы — бегущая точка [SCAN]"
     icon: "mdi:motion-play"
 
     on_press:
@@ -339,7 +351,8 @@ button:
             effect: "Диагностика: бегущая точка"
 
   - platform: template
-    name: "Тест матрицы — радуга"
+    id: matrix_test_rainbow
+    name: "Тест матрицы — радуга [RAINBOW]"
     icon: "mdi:looks"
 
     on_press:
@@ -350,7 +363,8 @@ button:
             effect: "Диагностика: радуга"
 
   - platform: template
-    name: "Выключить матрицу"
+    id: matrix_turn_off
+    name: "Выключить матрицу [OFF]"
     icon: "mdi:lightbulb-off"
 
     on_press:
@@ -360,7 +374,8 @@ button:
             transition_length: 0s
 
   - platform: restart
-    name: "Перезагрузить a5in-led-block"
+    id: restart_a5in_led_block
+    name: "Перезагрузить a5in-led-block [RESTART]"
     icon: "mdi:restart"
     entity_category: diagnostic
 
@@ -371,15 +386,18 @@ button:
 text_sensor:
   - platform: wifi_info
     ip_address:
+      id: device_ip_address
       name: "IP-адрес"
       icon: "mdi:ip-network"
       entity_category: diagnostic
 
     ssid:
+      id: connected_wifi_ssid
       name: "Подключённая сеть"
       icon: "mdi:wifi"
       entity_category: diagnostic
 
   - platform: version
+    id: esphome_version
     name: "Версия ESPHome"
     entity_category: diagnostic
