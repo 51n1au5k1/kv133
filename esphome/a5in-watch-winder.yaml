@@ -1,5 +1,27 @@
 # Board: Wemos D1 Mini (ESP8266) (Wemos)
 # Definition: definitions/boards/d1_mini/manifest.yaml
+################################################################################
+# ESPHome: watch-winder
+# Плата: ESP8266 D1 mini v2
+#
+# ПОДКЛЮЧЕНИЕ L9110S:
+# • D2 / GPIO4 -> A-IA
+# • D1 / GPIO5 -> A-IB
+# • 3V3        -> VCC
+# • GND        -> GND
+# • A-OA/A-OB  -> двигатель
+#
+# ФИЛЬТРАЦИЯ ПИТАНИЯ:
+# • 470 мкФ 16 В между VCC и GND возле L9110S:
+#     плюс -> VCC, минус -> GND
+# • 100 нФ (104) между VCC и GND возле L9110S
+# • 100 нФ (104) непосредственно между выводами двигателя
+#
+# ВАЖНО:
+# • Оба конденсатора 104 неполярные.
+# • Электролитический конденсатор полярный.
+# • Все GND должны быть общими.
+################################################################################
 
 esphome:
   name: a5in-watch-winder
@@ -20,8 +42,189 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  power_save_mode: none
   ap:
     ssid: a5in-watch-wind Fallback Hotspot
     password: "gqggusZkid0z"
 
-captive_portal:
+################################################################################
+# PWM-ВЫХОДЫ НА L9110S
+#
+# D2 / GPIO4 -> A-IA
+# D1 / GPIO5 -> A-IB
+################################################################################
+
+output:
+  - platform: esp8266_pwm
+    id: motor_input_a
+    pin: GPIO4
+    frequency: 1220Hz
+
+  - platform: esp8266_pwm
+    id: motor_input_b
+    pin: GPIO5
+    frequency: 1220Hz
+
+################################################################################
+# H-МОСТ И ДВИГАТЕЛЬ
+################################################################################
+
+fan:
+  - platform: hbridge
+    id: watch_winder_motor
+    name: "Мотор заводчика"
+    icon: mdi:rotate-right
+    pin_a: motor_input_a
+    pin_b: motor_input_b
+
+    # 100 дискретных уровней: регулировка 1–100%.
+    speed_count: 100
+
+    # После включения питания двигатель всегда выключен.
+    restore_mode: ALWAYS_OFF
+
+    # Свободная остановка двигателя без электрического торможения.
+    decay_mode: slow
+
+################################################################################
+# НАСТРОЙКИ ЦИКЛА
+################################################################################
+
+number:
+  - platform: template
+    id: rotation_time
+    name: "Длительность вращения"
+    unit_of_measurement: "с"
+    icon: mdi:timer-outline
+    entity_category: config
+    mode: box
+    min_value: 1
+    max_value: 500
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 10
+
+  - platform: template
+    id: motor_speed_percent
+    name: "Скорость мотора"
+    unit_of_measurement: "%"
+    icon: mdi:speedometer
+    entity_category: config
+    mode: slider
+    min_value: 40
+    max_value: 100
+    step: 5
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+
+################################################################################
+# СЦЕНАРИЙ ВРАЩЕНИЯ
+################################################################################
+
+script:
+  - id: run_rotation_cycle
+    mode: restart
+    then:
+      # Для двух часов на одной площадке цикл всегда запускается вправо.
+      # Если физически получилось наоборот, поменять местами A-IA/A-IB
+      # либо провода двигателя A-OA/A-OB, но только одну пару.
+      - fan.turn_on:
+          id: watch_winder_motor
+          direction: forward
+          speed: !lambda |-
+            int speed = static_cast<int>(id(motor_speed_percent).state);
+
+            if (speed < 40) {
+              speed = 40;
+            }
+
+            if (speed > 100) {
+              speed = 100;
+            }
+
+            return speed;
+
+      - delay: !lambda |-
+          return static_cast<uint32_t>(
+            id(rotation_time).state * 1000.0f
+          );
+
+      - fan.turn_off: watch_winder_motor
+
+################################################################################
+# КНОПКИ
+################################################################################
+
+button:
+  - platform: template
+    name: "Запустить цикл"
+    icon: mdi:play
+    on_press:
+      - script.execute: run_rotation_cycle
+
+  - platform: template
+    name: "Остановить"
+    icon: mdi:stop
+    on_press:
+      - script.stop: run_rotation_cycle
+      - fan.turn_off: watch_winder_motor
+
+  - platform: restart
+    id: restart_watch_winder
+    name: "Перезагрузить watch-winder [RESTART]"
+    icon: mdi:restart
+    entity_category: diagnostic
+
+################################################################################
+# ДИАГНОСТИКА: СЕТЬ И ВЕРСИЯ
+################################################################################
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      id: device_ip_address
+      name: "IP-адрес [IP]"
+      icon: mdi:ip-network
+      entity_category: diagnostic
+
+    ssid:
+      id: connected_wifi_ssid
+      name: "Подключённая сеть [SSID]"
+      icon: mdi:wifi
+      entity_category: diagnostic
+
+    mac_address:
+      id: device_wifi_mac
+      name: "Wi-Fi MAC [MAC]"
+      icon: mdi:network-outline
+      entity_category: diagnostic
+
+  - platform: version
+    id: esphome_version
+    name: "Версия ESPHome [VERSION]"
+    icon: mdi:information-outline
+    entity_category: diagnostic
+    hide_timestamp: true
+    hide_hash: true
+
+################################################################################
+# ДИАГНОСТИКА: СИГНАЛ И ВРЕМЯ РАБОТЫ
+################################################################################
+
+sensor:
+  - platform: wifi_signal
+    id: wifi_signal_db
+    name: "Уровень Wi-Fi [WIFI_DB]"
+    icon: mdi:wifi
+    update_interval: 30s
+    entity_category: diagnostic
+
+  - platform: uptime
+    id: device_uptime
+    name: "Время работы [UPTIME]"
+    icon: mdi:timer-outline
+    type: seconds
+    update_interval: 60s
+    entity_category: diagnostic
