@@ -55,5 +55,6 @@ _*.*_
 /esphome/*.map
 **/secrets.yml
 /esphome/.esphome/
+/esphome/components/*
 /esphome/.device-builder*
 /packages/archive/devices/a5in_led_block/*.*
